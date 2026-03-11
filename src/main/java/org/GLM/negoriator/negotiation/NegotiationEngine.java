@@ -6,6 +6,16 @@ import java.util.Map;
 
 public interface NegotiationEngine {
 
+	/** TODO: Add strategy selection here so the engine can negotiate differently by supplier type, risk, or stage. 
+	 *
+	 * enum NegotiationStrategy {
+    MESO, // multiple
+    BOULWARE, // slow
+    CONCEDER, // fast
+    TIT_FOR_TAT // copy opponent
+}
+	*/
+
 	NegotiationResponse negotiate(NegotiationRequest request);
 
 	enum Decision {
@@ -45,6 +55,7 @@ public interface NegotiationEngine {
 	) {
 	}
 
+	// TODO: We have weights here, but there is still no formula that turns one offer into a final score or percent for comparison e.g. 0.78
 	record BuyerProfile(
 		OfferVector idealOffer,
 		OfferVector reservationOffer,
@@ -64,9 +75,11 @@ public interface NegotiationEngine {
 
 	record NegotiationContext(
 		int round,
+		// TODO: AI or algoritm should be more agressive in earlier rounds, but with more compromise at later rounds. (Adaptiveness)
 		int maxRounds,
 		NegotiationState state,
 		BigDecimal riskOfWalkaway,
+		// TODO: Put who made the offer in the history too so the engine can learn from that as well.
 		List<OfferVector> history
 	) {
 	}
