@@ -10,10 +10,8 @@ Configurable bot has goals and limits with multiple negotiation strategies.
 
 ### Environment Variables
 - list all required env vars. Explain what each one does
-- 
 ### Tests
 - one command, not its complicated
-- 
 ### Tech Stack
 - Backend: Java SpringBoot
 - Frontend: React
