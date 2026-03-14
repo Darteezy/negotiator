@@ -1,4 +1,5 @@
-ackage org.GLM.negoriator.controller;
+package org.GLM.negoriator.controller;
+
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.web.bind.annotation.GetMapping;
