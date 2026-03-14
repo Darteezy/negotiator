@@ -30,11 +30,11 @@ The system combines a Spring Boot backend, a React frontend, and PostgreSQL pers
 ### Start the backend and database
 
 ```bash
-cp .env.example # Configure environment variables
+cp .env.example .env # Configure environment variables
 docker compose up # Starts PostgreSQL + Springboot backend
 ```
 
-Backend API: `http://localhost:3001`
+Backend API: `http://localhost:8080`
 
 ### Start the frontend
 
