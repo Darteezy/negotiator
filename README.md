@@ -1,48 +1,69 @@
-### Negotiator 
+# Negotiator
 
-Automated negotiation agent on behalf of the buyer side and a UI where human can play the supplier and negotiate against it. App has an algorithm that powers the negotiation engine with a back and forth offer/counteroffer flow.
-Configurable bot has goals and limits with multiple negotiation strategies.
+Negotiator is a buyer-side autonomous negotiation application with a supplier-facing interface. The platform allows a human supplier to negotiate with an automated buyer agent through a structured offer and counteroffer flow.
 
-### Features
+## Overview
 
-### Tech Stack
-- Backend - Java21 + Spring Boot
-- Frontend - React
-- Database - PostGreSQL
-- Node.js
-- Docker and Docker compose
+The system combines a Spring Boot backend, a React frontend, and PostgreSQL persistence. The buyer agent uses a hybrid negotiation strategy based on rule-based logic and LLM support. Detailed negotiation logic, scoring, and strategy design will be documented separately in a dedicated README.
 
-### Prerequisites
-1. Start the backend and database
+## Features
+- Buyer-side automated negotiation agent.
+- Supplier-facing UI for live negotiation sessions.
+- Back-and-forth offer and counteroffer workflow.
+- Negotiation state tracking across the full session lifecycle.
+- Configurable buyer goals, limits, and negotiation preferences.
+- Hybrid negotiation strategy using a rule-based algorithm with LLM support.
+- Persistent storage for negotiation sessions, offers, and outcomes.
+- Extensible architecture for future strategy comparison, analytics, and replay features.
 
-cp .env.example .env # Configure environment variables
-docker compose up # # Starts PostgreSQL + Springboot backend
+## Tech Stack
+- Backend: Java 21 + Spring Boot
+- Frontend: React
+- Database: PostgreSQL
+- Runtime: Node.js
+- Containerization: Docker and Docker Compose
+- API documentation: Swagger / OpenAPI
+- Build tool: Maven
 
-Backend API: http://localhost:3001
+## Getting Started
 
-- Start the frontend
-- cd frontend
-- npm install
-- npm run dev
+### Start the backend and database
 
-Frontend: http://localhost:3000
+```bash
+cp .env.example # Configure environment variables
+docker compose up # Starts PostgreSQL + Springboot backend
+```
 
-### Project Structure
+Backend API: `http://localhost:3001`
+
+### Start the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend: `http://localhost:3000`
+
+## Project Structure
+
+```text
 negotiator/
 frontend/
 backend/
 docker-compose.yml
 .env.example
+```
 
-### Environment Variables
-- list all required env vars. Explain what each one does
+## Environment Variables
 
-### Tech Stack
-- Backend: Java SpringBoot
-- Frontend: React
-- Database: PostgreSQL
-- Docker
-- API docs: Swagger / OpenAPi
-- Build tools: Maven
+The application should be configured through `.env` values for:
+- Backend application configuration
+- Database connection settings
+- Frontend environment configuration
+- External API keys for LLM integration
+
+The final variable list should be documented alongside the implementation configuration.
 
 
