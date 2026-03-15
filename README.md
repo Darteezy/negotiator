@@ -31,7 +31,7 @@ The system combines a Spring Boot backend, a React frontend, and PostgreSQL pers
 
 ```bash
 cp .env.example .env # Configure environment variables
-docker compose up # Starts PostgreSQL + Springboot backend
+docker compose up --build # Starts PostgreSQL + Springboot backend
 ```
 
 Backend API: `http://localhost:8080`
