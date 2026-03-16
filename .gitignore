@@ -3,7 +3,16 @@ target/
 backend/.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+
+# Dependencies
+node_modules/
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+
 ### STS ###
 .apt_generated
 .classpath
