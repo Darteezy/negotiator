@@ -12,6 +12,7 @@ public class BuyerUtilityCalculator {
      * - normalized weighted score
      * - typically in range 0.0 to 1.0
      * - higher means better for the buyer
+     * @return - price + payment + delivery + contract ≈ 1.0
      */
     public BigDecimal calculate(
             NegotiationEngine.OfferVector offer,
@@ -19,15 +20,39 @@ public class BuyerUtilityCalculator {
             NegotiationEngine.NegotiationBounds bounds
     ) {
 
-        // TODO:
-        // 1. Normalize price
-        // 2. Normalize payment days
-        // 3. Normalize delivery days
-        // 4. Normalize contract months
-        // 5. Multiply by issue weights
-        // 6. Sum into final utility
-        // 7. Optionally apply penalties/interactions
-        return BigDecimal.ZERO;
+        BigDecimal priceScore = normalizeNegative(
+                offer.price(),
+                bounds.minPrice(),
+                bounds.maxPrice()
+        );
+        BigDecimal paymentScore = normalizeNegative(
+                offer.paymentDays(),
+                bounds.minPaymentDays(),
+                bounds.maxPaymentDays()
+        );
+        BigDecimal deliveryScore = normalizeNegative(
+                offer.deliveryDays(),
+                bounds.minDeliveryDays(),
+                bounds.maxDeliveryDays()
+        );
+
+        BigDecimal contractScore = normalizeNegative(
+                offer.contractMonths(),
+                bounds.minContractMonths(),
+                bounds.maxContractMonths()
+        );
+
+        BigDecimal weightedPrice = priceScore.multiply(profile.weights().price());
+        BigDecimal weightedPayment = paymentScore.multiply(profile.weights().paymentDays());
+        BigDecimal weightedDelivery = deliveryScore.multiply(profile.weights().deliveryDays());
+        BigDecimal weightedContract = contractScore.multiply(profile.weights().contractMonths());
+
+        BigDecimal utility = weightedPrice
+                .add(weightedPayment)
+                .add(weightedDelivery)
+                .add(weightedContract);
+
+        return utility.setScale(SCALE, RoundingMode.HALF_UP);
     }
 
     private BigDecimal normalizePositive(int value, int min, int max) {
@@ -35,14 +60,14 @@ public class BuyerUtilityCalculator {
             return BigDecimal.ZERO;
         }
         return BigDecimal.valueOf(value - min)
-                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_DOWN);
+                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
     }
     private BigDecimal normalizeNegative(int value, int min, int max) {
         if (max == min) {
             return BigDecimal.ZERO;
         }
-        return BigDecimal.valueOf(value - min)
-                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_DOWN);
+        return BigDecimal.valueOf(max - value)
+                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
     }
     private BigDecimal normalizeNegative(BigDecimal value, BigDecimal min, BigDecimal max) {
         if (max.compareTo(min) == 0)
