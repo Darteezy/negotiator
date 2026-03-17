@@ -20,12 +20,12 @@ public class BuyerUtilityCalculator {
             NegotiationEngine.NegotiationBounds bounds
     ) {
 
-        BigDecimal priceScore = normalizeNegative(
+        BigDecimal priceScore = normalizePrice(
                 offer.price(),
                 bounds.minPrice(),
                 bounds.maxPrice()
         );
-        BigDecimal paymentScore = normalizeNegative(
+        BigDecimal paymentScore = normalizePositive(
                 offer.paymentDays(),
                 bounds.minPaymentDays(),
                 bounds.maxPaymentDays()
@@ -55,10 +55,17 @@ public class BuyerUtilityCalculator {
         return utility.setScale(SCALE, RoundingMode.HALF_UP);
     }
 
+    BigDecimal normalizePrice(BigDecimal value, BigDecimal min, BigDecimal max) {
+        return max.subtract(value)
+                .divide(max.subtract(min), RoundingMode.HALF_UP);
+    }
+
+
     private BigDecimal normalizePositive(int value, int min, int max) {
         if (max == min) {
             return BigDecimal.ZERO;
         }
+
         return BigDecimal.valueOf(value - min)
                 .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
     }
