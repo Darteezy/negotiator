@@ -16,6 +16,18 @@ The system combines a Spring Boot backend, a React frontend, and PostgreSQL pers
 - Persistent storage for negotiation sessions, offers, and outcomes.
 - Extensible architecture for future strategy comparison, analytics, and replay features.
 
+## Current Negotiation Strategy
+
+The current implementation uses a simple rule-based strategy intended for an MVP:
+
+- Each supplier offer is converted into a buyer utility score from `0.0` to `1.0` using weighted price, payment terms, delivery time, and contract length.
+- The buyer starts with a stricter acceptance threshold and lowers it gradually as the negotiation approaches the final round.
+- The buyer immediately rejects offers that are worse than its reservation limits.
+- If an offer is good enough for the current round, the buyer accepts it.
+- If the offer is still workable but not yet good enough, the buyer counters by improving the single term that hurts the buyer the most and moves that term halfway toward the buyer's ideal value.
+
+In practice, that means the bot behaves conservatively early, becomes more flexible later, and makes small, easy-to-explain counteroffers instead of changing every term at once.
+
 ## Tech Stack
 - Backend: Java 21 + Spring Boot
 - Frontend: React
@@ -65,5 +77,4 @@ The application should be configured through `.env` values for:
 - External API keys for LLM integration
 
 The final variable list should be documented alongside the implementation configuration.
-
 
