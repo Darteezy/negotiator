@@ -6,6 +6,8 @@ import java.math.RoundingMode;
 public class BuyerUtilityCalculator {
 
     private static final int SCALE = 4;
+    private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(SCALE, RoundingMode.HALF_UP);
+    private static final BigDecimal ONE = BigDecimal.ONE.setScale(SCALE, RoundingMode.HALF_UP);
     /**
      * Calculates the buyer-side utility score for a supplier offer.
      * Expected output:
@@ -52,7 +54,7 @@ public class BuyerUtilityCalculator {
                 .add(weightedDelivery)
                 .add(weightedContract);
 
-        return utility.setScale(SCALE, RoundingMode.HALF_UP);
+        return clamp(utility);
     }
 
     public static void main(String[] args) {
@@ -110,32 +112,58 @@ public class BuyerUtilityCalculator {
     }
 
     BigDecimal normalizePrice(BigDecimal value, BigDecimal min, BigDecimal max) {
-        return max.subtract(value)
-                .divide(max.subtract(min), RoundingMode.HALF_UP);
+        if (max.compareTo(min) == 0) {
+            return ZERO;
+        }
+
+        BigDecimal normalized = max.subtract(value)
+                .divide(max.subtract(min), SCALE, RoundingMode.HALF_UP);
+
+        return clamp(normalized);
     }
 
 
     private BigDecimal normalizePositive(int value, int min, int max) {
         if (max == min) {
-            return BigDecimal.ZERO;
+            return ZERO;
         }
 
-        return BigDecimal.valueOf(value - min)
+        BigDecimal normalized = BigDecimal.valueOf(value - min)
                 .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
+
+        return clamp(normalized);
     }
     private BigDecimal normalizeNegative(int value, int min, int max) {
         if (max == min) {
-            return BigDecimal.ZERO;
+            return ZERO;
         }
-        return BigDecimal.valueOf(max - value)
+
+        BigDecimal normalized = BigDecimal.valueOf(max - value)
                 .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
+
+        return clamp(normalized);
     }
     private BigDecimal normalizeNegative(BigDecimal value, BigDecimal min, BigDecimal max) {
         if (max.compareTo(min) == 0)
         {
-            return BigDecimal.ZERO;
+            return ZERO;
         }
-        return max.subtract(value)
+
+        BigDecimal normalized = max.subtract(value)
                 .divide(max.subtract(min), SCALE, RoundingMode.HALF_UP);
+
+        return clamp(normalized);
+    }
+
+    private BigDecimal clamp(BigDecimal value) {
+        BigDecimal scaledValue = value.setScale(SCALE, RoundingMode.HALF_UP);
+
+        if (scaledValue.compareTo(ZERO) < 0) {
+            return ZERO;
+        }
+        if (scaledValue.compareTo(ONE) > 0) {
+            return ONE;
+        }
+        return scaledValue;
     }
 }

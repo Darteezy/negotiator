@@ -129,6 +129,18 @@ class NegotiationEngineTest {
 		assertThat(response.evaluation().buyerUtility()).isLessThan(response.evaluation().targetUtility());
 	}
 
+	@Test
+	void clampsOutOfBoundsBuyerFriendlyOffersBeforeDecisionMaking() {
+		NegotiationResponse response = engine.negotiate(requestFor(
+			new OfferVector(BigDecimal.valueOf(70), 95, 1, 1),
+			new NegotiationContext(1, 6, NegotiationState.PENDING, BigDecimal.valueOf(0.10), List.of())
+		));
+
+		assertThat(response.decision()).isEqualTo(Decision.ACCEPT);
+		assertThat(response.evaluation().buyerUtility()).isEqualByComparingTo("1.0000");
+		assertThat(response.evaluation().buyerUtility()).isGreaterThanOrEqualTo(response.evaluation().targetUtility());
+	}
+
 	private NegotiationRequest requestFor(OfferVector supplierOffer, NegotiationContext context) {
 		return new NegotiationRequest(
 			supplierOffer,
