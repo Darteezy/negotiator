@@ -10,6 +10,10 @@ public enum NegotiationSessionStatus {
 	REJECTED,
 	EXPIRED;
 
+	public static NegotiationSessionStatus from(NegotiationState state) {
+		return NegotiationSessionStatus.valueOf(state.name());
+	}
+
 	public NegotiationState toNegotiationState() {
 		return NegotiationState.valueOf(name());
 	}

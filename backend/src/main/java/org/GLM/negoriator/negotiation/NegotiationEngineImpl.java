@@ -5,9 +5,12 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.stereotype.Component;
+
 /**
  * negotitation engine flow gets orchestrated
  */
+@Component
 public class NegotiationEngineImpl implements NegotiationEngine {
 
     private static final int SCALE = 4;

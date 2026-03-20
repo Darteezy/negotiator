@@ -146,6 +146,19 @@ public class NegotiationSession {
 			history);
 	}
 
+	public void moveTo(NegotiationSessionStatus nextStatus) {
+		this.status = nextStatus;
+		if (nextStatus == NegotiationSessionStatus.COUNTERED) {
+			this.currentRound = currentRound + 1;
+		}
+	}
+
+	public boolean isClosed() {
+		return status == NegotiationSessionStatus.ACCEPTED
+			|| status == NegotiationSessionStatus.REJECTED
+			|| status == NegotiationSessionStatus.EXPIRED;
+	}
+
 	@PrePersist
 	void onCreate() {
 		Instant now = Instant.now();

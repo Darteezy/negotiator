@@ -8,6 +8,10 @@ public enum NegotiationDecisionType {
 	COUNTER,
 	REJECT;
 
+	public static NegotiationDecisionType from(Decision decision) {
+		return NegotiationDecisionType.valueOf(decision.name());
+	}
+
 	public Decision toDecision() {
 		return Decision.valueOf(name());
 	}
