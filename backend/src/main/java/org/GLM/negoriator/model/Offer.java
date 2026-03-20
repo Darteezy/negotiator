@@ -19,8 +19,9 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 @Entity
-@Table(indexes = {@Index(name = "idx_offer_negotiation_id", columnList = "negotiation_id"), @Index(name = "idx_offer_round_number", columnList = "round_number")}
-)
+@Table(indexes = {
+        @Index(name = "idx_offer_negotiation_round", columnList = "negotiation_id, round_number")
+})
 @Getter
 @Setter
 public class Offer {
