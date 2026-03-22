@@ -580,21 +580,21 @@ For stronger confidence, add tests for:
 
 These are important to document explicitly.
 
-### 1. No public negotiation API yet
+### 1. The live UI is still structured-offer first
 
-The negotiation engine is available through the application service and tests, not through a dedicated controller.
+The supplier-facing frontend now exists, but it submits structured terms rather than free-text negotiation messages. This is intentional because the current engine evaluates explicit numeric terms, not natural-language intent.
 
-### 2. No frontend yet
-
-The user-facing negotiation interface requested by the challenge is still planned.
-
-### 3. No runtime strategy switching yet
+### 2. No runtime strategy switching yet
 
 The code contains design hints, but only one strategy is active today.
 
-### 4. Supplier beliefs are not learned yet
+### 3. Supplier beliefs are not learned yet
 
 Belief snapshots are persisted, and supplier utility is estimated from them, but there is no belief update algorithm in the current engine.
+
+### 4. AI messaging is not part of the negotiation decision yet
+
+The repository contains a Spring AI endpoint, but the buyer negotiation engine does not use AI to decide accept, counter, or reject. Any future AI chat layer should remain downstream of the structured decision contract or operate as a recommendation layer with strict rule-based guardrails.
 
 ### 5. Some model parameters are unused
 
@@ -602,9 +602,9 @@ Belief snapshots are persisted, and supplier utility is estimated from them, but
 
 ## Recommended Next Technical Steps
 
-1. Add a negotiation REST controller over the existing application service.
-2. Build a minimal frontend so the challenge can be exercised end to end by a human supplier.
-3. Extract a strategy interface from the current rule-based engine.
-4. Implement at least one alternative strategy such as Boulware or Conceder.
-5. Add a rule-based selector before introducing AI-assisted switching.
-6. Persist strategy choice and switching rationale for auditability.
+1. Extract a strategy interface from the current rule-based engine.
+2. Implement at least one alternative strategy such as Boulware or Conceder.
+3. Add a rule-based selector before introducing AI-assisted switching.
+4. Add human-readable AI phrasing to the buyer response layer without bypassing deterministic reservation enforcement.
+5. Persist strategy choice and switching rationale for auditability.
+6. Expand replay and analytics around the now-live frontend and API contract.

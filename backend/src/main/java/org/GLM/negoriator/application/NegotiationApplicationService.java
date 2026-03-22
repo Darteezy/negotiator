@@ -54,6 +54,12 @@ public class NegotiationApplicationService {
 		return sessionRepository.saveAndFlush(session);
 	}
 
+	@Transactional(readOnly = true)
+	public NegotiationSession getSession(UUID sessionId) {
+		return sessionRepository.findDetailedById(sessionId)
+			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));
+	}
+
 	public NegotiationSession submitSupplierOffer(UUID sessionId, OfferVector supplierOfferTerms) {
 		NegotiationSession session = sessionRepository.findById(sessionId)
 			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));

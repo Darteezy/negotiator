@@ -1,0 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --page-bg: #f4efe7;
+  --panel: rgba(255, 252, 245, 0.92);
+  --line: #ddcfbc;
+  --ink-strong: #1d2a2f;
+  --ink-muted: #5f6f77;
+  --ink-soft: #7f8f95;
+  --accent: #0e7c66;
+  --accent-soft: #e0f4ee;
+  --buyer-soft: #e6f4ef;
+  --buyer-ink: #116a58;
+  --supplier-soft: #fff1dc;
+  --supplier-ink: #9a5e1b;
+  --system-soft: #f1ebe2;
+  --system-ink: #5e5140;
+  --danger-soft: #fdeaea;
+  --danger-ink: #b44343;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: "Manrope", sans-serif;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-mono {
+  font-family: "IBM Plex Mono", monospace;
+}

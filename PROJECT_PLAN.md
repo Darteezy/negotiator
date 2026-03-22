@@ -9,6 +9,8 @@ Build a buyer-side autonomous negotiation agent for the Pactum challenge, expose
 ### Completed foundations
 
 - Backend Spring Boot project with Maven and Docker Compose.
+- Frontend Vite + React supplier console.
+- Negotiation REST controller for session lifecycle and supplier offer submission.
 - Persistence model for negotiation sessions, offers, and decisions.
 - Rule-based buyer engine for accept, counter, and reject decisions.
 - Utility scoring over price, payment terms, delivery time, and contract length.
@@ -19,15 +21,14 @@ Build a buyer-side autonomous negotiation agent for the Pactum challenge, expose
 ### In progress conceptually
 
 - Documentation cleanup and architecture clarification.
-- Converting the negotiation engine from an internal service flow into public API endpoints.
+- Evolving the structured supplier UI into a more conversational negotiation experience.
 
 ### Not implemented yet
 
-- Frontend UI.
-- Negotiation REST controller.
 - Multiple runtime strategies.
 - Strategy selection mechanism.
 - AI-assisted strategy switching.
+- AI-generated buyer phrasing in the main negotiation flow.
 - Replay and analytics UI.
 
 ## Delivery Principles

@@ -6,27 +6,37 @@ This document describes the architecture that is implemented in the repository t
 
 ## System Scope Today
 
-The current repository is a backend-first negotiation system with persistence and tests.
+The current repository is a frontend-plus-backend negotiation system with persistence and tests.
 
 Implemented components:
 
+- Supplier-facing React frontend for session start, structured offer submission, and timeline review.
 - Negotiation domain model and persistence.
 - Rule-based buyer negotiation engine.
+- Negotiation REST API.
 - Application service orchestration for session start and supplier-offer submission.
-- PostgreSQL and local Docker Compose support.
+- PostgreSQL and local Docker Compose support for frontend, backend, and database.
 - A standalone AI chat endpoint for experimentation.
 
 Not implemented yet:
 
-- Supplier-facing frontend.
-- Public negotiation REST controller.
 - Runtime strategy selector.
 - AI-assisted strategy selection inside the negotiation loop.
+- Natural-language chat parsing into negotiation terms.
 
 ## High-Level Component View
 
 ```text
 Supplier Offer Input
+	|
+	v
+Frontend (Vite + React)
+	|
+	v
+Frontend container / dev server
+	|
+	v
+Negotiation REST API
 	|
 	v
 NegotiationApplicationService
@@ -55,7 +65,7 @@ Code references:
 
 ### 1. Session creation
 
-The application service creates a session with:
+The frontend starts a session through the negotiation API. The application service creates a session with:
 
 - current round
 - max rounds
@@ -68,7 +78,7 @@ This is implemented in [NegotiationApplicationService](../backend/src/main/java/
 
 ### 2. Supplier offer submission
 
-When a supplier offer is submitted:
+When a supplier offer is submitted from the frontend:
 
 1. The session is loaded from the repository.
 2. Closed sessions are rejected.
@@ -184,12 +194,27 @@ Current limitation:
 
 ## API Surface Today
 
-The repository currently exposes only two controller entry points:
+The repository currently exposes these API entry points:
 
+- [NegotiationController](../backend/src/main/java/org/GLM/negoriator/controller/NegotiationController.java)
+  - `GET /api/negotiations/config/defaults`
+  - `POST /api/negotiations/sessions`
+  - `GET /api/negotiations/sessions/{id}`
+  - `POST /api/negotiations/sessions/{id}/offers`
 - [AIController](../backend/src/main/java/org/GLM/negoriator/controller/AIController.java): `GET /api/ai`
 - [HelloController](../backend/src/main/java/org/GLM/negoriator/controller/HelloController.java): root mapping placeholder
 
-There is no negotiation controller yet. The negotiation loop exists behind the application service and tests, not behind a public REST contract.
+The human supplier UI currently uses the negotiation controller with structured offer payloads. Free-text AI chat is still future work.
+
+## Docker Runtime Today
+
+The repository now supports a three-service Compose flow:
+
+- `postgres`: PostgreSQL database
+- `backend`: Spring Boot API and negotiation engine
+- `frontend`: static React build served by Nginx
+
+In Docker, the frontend proxies `/api/*` requests to the backend service over the internal Compose network. This keeps the browser-facing app on a single origin while still preserving the same REST contract used in local frontend development.
 
 ## Testing Architecture
 
@@ -216,8 +241,6 @@ The repository already hints at future strategy work in [NegotiationEngine](../b
 
 Planned additions:
 
-- Frontend for supplier interaction.
-- Negotiation REST API.
 - Runtime strategy portfolio.
 - Strategy selector that can use rules, heuristics, or AI assistance.
 - Supplier model updates from history and response patterns.

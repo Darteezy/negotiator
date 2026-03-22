@@ -1,8 +1,6 @@
 # Negotiator
 
-Negotiator is a buyer-side autonomous negotiation backend built for the Pactum technical challenge. The current codebase implements the negotiation domain model, a rule-based buyer agent, persistence for sessions and decisions, and test coverage for the scoring and decision loop.
-
-The repository does not yet contain a supplier-facing frontend or a public negotiation REST API. Those are planned next steps and are documented separately as future work.
+Negotiator is a buyer-side autonomous negotiation application built for the Pactum technical challenge. The current codebase now includes a Spring Boot backend, a supplier-facing Vite + React frontend, a rule-based buyer agent, persistence for sessions and decisions, and test coverage for the scoring and decision loop.
 
 ## Challenge Alignment
 
@@ -17,16 +15,17 @@ This repository already implements the core buyer-side negotiation engine around
 
 Current gaps against the full challenge scope:
 
-- No supplier UI is present in the workspace yet.
-- No dedicated negotiation controller is exposed yet.
 - Multiple runtime-selectable strategies are planned but not implemented.
-- The Spring AI endpoint exists, but it is not part of the negotiation engine.
+- The current frontend is structured-offer first, not natural-language AI chat yet.
+- The Spring AI endpoint exists, but it is not part of the negotiation engine yet.
 
 ## Current State
 
 ### Implemented
 
 - Spring Boot backend with JPA persistence and PostgreSQL support.
+- Vite 8 + React 19 frontend for the human supplier experience.
+- Negotiation REST API for session creation, retrieval, and supplier-offer submission.
 - Negotiation engine built from these components:
   - [BuyerUtilityCalculator](backend/src/main/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculator.java)
   - [DecisionMaker](backend/src/main/java/org/GLM/negoriator/negotiation/DecisionMaker.java)
@@ -40,10 +39,9 @@ Current gaps against the full challenge scope:
 
 ### Planned
 
-- Supplier-facing frontend.
-- Negotiation REST endpoints.
 - Strategy portfolio with runtime strategy selection.
 - AI-assisted strategy switching and richer supplier modeling.
+- AI-generated buyer phrasing layered on top of the structured decision contract.
 - Better analytics, replay, and negotiation observability.
 
 ## Negotiation Strategy Today
@@ -65,9 +63,10 @@ For the full algorithm description, formulas, and test mapping, see [docs/negoti
 
 ## Architecture Summary
 
-The current architecture is backend-first:
+The current architecture is frontend-plus-backend:
 
-- Spring Boot hosts the application and negotiation logic.
+- Vite + React hosts the supplier-facing negotiation workspace.
+- Spring Boot hosts the negotiation logic and REST API.
 - PostgreSQL stores session state for reconstruction and later analysis.
 - The application service orchestrates session start and supplier-offer submission.
 - A separate AI endpoint exists for generic chat completion experiments, but it is not used by the negotiation engine.
@@ -78,11 +77,15 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 
 - Java 21
 - Spring Boot 3.4
+- React 19
+- Vite 8
 - Spring Web
 - Spring Data JPA
 - PostgreSQL
 - H2 for tests
 - Spring AI OpenAI starter
+- Tailwind CSS 4
+- shadcn-style component structure
 - Docker Compose
 - Maven Wrapper
 
@@ -94,17 +97,45 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 - Java 21 if running outside Docker
 - An `.env` file based on `.env.example`
 
-### Start PostgreSQL and the backend with Docker
+### Start the full stack with Docker
+
+1. Create the local environment file:
 
 ```bash
 cp .env.example .env
+```
+
+2. Build and start the containers:
+
+```bash
 docker compose up --build
 ```
 
-Services exposed by Compose:
+3. Open the app:
 
-- Backend: `http://localhost:8080`
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432`
+
+The Dockerized frontend serves the built React app and proxies `/api` traffic to the backend service inside Compose.
+
+To stop the Docker stack:
+
+```bash
+docker compose down
+```
+
+### Start the frontend outside Docker
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend development server: `http://localhost:5173`
+
+The Vite dev server proxies `/api` requests to `http://localhost:8080`.
 
 ### Run backend tests
 
@@ -123,12 +154,19 @@ The current backend expects these environment variables:
 - `SPRING_DATASOURCE_URL` or Docker Compose-provided database URL wiring
 - `OPENAI_API_KEY`
 
+Optional frontend override:
+
+- `VITE_API_BASE_URL` if you do not want to use the Vite development proxy
+
 The OpenAI key is required for the generic AI controller in [AIController](backend/src/main/java/org/GLM/negoriator/controller/AIController.java). It is not required for the negotiation engine logic itself.
 
 ## Repository Layout
 
 ```text
 negotiator/
+├── frontend/
+│   ├── src/
+│   └── package.json
 ├── backend/
 │   ├── src/main/java/org/GLM/negoriator/
 │   │   ├── application/
