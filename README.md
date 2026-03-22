@@ -28,14 +28,14 @@ Current gaps against the full challenge scope:
 
 - Spring Boot backend with JPA persistence and PostgreSQL support.
 - Negotiation engine built from these components:
-	- [BuyerUtilityCalculator](backend/src/main/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculator.java)
-	- [DecisionMaker](backend/src/main/java/org/GLM/negoriator/negotiation/DecisionMaker.java)
-	- [CounterOfferGenerator](backend/src/main/java/org/GLM/negoriator/negotiation/CounterOfferGenerator.java)
-	- [NegotiationEngineImpl](backend/src/main/java/org/GLM/negoriator/negotiation/NegotiationEngineImpl.java)
+  - [BuyerUtilityCalculator](backend/src/main/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculator.java)
+  - [DecisionMaker](backend/src/main/java/org/GLM/negoriator/negotiation/DecisionMaker.java)
+  - [CounterOfferGenerator](backend/src/main/java/org/GLM/negoriator/negotiation/CounterOfferGenerator.java)
+  - [NegotiationEngineImpl](backend/src/main/java/org/GLM/negoriator/negotiation/NegotiationEngineImpl.java)
 - Application service that starts sessions and records the full offer-decision loop:
-	- [NegotiationApplicationService](backend/src/main/java/org/GLM/negoriator/application/NegotiationApplicationService.java)
+  - [NegotiationApplicationService](backend/src/main/java/org/GLM/negoriator/application/NegotiationApplicationService.java)
 - Persistence model for sessions, offers, decisions, buyer profiles, bounds, and supplier beliefs:
-	- [NegotiationSession](backend/src/main/java/org/GLM/negoriator/domain/NegotiationSession.java)
+  - [NegotiationSession](backend/src/main/java/org/GLM/negoriator/domain/NegotiationSession.java)
 - Automated tests for utility scoring, decision thresholds, counteroffers, engine orchestration, and repository persistence.
 
 ### Planned
@@ -148,4 +148,3 @@ negotiator/
 - [docs/architecture.md](docs/architecture.md): system structure, persistence flow, and current gaps.
 - [docs/negotiation-engine.md](docs/negotiation-engine.md): algorithm, decision logic, test strategy, and future strategy design.
 - [PROJECT_PLAN.md](PROJECT_PLAN.md): delivery roadmap and planned improvements.
-
