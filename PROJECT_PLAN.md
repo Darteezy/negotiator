@@ -1,54 +1,210 @@
-### Negotiator
+# Project Plan
 
-### Overview
-Negotiator is a buyer-side automated negotiation agent with a supplier-facing UI. The system runs structured offer/counteroffer rounds, applies configurable strategies, and tracks outcomes across negotiation sessions.
+## Goal
 
-### Core Features
-- Configurable negotiation engine with strategy selection.
-- Buyer agent goals and limits (budget, target price, fallback rules).
-- Supplier UI for live negotiation sessions.
-- Session history and outcome reporting.
+Build a buyer-side autonomous negotiation agent for the Pactum challenge, expose it through a human-usable negotiation interface, and evolve the backend from a single rule-based strategy into a strategy portfolio with future AI-assisted selection.
 
-### Tech Stack
-- Backend - Java21 + Spring Boot
-- Frontend - React
-- Database - PostGreSQL
-- Node.js
-- Docker and Docker compose
-- Backend: Java SpringBoot
-- Frontend: React
-- Database: PostgreSQL
-- Docker
-- API docs: Swagger / OpenAPi
-- Build tools: Maven
+## Current Delivery Status
 
-### Hosting
-Server
+### Completed foundations
 
-### Architecture
-- Frontend (React) consumes backend REST APIs for sessions, offers, and configuration.
-- Backend (Spring Boot) runs negotiation orchestration and strategy evaluation.
-- Database (PostgreSQL) persists users, sessions, offers, and configuration data.
-- Docker Compose runs local dependencies for development.
+- Backend Spring Boot project with Maven and Docker Compose.
+- Persistence model for negotiation sessions, offers, and decisions.
+- Rule-based buyer engine for accept, counter, and reject decisions.
+- Utility scoring over price, payment terms, delivery time, and contract length.
+- Round-aware concession logic.
+- Single-issue counteroffer generation.
+- Automated tests for core engine and persistence flow.
 
-### Database Schema
-- Users: id, role, created_at.
-- Sessions: id, buyer_id, supplier_id, status, created_at, updated_at.
-- Offers: id, session_id, party, price, terms, created_at.
-- Strategies: id, name, parameters, active.
+### In progress conceptually
 
-### API Endpoints
-- POST /sessions: create a negotiation session.
-- GET /sessions/{id}: fetch session state and current offer.
-- POST /sessions/{id}/offers: submit an offer or counteroffer.
-- GET /sessions/{id}/history: retrieve offer history.
-- GET /strategies: list available strategies.
-- PUT /strategies/{id}: update strategy parameters.
+- Documentation cleanup and architecture clarification.
+- Converting the negotiation engine from an internal service flow into public API endpoints.
 
-### Implementation Phases
-1. Phase 0: Project Foundation. Confirm scope, key user flows, and MVP success criteria. Validate local dev setup with Docker Compose, backend, and frontend.
-2. Phase 1: Backend Core. Define domain models for sessions, offers, and strategies. Implement REST API scaffolding and persistence. Add validation, error handling.
-3. Phase 2: Negotiation Engine. Implement strategy interface and baseline strategies. Add negotiation loop with limits, timeouts, and stop conditions. Record session events and outcomes.
-4. Phase 3: Frontend UI. Build session list and session detail views. Implement offer submission flow and live session updates. Add basic analytics or outcome summary view.
-5. Phase 4: Integration & Quality. End-to-end flows across UI and API. Add logging, metrics, and API documentation. Expand automated tests for engine and API.
-6. Phase 5: Deployment Readiness. Harden configuration and environment variables. Create production-ready Docker Compose or container pipeline. Document release checklist and operational notes.
+### Not implemented yet
+
+- Frontend UI.
+- Negotiation REST controller.
+- Multiple runtime strategies.
+- Strategy selection mechanism.
+- AI-assisted strategy switching.
+- Replay and analytics UI.
+
+## Delivery Principles
+
+- Keep current-state docs accurate to the code.
+- Separate implemented behavior from design intent.
+- Preserve reproducibility through automated tests.
+- Add new strategy features behind explicit contracts so that they remain testable.
+
+## Phased Roadmap
+
+### Phase 1: Public negotiation API
+
+Target outcome:
+
+- Expose the existing application service through REST endpoints.
+
+Deliverables:
+
+- `POST /sessions` to create a session.
+- `POST /sessions/{id}/offers` to submit a supplier offer.
+- `GET /sessions/{id}` to fetch current state.
+- `GET /sessions/{id}/history` to fetch negotiation history.
+- Request and response DTOs with validation.
+- API documentation for negotiation flows.
+
+Reasoning:
+
+- The core engine already exists, but the challenge needs a human-accessible interface layer.
+
+### Phase 2: Frontend supplier experience
+
+Target outcome:
+
+- Provide a UI where a human supplier can negotiate with the buyer agent.
+
+Deliverables:
+
+- Session creation flow.
+- Offer submission form.
+- Negotiation timeline showing supplier offers, buyer responses, decision explanations, and current status.
+- Basic result summary when the session ends.
+
+Recommended first version:
+
+- A simple web app optimized for clarity over visual complexity.
+
+### Phase 3: Strategy portfolio
+
+Target outcome:
+
+- Move from one adaptive rule-based strategy to multiple selectable strategies.
+
+Candidate strategies:
+
+- Baseline adaptive utility-threshold strategy.
+- Boulware strategy.
+- Conceder strategy.
+- Tit-for-Tat strategy.
+- MESO-style multi-offer strategy.
+
+Required architecture changes:
+
+- Introduce a strategy interface.
+- Add per-strategy configuration.
+- Capture selected strategy in the session state.
+- Persist strategy decisions and rationale.
+- Add tests per strategy and for strategy selection.
+
+### Phase 4: Strategy selection mechanism
+
+Target outcome:
+
+- Select or switch strategies dynamically based on negotiation context.
+
+Possible selection inputs:
+
+- current round
+- concession velocity
+- supplier-offer history
+- estimated supplier archetype
+- walkaway risk
+- distance from reservation utility
+
+Possible implementation approaches:
+
+- Rule-based selector first.
+- AI-assisted selector later.
+- Hybrid selector where AI recommends but rules enforce safety and reservation constraints.
+
+Guardrails:
+
+- Reservation limits must remain hard constraints.
+- Selection logic must be observable and explainable.
+- The chosen strategy and switching reason must be persisted.
+
+### Phase 5: AI-assisted negotiation enhancements
+
+Target outcome:
+
+- Use AI where it adds value without replacing deterministic safety constraints.
+
+Recommended AI roles:
+
+- infer likely supplier priorities from negotiation text or offer patterns
+- recommend strategy switching
+- generate human-readable explanations
+- help propose diversified MESO options
+
+Recommended non-AI responsibilities:
+
+- final reservation enforcement
+- utility calculation
+- hard reject rules
+- state transitions
+
+### Phase 6: Analytics, replay, and evaluation
+
+Target outcome:
+
+- Make negotiation outcomes measurable and comparable across strategies.
+
+Deliverables:
+
+- session replay
+- per-round evaluation timeline
+- agreement quality metrics
+- strategy comparison dashboard
+- outcome export for offline analysis
+
+## Acceptance Criteria By Milestone
+
+### Backend API milestone
+
+- A session can be created and negotiated end to end through HTTP.
+- Closed sessions reject further offers.
+- Decision explanations are returned to the client.
+
+### Frontend milestone
+
+- A supplier can complete a full negotiation flow without using test fixtures or direct backend calls.
+
+### Strategy milestone
+
+- At least three strategies are implemented behind one contract.
+- Each strategy has deterministic unit tests.
+- The selected strategy is visible in logs and persisted state.
+
+### AI-selection milestone
+
+- AI recommendations are bounded by rule-based safety constraints.
+- Strategy-switch explanations are stored for auditability.
+
+## Risks And Mitigations
+
+### Risk: documentation drifts from implementation
+
+Mitigation:
+
+- Treat current behavior and planned features as separate sections in every major doc.
+
+### Risk: AI makes unsafe or inconsistent concessions
+
+Mitigation:
+
+- Keep reservation limits and state transitions deterministic.
+- Use AI for recommendation, not unchecked execution.
+
+### Risk: strategy switching becomes opaque
+
+Mitigation:
+
+- Persist the chosen strategy, trigger signals, and explanation on each round.
+
+## Related Documents
+
+- [README.md](README.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/negotiation-engine.md](docs/negotiation-engine.md)
+- [TASK.md](TASK.md)
