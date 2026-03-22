@@ -3,7 +3,7 @@ package org.GLM.negoriator.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.ai.chat.client.ChatClient;
+import org.GLM.negoriator.ai.AiGatewayService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,20 +16,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class AIController {
 
-    private final ChatClient chatClient;
+    private static final String OFFER_PARSE_PROMPT = "You extract final negotiation terms from supplier messages. Return JSON only with keys price, paymentDays, deliveryDays, contractMonths. Use referenceTerms as defaults. If the supplier says option N, use counterOffers[N-1] as the base. Apply relative adjustments such as 5 euro higher. Do not include markdown fences.";
+
+    private final AiGatewayService aiGatewayService;
     private final ObjectMapper objectMapper;
 
-    public AIController(ChatClient.Builder chatClientBuilder, ObjectMapper objectMapper) {
-        this.chatClient = chatClientBuilder.build();
+    public AIController(AiGatewayService aiGatewayService, ObjectMapper objectMapper) {
+        this.aiGatewayService = aiGatewayService;
         this.objectMapper = objectMapper;
     }
 
     @GetMapping("/ai")
     String generation(@RequestParam String userInput) {
-        return this.chatClient.prompt()
-                .user(userInput)
-                .call()
-                .content();
+        return aiGatewayService.complete("You are a helpful AI assistant.", userInput);
     }
 
     @PostMapping(path = "/ai/parse-offer", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -39,11 +38,9 @@ public class AIController {
         }
 
         try {
-            String content = this.chatClient.prompt()
-                    .system("You extract final negotiation terms from supplier messages. Return JSON only with keys price, paymentDays, deliveryDays, contractMonths. Use referenceTerms as defaults. If the supplier says option N, use counterOffers[N-1] as the base. Apply relative adjustments such as 5 euro higher. Do not include markdown fences.")
-                    .user(objectMapper.writeValueAsString(request))
-                    .call()
-                    .content();
+            String content = aiGatewayService.complete(
+                OFFER_PARSE_PROMPT,
+                objectMapper.writeValueAsString(request));
 
             JsonNode jsonNode = extractJson(content);
             return new ParseOfferResponse(

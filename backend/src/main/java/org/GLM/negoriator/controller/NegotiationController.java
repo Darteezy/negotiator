@@ -13,6 +13,7 @@ import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationParty;
 import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.domain.NegotiationStrategyChange;
+import org.GLM.negoriator.domain.SupplierConstraintsSnapshot;
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
@@ -78,7 +79,8 @@ public class NegotiationController {
 
 		NegotiationSession updatedSession = negotiationApplicationService.submitSupplierOffer(
 			sessionId,
-			request.toOfferVector());
+			request.toOfferVector(),
+			request.toSupplierConstraints());
 
 		return NegotiationSessionResponse.from(negotiationApplicationService.getSession(updatedSession.getId()));
 	}
@@ -132,7 +134,8 @@ public class NegotiationController {
 		BigDecimal price,
 		Integer paymentDays,
 		Integer deliveryDays,
-		Integer contractMonths
+		Integer contractMonths,
+		SupplierConstraintsRequest supplierConstraints
 	) {
 		OfferVector toOfferVector() {
 			return new OfferVector(
@@ -140,6 +143,10 @@ public class NegotiationController {
 				require(paymentDays, "paymentDays"),
 				require(deliveryDays, "deliveryDays"),
 				require(contractMonths, "contractMonths"));
+		}
+
+		SupplierConstraintsSnapshot toSupplierConstraints() {
+			return supplierConstraints == null ? null : supplierConstraints.toSnapshot();
 		}
 	}
 
@@ -243,9 +250,9 @@ public class NegotiationController {
 			return new BuyerReplyResponse(
 				decision.getDecision().name(),
 				decision.getResultingStatus().name(),
-				decision.getReasonCode().name(),
+				decision.getReasonCode() == null ? null : decision.getReasonCode().name(),
 				decision.getFocusIssue() == null ? null : decision.getFocusIssue().name(),
-				decision.getStrategyUsed().name(),
+				decision.getStrategyUsed() == null ? null : decision.getStrategyUsed().name(),
 				decision.getStrategyRationale(),
 				decision.getExplanation(),
 				decision.getDecidedAt(),
@@ -492,6 +499,21 @@ public class NegotiationController {
 				require(archetypeBeliefs, "supplierModel.archetypeBeliefs"),
 				require(updateSensitivity, "supplierModel.updateSensitivity"),
 				require(reservationUtility, "supplierModel.reservationUtility"));
+		}
+	}
+
+	public record SupplierConstraintsRequest(
+		BigDecimal priceFloor,
+		Integer paymentDaysCeiling,
+		Integer deliveryDaysFloor,
+		Integer contractMonthsFloor
+	) {
+		SupplierConstraintsSnapshot toSnapshot() {
+			return new SupplierConstraintsSnapshot(
+				priceFloor,
+				paymentDaysCeiling,
+				deliveryDaysFloor,
+				contractMonthsFloor);
 		}
 	}
 

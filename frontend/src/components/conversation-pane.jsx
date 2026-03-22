@@ -29,6 +29,9 @@ export function ConversationPane({
             <Badge tone='neutral'>
               Round {session.currentRound} / {session.maxRounds}
             </Badge>
+            <Badge tone={statusTone(session.status)}>
+              {sentenceCase(session.status)}
+            </Badge>
             <Badge tone='buyer'>{sentenceCase(session.strategy)}</Badge>
           </>
         )}
@@ -103,6 +106,18 @@ function actorIcon(actor) {
   }
 
   return Bot;
+}
+
+function statusTone(status) {
+  if (status === "ACCEPTED") {
+    return "success";
+  }
+
+  if (status === "REJECTED") {
+    return "danger";
+  }
+
+  return "neutral";
 }
 
 function MessageCard({

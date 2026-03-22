@@ -94,7 +94,8 @@ class StrategySwitchPolicy {
 	private List<OfferVector> supplierHistory(NegotiationSession session) {
 		return session.getOffers().stream()
 			.filter(offer -> offer.getParty() == NegotiationParty.SUPPLIER)
-			.sorted(Comparator.comparing(NegotiationOffer::getCreatedAt))
+			.sorted(Comparator.comparing(NegotiationOffer::getRoundNumber)
+				.thenComparing(NegotiationOffer::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
 			.map(NegotiationOffer::toOfferVector)
 			.toList();
 	}

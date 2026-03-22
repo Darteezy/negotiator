@@ -90,6 +90,42 @@ const relativeAdjustments = {
   ],
 };
 
+const optionOrdinals = {
+  one: 1,
+  first: 1,
+  "1st": 1,
+  two: 2,
+  second: 2,
+  "2nd": 2,
+  three: 3,
+  third: 3,
+  "3rd": 3,
+};
+
+const agreementPattern = /\b(agree|accept|accepted|works|deal|okay|ok)\b/i;
+
+const constraintPatterns = {
+  priceFloor: [
+    /(?:cannot|can't|can\s+not|won't|will\s+not)\D{0,24}(?:go|be|offer|propose)?\D{0,12}(?:lower|below|under|less)\D{0,8}(?:than)?\D{0,4}(?:€|eur|euro|euros|\$|usd)?\s*(\d+(?:\.\d+)?)/i,
+    /(?:minimum|min)\D{0,12}(?:price)?\D{0,12}(?:is)?\D{0,4}(?:€|eur|euro|euros|\$|usd)?\s*(\d+(?:\.\d+)?)/i,
+  ],
+  paymentDaysCeiling: [
+    /(?:cannot|can't|can\s+not|won't|will\s+not)\D{0,24}(?:payment|pay(?:ment)?\s+terms?)\D{0,12}(?:be\s+)?(?:longer|more|above|over)\D{0,8}(?:than)?\D{0,4}(\d+)\s*days?/i,
+    /(?:payment|pay(?:ment)?\s+terms?)\D{0,12}(?:cannot|can't|can\s+not|won't|will\s+not)\D{0,12}(?:be\s+)?(?:longer|more|above|over)\D{0,8}(?:than)?\D{0,4}(\d+)\s*days?/i,
+    /(?:payment|pay(?:ment)?\s+terms?)\D{0,12}(?:max(?:imum)?|cap)\D{0,8}(\d+)\s*days?/i,
+  ],
+  deliveryDaysFloor: [
+    /(?:cannot|can't|can\s+not|won't|will\s+not)\D{0,24}(?:deliver|delivery)\D{0,12}(?:before|earlier\s+than|faster\s+than|under|less\s+than)\D{0,4}(\d+)\s*days?/i,
+    /(?:deliver|delivery)\D{0,12}(?:cannot|can't|can\s+not|won't|will\s+not)\D{0,12}(?:be\s+)?(?:before|earlier\s+than|faster\s+than|under|less\s+than)\D{0,4}(\d+)\s*days?/i,
+    /(?:minimum|min)\D{0,12}(?:delivery)\D{0,12}(?:is)?\D{0,4}(\d+)\s*days?/i,
+  ],
+  contractMonthsFloor: [
+    /(?:cannot|can't|can\s+not|won't|will\s+not)\D{0,24}(?:contract|term|commitment)\D{0,12}(?:be\s+)?(?:shorter|less|under)\D{0,8}(?:than)?\D{0,4}(\d+)\s*months?/i,
+    /(?:contract|term|commitment)\D{0,12}(?:cannot|can't|can\s+not|won't|will\s+not)\D{0,12}(?:be\s+)?(?:shorter|less|under)\D{0,8}(?:than)?\D{0,4}(\d+)\s*months?/i,
+    /(?:minimum|min)\D{0,12}(?:contract|term|commitment)\D{0,12}(?:is)?\D{0,4}(\d+)\s*months?/i,
+  ],
+};
+
 export function parseSupplierMessage(message, bounds) {
   const normalizedMessage = message.trim();
   const referenceTerms = arguments[2] ?? null;
@@ -98,6 +134,7 @@ export function parseSupplierMessage(message, bounds) {
   const baseTerms =
     optionIndex === null ? referenceTerms : counterOffers[optionIndex];
   const detectedTerms = {};
+  const constraints = extractSupplierConstraints(normalizedMessage);
 
   for (const [key, definition] of Object.entries(fieldDefinitions)) {
     for (const pattern of definition.patterns) {
@@ -156,6 +193,7 @@ export function parseSupplierMessage(message, bounds) {
 
   return {
     complete: missingFields.length === 0,
+    constraints,
     detectedFields: Object.keys(detectedTerms),
     optionReference: optionIndex === null ? null : optionIndex + 1,
     inheritedFields: baseTerms
@@ -167,6 +205,32 @@ export function parseSupplierMessage(message, bounds) {
     outOfBounds,
     terms,
   };
+}
+
+function extractSupplierConstraints(message) {
+  if (!message) {
+    return null;
+  }
+
+  const extractedConstraints = {};
+
+  for (const [key, patterns] of Object.entries(constraintPatterns)) {
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+
+      if (match) {
+        extractedConstraints[key] =
+          key === "priceFloor"
+            ? Number(match[1])
+            : Math.round(Number(match[1]));
+        break;
+      }
+    }
+  }
+
+  return Object.keys(extractedConstraints).length > 0
+    ? extractedConstraints
+    : null;
 }
 
 export function shouldUseAiParsing(message, parsedDraft) {
@@ -188,15 +252,47 @@ function detectOptionReference(message, counterOffers) {
     return null;
   }
 
-  const match = message.match(/\boption\s+(\d+)\b/i);
+  const directMatch = message.match(
+    /\boption\s+(\d+|one|two|three|1st|2nd|3rd|first|second|third)\b/i,
+  );
 
-  if (!match) {
+  if (directMatch) {
+    return normalizeOptionIndex(directMatch[1], counterOffers.length);
+  }
+
+  const reverseMatch = message.match(
+    /\b(\d+|one|two|three|1st|2nd|3rd|first|second|third)\s+option\b/i,
+  );
+
+  if (reverseMatch) {
+    return normalizeOptionIndex(reverseMatch[1], counterOffers.length);
+  }
+
+  if (counterOffers.length === 1 && agreementPattern.test(message)) {
+    return 0;
+  }
+
+  return null;
+}
+
+function normalizeOptionIndex(rawValue, optionCount) {
+  if (!rawValue) {
     return null;
   }
 
-  const optionIndex = Number(match[1]) - 1;
+  const normalizedValue = rawValue.trim().toLowerCase();
+  const numericValue = Number(normalizedValue);
+  const optionNumber = Number.isNaN(numericValue)
+    ? optionOrdinals[normalizedValue]
+    : numericValue;
 
-  if (optionIndex < 0 || optionIndex >= counterOffers.length) {
+  if (!optionNumber) {
+    return null;
+  }
+
+  const optionIndex = optionNumber - 1;
+
+  if (optionIndex < 0 || optionIndex >= optionCount) {
     return null;
   }
 

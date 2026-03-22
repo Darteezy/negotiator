@@ -64,6 +64,9 @@ public class NegotiationSession {
 	@Embedded
 	private SupplierModelSnapshot supplierModelSnapshot;
 
+	@Embedded
+	private SupplierConstraintsSnapshot supplierConstraintsSnapshot;
+
 	@OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
 	@OrderBy("roundNumber ASC, createdAt ASC")
 	private final List<NegotiationOffer> offers = new ArrayList<>();
@@ -103,6 +106,7 @@ public class NegotiationSession {
 		this.buyerProfileSnapshot = buyerProfileSnapshot;
 		this.boundsSnapshot = boundsSnapshot;
 		this.supplierModelSnapshot = supplierModelSnapshot;
+		this.supplierConstraintsSnapshot = SupplierConstraintsSnapshot.empty();
 	}
 
 	public void addOffer(NegotiationOffer offer) {
@@ -130,6 +134,18 @@ public class NegotiationSession {
 
 	public SupplierModel initialSupplierModel() {
 		return supplierModelSnapshot.toSupplierModel();
+	}
+
+	public SupplierConstraintsSnapshot supplierConstraints() {
+		return supplierConstraintsSnapshot == null ? SupplierConstraintsSnapshot.empty() : supplierConstraintsSnapshot;
+	}
+
+	public void mergeSupplierConstraints(SupplierConstraintsSnapshot nextConstraints) {
+		if (nextConstraints == null || nextConstraints.isEmpty()) {
+			return;
+		}
+
+		supplierConstraintsSnapshot = supplierConstraints().merge(nextConstraints);
 	}
 
 	public SupplierModel currentSupplierModel() {
@@ -233,6 +249,10 @@ public class NegotiationSession {
 
 	public SupplierModelSnapshot getSupplierModelSnapshot() {
 		return supplierModelSnapshot;
+	}
+
+	public SupplierConstraintsSnapshot getSupplierConstraintsSnapshot() {
+		return supplierConstraints();
 	}
 
 	public List<NegotiationOffer> getOffers() {

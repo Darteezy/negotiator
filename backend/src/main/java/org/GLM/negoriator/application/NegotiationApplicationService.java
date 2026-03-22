@@ -19,6 +19,7 @@ import org.GLM.negoriator.domain.NegotiationBoundsSnapshot;
 import org.GLM.negoriator.domain.OfferEvaluationSnapshot;
 import org.GLM.negoriator.domain.OfferTermsSnapshot;
 import org.GLM.negoriator.domain.SupplierBeliefSnapshot;
+import org.GLM.negoriator.domain.SupplierConstraintsSnapshot;
 import org.GLM.negoriator.domain.SupplierModelSnapshot;
 import org.GLM.negoriator.negotiation.NegotiationEngine;
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
@@ -76,6 +77,14 @@ public class NegotiationApplicationService {
 	}
 
 	public NegotiationSession submitSupplierOffer(UUID sessionId, OfferVector supplierOfferTerms) {
+		return submitSupplierOffer(sessionId, supplierOfferTerms, null);
+	}
+
+	public NegotiationSession submitSupplierOffer(
+		UUID sessionId,
+		OfferVector supplierOfferTerms,
+		SupplierConstraintsSnapshot supplierConstraints
+	) {
 		NegotiationSession session = sessionRepository.findById(sessionId)
 			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));
 
@@ -83,11 +92,15 @@ public class NegotiationApplicationService {
 			throw new IllegalStateException("Negotiation session is closed: " + sessionId);
 		}
 
+		session.mergeSupplierConstraints(supplierConstraints);
+		SupplierConstraintsSnapshot activeConstraints = session.getSupplierConstraintsSnapshot();
+
 		NegotiationOffer supplierOffer = new NegotiationOffer(
 			session.getCurrentRound(),
 			NegotiationParty.SUPPLIER,
 			OfferTermsSnapshot.from(supplierOfferTerms));
 		StrategySwitchPolicy.StrategyContext strategyContext = strategySwitchPolicy.describeCurrentStrategy(session);
+		NegotiationOffer acceptedBuyerOffer = matchingActiveBuyerOffer(session, supplierOfferTerms);
 
 		NegotiationEngine.NegotiationResponse response = negotiationEngine.negotiate(
 			new NegotiationEngine.NegotiationRequest(
@@ -97,9 +110,21 @@ public class NegotiationApplicationService {
 				session.currentSupplierModel(),
 				session.toNegotiationBounds()));
 
+		if (acceptedBuyerOffer != null) {
+			response = new NegotiationEngine.NegotiationResponse(
+				NegotiationEngine.Decision.ACCEPT,
+				NegotiationEngine.NegotiationState.ACCEPTED,
+				java.util.List.of(),
+				response.evaluation(),
+				response.updatedSupplierBeliefs(),
+				NegotiationEngine.DecisionReason.TARGET_UTILITY_MET,
+				null,
+				"Accepted because the supplier agreed to the buyer's active offer from the previous round.");
+		}
+
 		session.addOffer(supplierOffer);
 
-		var buyerCounterOffers = response.counterOffers().stream()
+		var buyerCounterOffers = applySupplierConstraints(response.counterOffers(), supplierOfferTerms, activeConstraints).stream()
 			.map(offer -> new NegotiationOffer(
 				session.getCurrentRound(),
 				NegotiationParty.BUYER,
@@ -142,6 +167,54 @@ public class NegotiationApplicationService {
 		session.moveTo(NegotiationSessionStatus.from(response.nextState()));
 
 		return sessionRepository.saveAndFlush(session);
+	}
+
+	private java.util.List<OfferVector> applySupplierConstraints(
+		java.util.List<OfferVector> counterOffers,
+		OfferVector supplierOfferTerms,
+		SupplierConstraintsSnapshot supplierConstraints
+	) {
+		if (counterOffers.isEmpty() || supplierConstraints == null || supplierConstraints.isEmpty()) {
+			return counterOffers;
+		}
+
+		java.util.List<OfferVector> feasibleOffers = new java.util.ArrayList<>();
+
+		for (OfferVector counterOffer : counterOffers) {
+			OfferVector constrainedOffer = supplierConstraints.clamp(counterOffer);
+
+			if (sameOffer(constrainedOffer, supplierOfferTerms)) {
+				continue;
+			}
+
+			if (feasibleOffers.stream().noneMatch(existing -> sameOffer(existing, constrainedOffer))) {
+				feasibleOffers.add(constrainedOffer);
+			}
+		}
+
+		return feasibleOffers;
+	}
+
+	private NegotiationOffer matchingActiveBuyerOffer(NegotiationSession session, OfferVector supplierOfferTerms) {
+		if (session.getCurrentRound() <= 1) {
+			return null;
+		}
+
+		int activeBuyerRound = session.getCurrentRound() - 1;
+
+		return session.getOffers().stream()
+			.filter(offer -> offer.getParty() == NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == activeBuyerRound)
+			.filter(offer -> sameOffer(offer.toOfferVector(), supplierOfferTerms))
+			.findFirst()
+			.orElse(null);
+	}
+
+	private boolean sameOffer(OfferVector left, OfferVector right) {
+		return left.price().compareTo(right.price()) == 0
+			&& left.paymentDays() == right.paymentDays()
+			&& left.deliveryDays() == right.deliveryDays()
+			&& left.contractMonths() == right.contractMonths();
 	}
 
 	public record StartSessionCommand(

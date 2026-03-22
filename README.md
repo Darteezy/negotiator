@@ -17,9 +17,9 @@ Current gaps against the full challenge scope:
 
 - AI-assisted strategy switching is still planned, not implemented.
 - The current frontend is structured-offer first, not natural-language AI chat yet.
-- The Spring AI endpoint exists, now backed by Ollama, but it is not part of the negotiation engine yet.
+- The optional AI endpoint exists for helper parsing and experiments, but it is not part of the negotiation engine yet.
 
-That means the current MVP does work without Ollama for the main negotiation flow. Ollama is only needed for the separate experimental AI endpoint.
+That means the current MVP does work without any AI provider for the main negotiation flow. An external AI service is only needed for the optional parsing and chat helper endpoints.
 
 ## Current State
 
@@ -77,8 +77,8 @@ The current architecture is frontend-plus-backend:
 - Spring Boot hosts the negotiation logic and REST API.
 - PostgreSQL stores session state for reconstruction and later analysis.
 - The application service orchestrates session start and supplier-offer submission.
-- A separate AI endpoint exists for generic chat completion experiments through Ollama, but it is not used by the negotiation engine.
-- Docker Compose now runs Ollama in its own container for the optional AI endpoint.
+- A separate AI endpoint exists for generic chat completion and optional supplier-message parsing, but it is not used by the negotiation engine.
+- The backend can call either a remote Ollama server or an OpenAI-compatible API.
 
 More detail is in [docs/architecture.md](docs/architecture.md).
 
@@ -92,7 +92,7 @@ More detail is in [docs/architecture.md](docs/architecture.md).
 - Spring Data JPA
 - PostgreSQL
 - H2 for tests
-- Spring AI Ollama starter
+- External AI provider via HTTP
 - Tailwind CSS 4
 - shadcn-style component structure
 - Docker Compose
@@ -125,19 +125,12 @@ docker compose up --build
 - Frontend: `http://localhost:5173`
 - Backend API: `http://localhost:8080`
 - PostgreSQL: `localhost:5432`
-- Ollama API: `http://localhost:11434`
 
 The Dockerized frontend serves the built React app and proxies `/api` traffic to the backend service inside Compose.
 
 The core negotiation MVP should be usable as soon as the frontend, backend, and database are up.
 
-Docker Compose now uses a dedicated `ollama-pull` init service to pull the model named by `OLLAMA_CHAT_MODEL` from `.env` before the backend starts. On the first run this can add a noticeable startup delay while the model is downloaded.
-
-If you want to bypass the containerized Ollama service and point the backend at a host Ollama instance instead, set this in `.env`:
-
-```bash
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-```
+Docker Compose no longer runs Ollama. If you want AI-assisted parsing or the generic AI endpoint, point the backend at an external provider from `.env`.
 
 To stop the Docker stack:
 
@@ -172,21 +165,38 @@ The current backend expects these environment variables:
 - `POSTGRES_PASSWORD`
 - `POSTGRES_DB`
 - `SPRING_DATASOURCE_URL` or Docker Compose-provided database URL wiring
-- `OLLAMA_BASE_URL`
-- `OLLAMA_CHAT_MODEL`
+- `AI_PROVIDER`
+- `AI_BASE_URL`
+- `AI_CHAT_MODEL`
+- `AI_API_KEY` for OpenAI or OpenAI-compatible providers that require bearer auth
 
 Optional frontend override:
 
 - `VITE_API_BASE_URL` if you do not want to use the Vite development proxy
 
-Recommended local model:
+Recommended model defaults:
 
 - `qwen2.5:7b-instruct`
 - `qwen3.5:9b` if your machine has enough memory
 
-The Ollama settings are only required for the generic AI controller in [backend/src/main/java/org/GLM/negoriator/controller/AIController.java](backend/src/main/java/org/GLM/negoriator/controller/AIController.java). They are not required for the negotiation engine logic itself. In Docker Compose, the default base URL is the internal Ollama service. Outside Docker, `.env.example` points to `http://localhost:11434`.
+Provider examples:
 
-In Docker Compose, changing `OLLAMA_CHAT_MODEL` in `.env` now changes both the backend model setting and the `ollama-pull` init service. Restarting the stack will pull the configured model automatically if it is missing.
+- Remote Ollama on another server:
+  - `AI_PROVIDER=ollama`
+  - `AI_BASE_URL=http://your-gpu-server:11434`
+  - `AI_CHAT_MODEL=qwen3.5:9b`
+- OpenAI:
+  - `AI_PROVIDER=openai`
+  - `AI_BASE_URL=https://api.openai.com/v1`
+  - `AI_API_KEY=...`
+  - `AI_CHAT_MODEL=gpt-4.1-mini`
+- OpenAI-compatible server:
+  - `AI_PROVIDER=openai`
+  - `AI_BASE_URL=https://your-proxy-or-server/v1`
+  - `AI_API_KEY=...` if required by that server
+  - `AI_CHAT_MODEL=your-model-name`
+
+The AI settings are only required for the optional AI controller in [backend/src/main/java/org/GLM/negoriator/controller/AIController.java](backend/src/main/java/org/GLM/negoriator/controller/AIController.java). They are not required for the negotiation engine logic itself.
 
 ## Repository Layout
 

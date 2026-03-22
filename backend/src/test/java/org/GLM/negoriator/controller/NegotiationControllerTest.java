@@ -121,6 +121,51 @@ class NegotiationControllerTest {
 	}
 
 	@Test
+	void acceptsSecondSupplierOfferBasedOnTheFirstBuyerOption() throws Exception {
+		UUID sessionId = startSessionAndExtractId();
+
+		MvcResult firstOfferResult = mockMvc.perform(post("/api/negotiations/sessions/{sessionId}/offers", sessionId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "price": 104.00,
+					  "paymentDays": 45,
+					  "deliveryDays": 10,
+					  "contractMonths": 12
+					}
+					"""))
+			.andExpect(status().isOk())
+			.andReturn();
+
+		JsonNode firstOfferBody = objectMapper.readTree(firstOfferResult.getResponse().getContentAsString());
+		JsonNode optionOne = firstOfferBody.at("/rounds/0/buyerReply/counterOffers/0");
+
+		mockMvc.perform(post("/api/negotiations/sessions/{sessionId}/offers", sessionId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "price": %s,
+					  "paymentDays": %d,
+					  "deliveryDays": %d,
+					  "contractMonths": %d
+					}
+					""".formatted(
+						optionOne.get("price").decimalValue(),
+						optionOne.get("paymentDays").asInt(),
+						optionOne.get("deliveryDays").asInt(),
+						optionOne.get("contractMonths").asInt())))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.id").value(sessionId.toString()))
+			.andExpect(jsonPath("$.rounds.length()").value(2))
+			.andExpect(jsonPath("$.status").value(NegotiationSessionStatus.ACCEPTED.name()))
+			.andExpect(jsonPath("$.closed").value(true))
+			.andExpect(jsonPath("$.rounds[1].supplierOffer.terms.price").value(optionOne.get("price").decimalValue()))
+			.andExpect(jsonPath("$.rounds[1].buyerReply.decision").value("ACCEPT"))
+			.andExpect(jsonPath("$.rounds[1].buyerReply.counterOffer").isEmpty())
+			.andExpect(jsonPath("$.conversation[*].eventType", org.hamcrest.Matchers.hasItems("SUPPLIER_OFFER", "BUYER_REPLY")));
+	}
+
+	@Test
 	void returnsBadRequestWhenSupplierOfferPayloadIsIncomplete() throws Exception {
 		UUID sessionId = startSessionAndExtractId();
 

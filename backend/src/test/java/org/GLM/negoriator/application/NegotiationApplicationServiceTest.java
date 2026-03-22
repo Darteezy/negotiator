@@ -10,6 +10,7 @@ import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.domain.NegotiationSessionRepository;
 import org.GLM.negoriator.domain.NegotiationSessionStatus;
 import org.GLM.negoriator.domain.NegotiationStrategyChangeTrigger;
+import org.GLM.negoriator.domain.SupplierConstraintsSnapshot;
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
@@ -99,5 +100,111 @@ class NegotiationApplicationServiceTest {
 		assertThat(reloadedSession.getDecisions().getFirst().getEvaluation().getTargetUtility()).isNotNull();
 		assertThat(reloadedSession.getDecisions().getFirst().getReasonCode()).isNotNull();
 		assertThat(reloadedSession.getDecisions().getFirst().getStrategyUsed()).isEqualTo(NegotiationStrategy.MESO);
+	}
+
+	@Test
+	void acceptsSupplierAgreementWithThePreviousBuyerCounteroffer() {
+		NegotiationSession startedSession = service.startSession(new NegotiationApplicationService.StartSessionCommand(
+			NegotiationStrategy.MESO,
+			8,
+			BigDecimal.valueOf(0.15),
+			new BuyerProfile(
+				new OfferVector(BigDecimal.valueOf(90), 60, 3, 6),
+				new OfferVector(BigDecimal.valueOf(120), 30, 14, 24),
+				new IssueWeights(
+					BigDecimal.valueOf(0.4),
+					BigDecimal.valueOf(0.2),
+					BigDecimal.valueOf(0.25),
+					BigDecimal.valueOf(0.15)),
+				BigDecimal.valueOf(0.45),
+				BigDecimal.valueOf(2.0),
+				BigDecimal.valueOf(0.1)),
+			new NegotiationBounds(
+				BigDecimal.valueOf(80),
+				BigDecimal.valueOf(120),
+				30,
+				90,
+				3,
+				14,
+				3,
+				24),
+			new SupplierModel(
+				Map.of(
+					SupplierArchetype.MARGIN_FOCUSED, BigDecimal.valueOf(0.25),
+					SupplierArchetype.CASHFLOW_FOCUSED, BigDecimal.valueOf(0.25),
+					SupplierArchetype.OPERATIONS_FOCUSED, BigDecimal.valueOf(0.25),
+					SupplierArchetype.STABILITY_FOCUSED, BigDecimal.valueOf(0.25)),
+				BigDecimal.valueOf(0.50),
+				BigDecimal.valueOf(0.35))));
+
+		NegotiationSession counteredSession = service.submitSupplierOffer(
+			startedSession.getId(),
+			new OfferVector(BigDecimal.valueOf(104), 45, 10, 12));
+
+		OfferVector buyerOption = counteredSession.getDecisions().getFirst().getCounterOffer().toOfferVector();
+
+		NegotiationSession acceptedSession = service.submitSupplierOffer(
+			startedSession.getId(),
+			buyerOption);
+
+		assertThat(acceptedSession.getStatus()).isEqualTo(NegotiationSessionStatus.ACCEPTED);
+		assertThat(acceptedSession.isClosed()).isTrue();
+		assertThat(acceptedSession.getCurrentRound()).isEqualTo(2);
+		assertThat(acceptedSession.getDecisions()).hasSize(2);
+		assertThat(acceptedSession.getDecisions().getLast().getDecision())
+			.isEqualTo(org.GLM.negoriator.domain.NegotiationDecisionType.ACCEPT);
+		assertThat(acceptedSession.getDecisions().getLast().getCounterOffer()).isNull();
+	}
+
+	@Test
+	void clampsBuyerCounteroffersToTheActiveSupplierPriceFloor() {
+		NegotiationSession startedSession = service.startSession(new NegotiationApplicationService.StartSessionCommand(
+			NegotiationStrategy.MESO,
+			8,
+			BigDecimal.valueOf(0.15),
+			new BuyerProfile(
+				new OfferVector(BigDecimal.valueOf(90), 60, 3, 6),
+				new OfferVector(BigDecimal.valueOf(120), 30, 14, 24),
+				new IssueWeights(
+					BigDecimal.valueOf(0.4),
+					BigDecimal.valueOf(0.2),
+					BigDecimal.valueOf(0.25),
+					BigDecimal.valueOf(0.15)),
+				BigDecimal.valueOf(0.45),
+				BigDecimal.valueOf(2.0),
+				BigDecimal.valueOf(0.1)),
+			new NegotiationBounds(
+				BigDecimal.valueOf(80),
+				BigDecimal.valueOf(120),
+				30,
+				90,
+				3,
+				14,
+				3,
+				24),
+			new SupplierModel(
+				Map.of(
+					SupplierArchetype.MARGIN_FOCUSED, BigDecimal.valueOf(0.25),
+					SupplierArchetype.CASHFLOW_FOCUSED, BigDecimal.valueOf(0.25),
+					SupplierArchetype.OPERATIONS_FOCUSED, BigDecimal.valueOf(0.25),
+					SupplierArchetype.STABILITY_FOCUSED, BigDecimal.valueOf(0.25)),
+				BigDecimal.valueOf(0.50),
+				BigDecimal.valueOf(0.35))));
+
+		service.submitSupplierOffer(
+			startedSession.getId(),
+			new OfferVector(BigDecimal.valueOf(104), 45, 10, 12));
+
+		NegotiationSession constrainedSession = service.submitSupplierOffer(
+			startedSession.getId(),
+			new OfferVector(BigDecimal.valueOf(104), 45, 10, 12),
+			new SupplierConstraintsSnapshot(BigDecimal.valueOf(101), null, null, null));
+
+		assertThat(constrainedSession.getSupplierConstraintsSnapshot().getPriceFloor()).isEqualByComparingTo("101");
+		assertThat(constrainedSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber().equals(2))
+			.map(offer -> offer.toOfferVector().price()))
+			.allMatch(price -> price.compareTo(BigDecimal.valueOf(101)) >= 0);
 	}
 }

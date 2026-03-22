@@ -135,10 +135,10 @@ function App() {
         return;
       }
 
-      const nextSession = await submitSupplierOffer(
-        session.id,
-        resolvedDraft.terms,
-      );
+      const nextSession = await submitSupplierOffer(session.id, {
+        ...resolvedDraft.terms,
+        supplierConstraints: resolvedDraft.constraints,
+      });
       setSubmittedSupplierMessages((currentMessages) => [
         ...currentMessages,
         messageDraft.trim(),
@@ -273,7 +273,10 @@ async function resolveDraftTerms({
       counterOffers,
     });
 
-    return parseSupplierMessage("", bounds, aiTerms, []);
+    return {
+      ...parseSupplierMessage("", bounds, aiTerms, []),
+      constraints: parsedDraft.constraints,
+    };
   } catch {
     return parsedDraft;
   }

@@ -85,4 +85,91 @@ describe("parseSupplierMessage", () => {
       },
     });
   });
+
+  it("parses agreement with the first buyer option using ordinal phrasing", () => {
+    expect(
+      parseSupplierMessage(
+        "We agree with your first option.",
+        null,
+        {
+          price: 101,
+          paymentDays: 40,
+          deliveryDays: 9,
+          contractMonths: 12,
+        },
+        [
+          {
+            price: 101,
+            paymentDays: 40,
+            deliveryDays: 9,
+            contractMonths: 12,
+          },
+          {
+            price: 102,
+            paymentDays: 42,
+            deliveryDays: 8,
+            contractMonths: 12,
+          },
+        ],
+      ),
+    ).toMatchObject({
+      complete: true,
+      optionReference: 1,
+      terms: {
+        price: 101,
+        paymentDays: 40,
+        deliveryDays: 9,
+        contractMonths: 12,
+      },
+    });
+  });
+
+  it("treats a bare agreement as acceptance of the only buyer option", () => {
+    expect(
+      parseSupplierMessage("Okay, we agree.", null, null, [
+        {
+          price: 101,
+          paymentDays: 40,
+          deliveryDays: 9,
+          contractMonths: 12,
+        },
+      ]),
+    ).toMatchObject({
+      complete: true,
+      optionReference: 1,
+      terms: {
+        price: 101,
+        paymentDays: 40,
+        deliveryDays: 9,
+        contractMonths: 12,
+      },
+    });
+  });
+
+  it("extracts supplier hard constraints from natural-language messages", () => {
+    expect(
+      parseSupplierMessage(
+        "We cannot propose lower than 101 euro and delivery cannot be earlier than 9 days.",
+        null,
+        {
+          price: 104,
+          paymentDays: 45,
+          deliveryDays: 10,
+          contractMonths: 12,
+        },
+      ),
+    ).toMatchObject({
+      complete: true,
+      constraints: {
+        priceFloor: 101,
+        deliveryDaysFloor: 9,
+      },
+      terms: {
+        price: 104,
+        paymentDays: 45,
+        deliveryDays: 10,
+        contractMonths: 12,
+      },
+    });
+  });
 });

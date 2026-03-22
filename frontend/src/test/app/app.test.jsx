@@ -241,6 +241,7 @@ describe("App", () => {
           paymentDays: 40,
           deliveryDays: 9,
           contractMonths: 12,
+          supplierConstraints: null,
         },
       );
     });
@@ -249,6 +250,7 @@ describe("App", () => {
       screen.getByText(/thank you for engaging with our procurement team/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Round 2 / 10")).toBeInTheDocument();
+    expect(screen.getByText("Countered")).toBeInTheDocument();
     expect(screen.getAllByText("Meso").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: "M2" }).length).toBeGreaterThan(
       0,

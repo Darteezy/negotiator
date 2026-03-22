@@ -94,6 +94,9 @@ function buildConversationModel(
           title: "Buyer",
           at: round.buyerReply.decidedAt ?? round.supplierOffer?.at ?? null,
           message: buildBuyerLetter({
+            decision: round.buyerReply.decision,
+            resultingStatus: round.buyerReply.resultingStatus,
+            explanation: round.buyerReply.explanation,
             terms: round.buyerReply.counterOffer ?? round.buyerReply.terms,
             counterOffers: round.buyerReply.counterOffers,
           }),
@@ -304,6 +307,26 @@ function buildOpeningBuyerLetter(session) {
 function buildBuyerLetter(event) {
   const counterOffers = event.counterOffers ?? [];
   const primaryTerms = event.terms ?? counterOffers[0] ?? null;
+
+  if (event.decision === "ACCEPT" || event.resultingStatus === "ACCEPTED") {
+    return [
+      "Dear Supplier,",
+      "Thank you for your confirmation.",
+      primaryTerms
+        ? `The buyer accepts the agreed terms: ${formatTermsSentence(primaryTerms)}.`
+        : "The buyer accepts the agreed terms and closes the negotiation.",
+      event.explanation ?? "This negotiation is now closed.",
+    ].join(" ");
+  }
+
+  if (event.decision === "REJECT" || event.resultingStatus === "REJECTED") {
+    return [
+      "Dear Supplier,",
+      "Thank you for your proposal.",
+      event.explanation ??
+        "The buyer cannot approve the current terms and requests a revised commercial offer.",
+    ].join(" ");
+  }
 
   if (!primaryTerms) {
     return [
