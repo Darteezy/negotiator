@@ -20,6 +20,8 @@ export function StatusPanel({
   session,
   startingSession,
 }) {
+  const latestStrategyEvent = session?.strategyHistory?.at(-1) ?? null;
+
   return (
     <Card className='border-[var(--line)] bg-[var(--panel)]/96 backdrop-blur'>
       <CardHeader>
@@ -52,6 +54,12 @@ export function StatusPanel({
                   ? "…"
                   : `1 / ${defaults?.maxRounds ?? "—"}`
             }
+          />
+          <MetricCard
+            label='Strategy'
+            value={humanStrategyName(
+              session?.strategy ?? defaults?.defaultStrategy ?? "MESO",
+            )}
           />
           <MetricCard
             label='Walkaway risk'
@@ -91,6 +99,15 @@ export function StatusPanel({
               {latestReply.explanation}
             </p>
 
+            <div className='flex flex-wrap gap-2'>
+              <Badge tone='buyer'>{sentenceCase(latestReply.reasonCode)}</Badge>
+              {latestReply.focusIssue && (
+                <Badge tone='neutral'>
+                  Focus: {humanIssueName(latestReply.focusIssue)}
+                </Badge>
+              )}
+            </div>
+
             <div className='grid gap-3 sm:grid-cols-2'>
               <MetricCard
                 label='Buyer utility'
@@ -112,6 +129,32 @@ export function StatusPanel({
                 value={latestReply.evaluation?.nashProduct ?? "—"}
                 compact
               />
+            </div>
+          </div>
+        )}
+
+        {latestStrategyEvent && (
+          <div className='space-y-3 rounded-3xl border border-[var(--line)] bg-[var(--page-bg)] p-4'>
+            <div className='flex items-center justify-between gap-3'>
+              <p className='text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--ink-soft)]'>
+                Strategy history
+              </p>
+              <Badge tone='neutral'>
+                {sentenceCase(latestStrategyEvent.nextStrategy)}
+              </Badge>
+            </div>
+            <p className='text-sm leading-7 text-[var(--ink-muted)]'>
+              {latestStrategyEvent.rationale}
+            </p>
+            <div className='flex flex-wrap gap-2'>
+              <Badge tone='neutral'>
+                Trigger: {sentenceCase(latestStrategyEvent.trigger)}
+              </Badge>
+              {latestStrategyEvent.previousStrategy && (
+                <Badge tone='buyer'>
+                  From: {sentenceCase(latestStrategyEvent.previousStrategy)}
+                </Badge>
+              )}
             </div>
           </div>
         )}
@@ -149,6 +192,26 @@ export function StatusPanel({
       </CardContent>
     </Card>
   );
+}
+
+function humanIssueName(issue) {
+  if (issue === "PAYMENT_DAYS") {
+    return "payment days";
+  }
+
+  if (issue === "DELIVERY_DAYS") {
+    return "delivery days";
+  }
+
+  if (issue === "CONTRACT_MONTHS") {
+    return "contract months";
+  }
+
+  return "price";
+}
+
+function humanStrategyName(strategy) {
+  return sentenceCase(strategy.replaceAll("_", " "));
 }
 
 function MetricCard({ compact = false, label, value }) {

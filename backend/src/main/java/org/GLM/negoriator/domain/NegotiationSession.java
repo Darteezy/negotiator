@@ -26,6 +26,7 @@ import jakarta.persistence.Table;
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationContext;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierModel;
 
@@ -42,6 +43,10 @@ public class NegotiationSession {
 
 	@Column(name = "max_rounds", nullable = false)
 	private Integer maxRounds;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "strategy", nullable = false, length = 24)
+	private NegotiationStrategy strategy;
 
 	@Column(name = "risk_of_walkaway", nullable = false, precision = 10, scale = 4)
 	private BigDecimal riskOfWalkaway;
@@ -67,6 +72,10 @@ public class NegotiationSession {
 	@OrderBy("roundNumber ASC, decidedAt ASC")
 	private final List<NegotiationDecision> decisions = new ArrayList<>();
 
+	@OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+	@OrderBy("roundNumber ASC, createdAt ASC")
+	private final List<NegotiationStrategyChange> strategyChanges = new ArrayList<>();
+
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
@@ -79,6 +88,7 @@ public class NegotiationSession {
 	public NegotiationSession(
 		Integer currentRound,
 		Integer maxRounds,
+		NegotiationStrategy strategy,
 		BigDecimal riskOfWalkaway,
 		NegotiationSessionStatus status,
 		BuyerProfileSnapshot buyerProfileSnapshot,
@@ -87,6 +97,7 @@ public class NegotiationSession {
 	) {
 		this.currentRound = currentRound;
 		this.maxRounds = maxRounds;
+		this.strategy = strategy;
 		this.riskOfWalkaway = riskOfWalkaway;
 		this.status = status;
 		this.buyerProfileSnapshot = buyerProfileSnapshot;
@@ -102,6 +113,11 @@ public class NegotiationSession {
 	public void addDecision(NegotiationDecision decision) {
 		decision.attachTo(this);
 		decisions.add(decision);
+	}
+
+	public void addStrategyChange(NegotiationStrategyChange strategyChange) {
+		strategyChange.attachTo(this);
+		strategyChanges.add(strategyChange);
 	}
 
 	public BuyerProfile toBuyerProfile() {
@@ -141,6 +157,7 @@ public class NegotiationSession {
 		return new NegotiationContext(
 			currentRound,
 			maxRounds,
+			strategy,
 			status.toNegotiationState(),
 			riskOfWalkaway,
 			history);
@@ -151,6 +168,17 @@ public class NegotiationSession {
 		if (nextStatus == NegotiationSessionStatus.COUNTERED) {
 			this.currentRound = currentRound + 1;
 		}
+	}
+
+	public void switchStrategy(
+		NegotiationStrategy nextStrategy,
+		Integer roundNumber,
+		NegotiationStrategyChangeTrigger trigger,
+		String rationale
+	) {
+		NegotiationStrategy previousStrategy = this.strategy;
+		this.strategy = nextStrategy;
+		addStrategyChange(new NegotiationStrategyChange(roundNumber, previousStrategy, nextStrategy, trigger, rationale));
 	}
 
 	public boolean isClosed() {
@@ -183,6 +211,10 @@ public class NegotiationSession {
 		return maxRounds;
 	}
 
+	public NegotiationStrategy getStrategy() {
+		return strategy;
+	}
+
 	public BigDecimal getRiskOfWalkaway() {
 		return riskOfWalkaway;
 	}
@@ -209,6 +241,10 @@ public class NegotiationSession {
 
 	public List<NegotiationDecision> getDecisions() {
 		return decisions;
+	}
+
+	public List<NegotiationStrategyChange> getStrategyChanges() {
+		return strategyChanges;
 	}
 
 	public Instant getCreatedAt() {

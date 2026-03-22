@@ -6,6 +6,7 @@ import java.util.Map;
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierArchetype;
 import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierModel;
@@ -15,8 +16,20 @@ public final class NegotiationDefaults {
 	private NegotiationDefaults() {
 	}
 
+	public static NegotiationStrategy defaultStrategy() {
+		return NegotiationStrategy.MESO;
+	}
+
 	public static int maxRounds() {
-		return 8;
+		return maxRounds(defaultStrategy());
+	}
+
+	public static int maxRounds(NegotiationStrategy strategy) {
+		return switch (strategy) {
+			case MESO, BOULWARE -> 10;
+			case CONCEDER -> 6;
+			case TIT_FOR_TAT, BASELINE -> 8;
+		};
 	}
 
 	public static BigDecimal riskOfWalkaway() {
@@ -61,8 +74,13 @@ public final class NegotiationDefaults {
 	}
 
 	public static NegotiationApplicationService.StartSessionCommand startSessionCommand() {
+		return startSessionCommand(defaultStrategy());
+	}
+
+	public static NegotiationApplicationService.StartSessionCommand startSessionCommand(NegotiationStrategy strategy) {
 		return new NegotiationApplicationService.StartSessionCommand(
-			maxRounds(),
+			strategy,
+			maxRounds(strategy),
 			riskOfWalkaway(),
 			buyerProfile(),
 			bounds(),

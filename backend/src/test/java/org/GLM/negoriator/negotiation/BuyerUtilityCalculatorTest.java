@@ -54,6 +54,27 @@ class BuyerUtilityCalculatorTest {
                 .isEqualByComparingTo("0.0000");
     }
 
+    @Test
+    void normalizesWeightsBeforeCalculatingUtility() {
+        BuyerProfile profile = new BuyerProfile(
+                new OfferVector(new BigDecimal("90"), 60, 3, 6),
+                new OfferVector(new BigDecimal("120"), 30, 14, 24),
+                new IssueWeights(
+                        new BigDecimal("4.0"),
+                        new BigDecimal("2.0"),
+                        new BigDecimal("2.5"),
+                        new BigDecimal("1.5")),
+                new BigDecimal("0.45"),
+                BigDecimal.ZERO,
+                BigDecimal.ZERO);
+
+        assertThat(calculator.calculate(
+                new OfferVector(new BigDecimal("80"), 90, 3, 3),
+                profile,
+                bounds()))
+                .isEqualByComparingTo("1.0000");
+    }
+
     private BuyerProfile buyerProfile() {
         return new BuyerProfile(
                 new OfferVector(new BigDecimal("90"), 60, 3, 6),

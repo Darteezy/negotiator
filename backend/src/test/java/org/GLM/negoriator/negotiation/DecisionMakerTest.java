@@ -8,6 +8,7 @@ import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationContext;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationState;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.junit.jupiter.api.Test;
 
@@ -21,16 +22,16 @@ class DecisionMakerTest {
 
         BigDecimal earlyRound = decisionMaker.targetUtility(
                 profile,
-                new NegotiationContext(1, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
+                new NegotiationContext(1, 6, NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
         BigDecimal midRound = decisionMaker.targetUtility(
                 profile,
-                new NegotiationContext(3, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
+                new NegotiationContext(3, 6, NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
         BigDecimal finalRound = decisionMaker.targetUtility(
                 profile,
-                new NegotiationContext(6, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
+                new NegotiationContext(6, 6, NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
         BigDecimal afterMaxRounds = decisionMaker.targetUtility(
                 profile,
-                new NegotiationContext(9, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
+                new NegotiationContext(9, 6, NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()));
 
         assertThat(earlyRound).isGreaterThan(midRound);
         assertThat(midRound).isGreaterThan(finalRound);

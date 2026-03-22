@@ -2,6 +2,11 @@ package org.GLM.negoriator.negotiation;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationIssue;
 
 public class CounterOfferGenerator {
 
@@ -20,7 +25,24 @@ public class CounterOfferGenerator {
             NegotiationEngine.NegotiationContext context,
             NegotiationEngine.NegotiationBounds bounds,
             NegotiationEngine.OfferVector supplierOffer) {
-        String issueToImprove = issueToImprove(profile, bounds, supplierOffer);
+        return counterProposal(profile, context, bounds, supplierOffer).offer();
+    }
+
+    CounterProposal counterProposal(
+            NegotiationEngine.BuyerProfile profile,
+            NegotiationEngine.NegotiationContext context,
+            NegotiationEngine.NegotiationBounds bounds,
+            NegotiationEngine.OfferVector supplierOffer) {
+        NegotiationIssue issueToImprove = issueToImprove(profile, context, bounds, supplierOffer);
+        return new CounterProposal(issueToImprove, counterOfferForIssue(profile, bounds, supplierOffer, issueToImprove));
+        }
+
+        NegotiationEngine.OfferVector counterOfferForIssue(
+            NegotiationEngine.BuyerProfile profile,
+            NegotiationEngine.NegotiationBounds bounds,
+            NegotiationEngine.OfferVector supplierOffer,
+            NegotiationIssue issueToImprove
+        ) {
         NegotiationEngine.OfferVector idealOffer = profile.idealOffer();
 
         BigDecimal price = supplierOffer.price();
@@ -29,17 +51,17 @@ public class CounterOfferGenerator {
         int contractMonths = supplierOffer.contractMonths();
 
         switch (issueToImprove) {
-            case "payment" -> paymentDays = moveIntTowards(
+            case PAYMENT_DAYS -> paymentDays = moveIntTowards(
                     supplierOffer.paymentDays(),
                     idealOffer.paymentDays(),
                     bounds.minPaymentDays(),
                     bounds.maxPaymentDays());
-            case "delivery" -> deliveryDays = moveIntTowards(
+            case DELIVERY_DAYS -> deliveryDays = moveIntTowards(
                     supplierOffer.deliveryDays(),
                     idealOffer.deliveryDays(),
                     bounds.minDeliveryDays(),
                     bounds.maxDeliveryDays());
-            case "contract" -> contractMonths = moveIntTowards(
+            case CONTRACT_MONTHS -> contractMonths = moveIntTowards(
                     supplierOffer.contractMonths(),
                     idealOffer.contractMonths(),
                     bounds.minContractMonths(),
@@ -51,50 +73,141 @@ public class CounterOfferGenerator {
                     bounds.maxPrice());
         }
 
-        return new NegotiationEngine.OfferVector(price, paymentDays, deliveryDays, contractMonths);
+            return new NegotiationEngine.OfferVector(price, paymentDays, deliveryDays, contractMonths);
     }
 
-    String issueToImprove(
+    NegotiationIssue issueToImprove(
             NegotiationEngine.BuyerProfile profile,
+            NegotiationEngine.NegotiationContext context,
             NegotiationEngine.NegotiationBounds bounds,
             NegotiationEngine.OfferVector supplierOffer
     ) {
+            return rankedIssues(profile, context, bounds, supplierOffer).getFirst();
+            }
+
+            List<NegotiationIssue> rankedIssues(
+                NegotiationEngine.BuyerProfile profile,
+                NegotiationEngine.NegotiationContext context,
+                NegotiationEngine.NegotiationBounds bounds,
+                NegotiationEngine.OfferVector supplierOffer
+            ) {
         NegotiationEngine.OfferVector ideal = profile.idealOffer();
-        NegotiationEngine.IssueWeights weights = profile.weights();
+        NegotiationEngine.IssueWeights weights = profile.weights().normalized();
 
-        BigDecimal priceGap = weightedGap(
-                positiveGap(supplierOffer.price(), ideal.price()),
-                bounds.maxPrice().subtract(bounds.minPrice()),
-                weights.price());
-        BigDecimal paymentGap = weightedGap(
-                BigDecimal.valueOf(Math.max(0, ideal.paymentDays() - supplierOffer.paymentDays())),
-                BigDecimal.valueOf(bounds.maxPaymentDays() - bounds.minPaymentDays()),
-                weights.paymentDays());
-        BigDecimal deliveryGap = weightedGap(
-                BigDecimal.valueOf(Math.max(0, supplierOffer.deliveryDays() - ideal.deliveryDays())),
-                BigDecimal.valueOf(bounds.maxDeliveryDays() - bounds.minDeliveryDays()),
-                weights.deliveryDays());
-        BigDecimal contractGap = weightedGap(
-                BigDecimal.valueOf(Math.max(0, supplierOffer.contractMonths() - ideal.contractMonths())),
-                BigDecimal.valueOf(bounds.maxContractMonths() - bounds.minContractMonths()),
-                weights.contractMonths());
+        Map<NegotiationIssue, BigDecimal> gapByIssue = new LinkedHashMap<>();
+        gapByIssue.put(
+                NegotiationIssue.PRICE,
+                weightedGap(
+                        positiveGap(supplierOffer.price(), ideal.price()),
+                        bounds.maxPrice().subtract(bounds.minPrice()),
+                        weights.price()));
+        gapByIssue.put(
+                NegotiationIssue.PAYMENT_DAYS,
+                weightedGap(
+                        BigDecimal.valueOf(Math.max(0, ideal.paymentDays() - supplierOffer.paymentDays())),
+                        BigDecimal.valueOf(bounds.maxPaymentDays() - bounds.minPaymentDays()),
+                        weights.paymentDays()));
+        gapByIssue.put(
+                NegotiationIssue.DELIVERY_DAYS,
+                weightedGap(
+                        BigDecimal.valueOf(Math.max(0, supplierOffer.deliveryDays() - ideal.deliveryDays())),
+                        BigDecimal.valueOf(bounds.maxDeliveryDays() - bounds.minDeliveryDays()),
+                        weights.deliveryDays()));
+        gapByIssue.put(
+                NegotiationIssue.CONTRACT_MONTHS,
+                weightedGap(
+                        BigDecimal.valueOf(Math.max(0, supplierOffer.contractMonths() - ideal.contractMonths())),
+                        BigDecimal.valueOf(bounds.maxContractMonths() - bounds.minContractMonths()),
+                        weights.contractMonths()));
 
-        String worstIssue = "price";
-        BigDecimal worstGap = priceGap;
+        List<Map.Entry<NegotiationIssue, BigDecimal>> rankedEntries = gapByIssue.entrySet().stream()
+                .sorted((left, right) -> right.getValue().compareTo(left.getValue()))
+                .toList();
 
-        if (paymentGap.compareTo(worstGap) > 0) {
-            worstIssue = "payment";
-            worstGap = paymentGap;
+        List<NegotiationIssue> rankedIssues = rankedEntries.stream()
+                .map(Map.Entry::getKey)
+                .toList();
+        Map.Entry<NegotiationIssue, BigDecimal> bestCandidate = rankedEntries.getFirst();
+        NegotiationIssue previousIssue = previousBuyerIssue(context);
+
+        if (previousIssue != null
+                && previousIssue == bestCandidate.getKey()
+                && supplierIgnoredPreviousBuyerCounter(context, supplierOffer, previousIssue)) {
+            for (Map.Entry<NegotiationIssue, BigDecimal> alternative : rankedEntries) {
+                if (alternative.getKey() == bestCandidate.getKey()) {
+                    continue;
+                }
+
+                if (alternative.getValue().compareTo(BigDecimal.ZERO) > 0
+                        && alternative.getValue().compareTo(bestCandidate.getValue().multiply(new BigDecimal("0.70"))) >= 0) {
+                    return rankAlternativeFirst(rankedIssues, alternative.getKey());
+                }
+            }
         }
-        if (deliveryGap.compareTo(worstGap) > 0) {
-            worstIssue = "delivery";
-            worstGap = deliveryGap;
-        }
-        if (contractGap.compareTo(worstGap) > 0) {
-            worstIssue = "contract";
+
+        return rankedIssues;
+    }
+
+    private List<NegotiationIssue> rankAlternativeFirst(
+            List<NegotiationIssue> rankedIssues,
+            NegotiationIssue alternative
+    ) {
+        return rankedIssues.stream()
+                .sorted((left, right) -> {
+                    if (left == alternative) {
+                        return -1;
+                    }
+                    if (right == alternative) {
+                        return 1;
+                    }
+                    return Integer.compare(rankedIssues.indexOf(left), rankedIssues.indexOf(right));
+                })
+                .toList();
+    }
+
+    private NegotiationIssue previousBuyerIssue(NegotiationEngine.NegotiationContext context) {
+        List<NegotiationEngine.OfferVector> history = context.history();
+        if (history.size() < 2) {
+            return null;
         }
 
-        return worstIssue;
+        NegotiationEngine.OfferVector previousSupplierOffer = history.get(history.size() - 2);
+        NegotiationEngine.OfferVector previousBuyerOffer = history.getLast();
+
+        if (previousBuyerOffer.price().compareTo(previousSupplierOffer.price()) != 0) {
+            return NegotiationIssue.PRICE;
+        }
+        if (previousBuyerOffer.paymentDays() != previousSupplierOffer.paymentDays()) {
+            return NegotiationIssue.PAYMENT_DAYS;
+        }
+        if (previousBuyerOffer.deliveryDays() != previousSupplierOffer.deliveryDays()) {
+            return NegotiationIssue.DELIVERY_DAYS;
+        }
+        if (previousBuyerOffer.contractMonths() != previousSupplierOffer.contractMonths()) {
+            return NegotiationIssue.CONTRACT_MONTHS;
+        }
+
+        return null;
+    }
+
+    private boolean supplierIgnoredPreviousBuyerCounter(
+            NegotiationEngine.NegotiationContext context,
+            NegotiationEngine.OfferVector currentSupplierOffer,
+            NegotiationIssue issue
+    ) {
+        List<NegotiationEngine.OfferVector> history = context.history();
+        if (history.isEmpty()) {
+            return false;
+        }
+
+        NegotiationEngine.OfferVector previousBuyerOffer = history.getLast();
+
+        return switch (issue) {
+            case PRICE -> currentSupplierOffer.price().compareTo(previousBuyerOffer.price()) == 0;
+            case PAYMENT_DAYS -> currentSupplierOffer.paymentDays() == previousBuyerOffer.paymentDays();
+            case DELIVERY_DAYS -> currentSupplierOffer.deliveryDays() == previousBuyerOffer.deliveryDays();
+            case CONTRACT_MONTHS -> currentSupplierOffer.contractMonths() == previousBuyerOffer.contractMonths();
+        };
     }
 
     private BigDecimal weightedGap(BigDecimal gap, BigDecimal span, BigDecimal weight) {
@@ -150,5 +263,8 @@ public class CounterOfferGenerator {
 
     private int clampInt(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    record CounterProposal(NegotiationIssue issue, NegotiationEngine.OfferVector offer) {
     }
 }

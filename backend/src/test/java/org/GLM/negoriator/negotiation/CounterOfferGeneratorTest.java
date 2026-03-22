@@ -20,11 +20,15 @@ class CounterOfferGeneratorTest {
     void choosesHigherWeightedGapWhenIssuesAreClose() {
         OfferVector supplierOffer = new OfferVector(new BigDecimal("94"), 60, 5, 6);
 
-        assertThat(counterOfferGenerator.issueToImprove(buyerProfile(), bounds(), supplierOffer))
-                .isEqualTo("delivery");
+        assertThat(counterOfferGenerator.issueToImprove(
+                buyerProfile(),
+                new NegotiationContext(2, 6, NegotiationEngine.NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
+                bounds(),
+                supplierOffer))
+                .isEqualTo(NegotiationEngine.NegotiationIssue.DELIVERY_DAYS);
         assertThat(counterOfferGenerator.counterOffer(
                 buyerProfile(),
-                new NegotiationContext(2, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
+                new NegotiationContext(2, 6, NegotiationEngine.NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
                 bounds(),
                 supplierOffer))
                 .isEqualTo(new OfferVector(new BigDecimal("94"), 60, 4, 6));
@@ -34,14 +38,35 @@ class CounterOfferGeneratorTest {
     void onlyMovesTheRemainingNonIdealIssue() {
         OfferVector supplierOffer = new OfferVector(new BigDecimal("92"), 60, 3, 6);
 
-        assertThat(counterOfferGenerator.issueToImprove(buyerProfile(), bounds(), supplierOffer))
-                .isEqualTo("price");
+        assertThat(counterOfferGenerator.issueToImprove(
+                buyerProfile(),
+                new NegotiationContext(2, 6, NegotiationEngine.NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
+                bounds(),
+                supplierOffer))
+                .isEqualTo(NegotiationEngine.NegotiationIssue.PRICE);
         assertThat(counterOfferGenerator.counterOffer(
                 buyerProfile(),
-                new NegotiationContext(2, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
+                new NegotiationContext(2, 6, NegotiationEngine.NegotiationStrategy.BASELINE, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
                 bounds(),
                 supplierOffer))
                 .isEqualTo(new OfferVector(new BigDecimal("91.00"), 60, 3, 6));
+    }
+
+    @Test
+    void avoidsRepeatingTheSameIgnoredIssueWhenAnotherMaterialGapExists() {
+        OfferVector supplierOffer = new OfferVector(new BigDecimal("102"), 45, 10, 12);
+        NegotiationContext context = new NegotiationContext(
+                3,
+                6,
+                NegotiationEngine.NegotiationStrategy.BASELINE,
+                NegotiationState.COUNTERED,
+                BigDecimal.ZERO,
+                java.util.List.of(
+                        new OfferVector(new BigDecimal("104"), 45, 10, 12),
+                        new OfferVector(new BigDecimal("102.00"), 45, 10, 12)));
+
+        assertThat(counterOfferGenerator.issueToImprove(buyerProfile(), context, bounds(), supplierOffer))
+                .isEqualTo(NegotiationEngine.NegotiationIssue.DELIVERY_DAYS);
     }
 
     private BuyerProfile buyerProfile() {

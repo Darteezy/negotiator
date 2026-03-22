@@ -7,9 +7,12 @@ import java.util.Map;
 
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.Decision;
+import org.GLM.negoriator.negotiation.NegotiationEngine.DecisionReason;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationIssue;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationState;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferEvaluation;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierArchetype;
@@ -62,6 +65,7 @@ class NegotiationSessionRepositoryTest {
 		NegotiationSession session = new NegotiationSession(
 			2,
 			8,
+			NegotiationStrategy.BASELINE,
 			BigDecimal.valueOf(0.15),
 			NegotiationSessionStatus.COUNTERED,
 			BuyerProfileSnapshot.from(buyerProfile),
@@ -96,8 +100,18 @@ class NegotiationSessionRepositoryTest {
 				SupplierArchetype.CASHFLOW_FOCUSED, BigDecimal.valueOf(0.20),
 				SupplierArchetype.OPERATIONS_FOCUSED, BigDecimal.valueOf(0.30),
 				SupplierArchetype.STABILITY_FOCUSED, BigDecimal.valueOf(0.15))),
+			DecisionReason.COUNTER_TO_CLOSE_GAP,
+			NegotiationIssue.DELIVERY_DAYS,
+			NegotiationStrategy.BASELINE,
+			"Baseline remained active because no stronger switching signal was present.",
 			"Countered by improving delivery.");
 		session.addDecision(decision);
+		session.addStrategyChange(new NegotiationStrategyChange(
+			1,
+			null,
+			NegotiationStrategy.BASELINE,
+			NegotiationStrategyChangeTrigger.INITIAL_SELECTION,
+			"Session started with BASELINE as the configured opening strategy."));
 
 		NegotiationSession saved = repository.saveAndFlush(session);
 		entityManager.clear();
@@ -124,6 +138,7 @@ class NegotiationSessionRepositoryTest {
 		assertThat(reloaded.currentSupplierModel().updateSensitivity()).isEqualByComparingTo("0.5");
 		assertThat(reloaded.currentSupplierModel().reservationUtility()).isEqualByComparingTo("0.35");
 		assertThat(reloaded.toNegotiationContext().round()).isEqualTo(2);
+		assertThat(reloaded.toNegotiationContext().strategy()).isEqualTo(NegotiationStrategy.BASELINE);
 		assertThat(reloaded.toNegotiationContext().state()).isEqualTo(NegotiationState.COUNTERED);
 		assertThat(reloaded.toNegotiationContext().history()).hasSize(2);
 		assertThat(reloaded.toNegotiationContext().history().get(0).price()).isEqualByComparingTo("104");
@@ -131,10 +146,12 @@ class NegotiationSessionRepositoryTest {
 		assertThat(reloaded.toNegotiationContext().history().get(1).price()).isEqualByComparingTo("100");
 		assertThat(reloaded.toNegotiationContext().history().get(1).deliveryDays()).isEqualTo(7);
 		assertThat(reloaded.getDecisions()).hasSize(1);
+		assertThat(reloaded.getStrategyChanges()).hasSize(1);
 		assertThat(reloaded.getDecisions().getFirst().getDecision().toDecision()).isEqualTo(Decision.COUNTER);
 		assertThat(reloaded.getDecisions().getFirst().getResultingStatus().toNegotiationState()).isEqualTo(NegotiationState.COUNTERED);
 		assertThat(reloaded.getDecisions().getFirst().toOfferEvaluation().buyerUtility()).isEqualByComparingTo("0.6400");
 		assertThat(reloaded.getDecisions().getFirst().getCounterOffer().toOfferVector().price()).isEqualByComparingTo("100");
 		assertThat(reloaded.getDecisions().getFirst().getCounterOffer().toOfferVector().deliveryDays()).isEqualTo(7);
+		assertThat(reloaded.getDecisions().getFirst().getStrategyUsed()).isEqualTo(NegotiationStrategy.BASELINE);
 	}
 }

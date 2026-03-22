@@ -1,151 +1,132 @@
-import { LoaderCircle, Play, SendHorizontal } from "lucide-react";
+import { LoaderCircle, SendHorizontal } from "lucide-react";
 
+import { formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-
-const fields = [
-  { key: "price", label: "Price", step: "0.01" },
-  { key: "paymentDays", label: "Payment days", step: "1" },
-  { key: "deliveryDays", label: "Delivery days", step: "1" },
-  { key: "contractMonths", label: "Contract months", step: "1" },
-];
 
 export function OfferComposer({
   bounds,
   disabled,
   draft,
+  error,
   onChange,
-  onStartSession,
   onSubmit,
+  parsedDraft,
   session,
-  startingSession,
   submittingOffer,
 }) {
   return (
-    <Card className='border-[var(--line)] bg-[var(--panel)]/96 backdrop-blur'>
-      <CardHeader>
-        <CardTitle className='text-xl tracking-[-0.03em]'>
-          Offer composer
-        </CardTitle>
-        <CardDescription className='text-sm leading-6 text-[var(--ink-muted)]'>
-          Supplier offers are submitted as real negotiation terms. The current
-          backend does not parse natural-language chat into deal values yet, so
-          the form stays structured by design.
-        </CardDescription>
-      </CardHeader>
+    <form
+      className='shrink-0 border-t border-[var(--line)] bg-[var(--panel)] px-3 py-3 sm:px-4'
+      onSubmit={onSubmit}
+    >
+      <label className='block'>
+        <span className='sr-only'>Message to buyer</span>
+        <textarea
+          className='min-h-20 w-full resize-none rounded-[22px] border border-[var(--line)] bg-white px-4 py-3 text-sm leading-6 text-[var(--ink-strong)] outline-none transition focus:border-[var(--accent)]'
+          disabled={disabled || !session}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder='Write one offer message. Example: Option 3, but price 5 euro higher.'
+          value={draft}
+        />
+      </label>
 
-      <CardContent className='space-y-4'>
-        {!session && (
-          <Button
-            className='w-full'
-            onClick={onStartSession}
-            type='button'
-            disabled={startingSession}
-          >
-            {startingSession ? (
-              <LoaderCircle className='h-4 w-4 animate-spin' />
-            ) : (
-              <Play className='h-4 w-4' />
-            )}
-            Start negotiation session
-          </Button>
-        )}
-
-        <form className='space-y-4' onSubmit={onSubmit}>
-          <div className='grid gap-4 sm:grid-cols-2'>
-            {fields.map((field) => (
-              <label key={field.key} className='space-y-2 text-sm'>
-                <span className='text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--ink-soft)]'>
-                  {field.label}
-                </span>
-                <Input
-                  disabled={!session || disabled}
-                  min={minimumValue(bounds, field.key)}
-                  max={maximumValue(bounds, field.key)}
-                  onChange={(event) =>
-                    onChange({ ...draft, [field.key]: event.target.value })
-                  }
-                  required
-                  step={field.step}
-                  type='number'
-                  value={draft?.[field.key] ?? ""}
-                />
-              </label>
-            ))}
-          </div>
-
-          {bounds && (
-            <div className='rounded-2xl border border-[var(--line)] bg-[var(--page-bg)] px-4 py-4 text-sm leading-7 text-[var(--ink-muted)]'>
-              <p className='mb-2 text-[13px] font-semibold uppercase tracking-[0.2em] text-[var(--ink-soft)]'>
-                Allowed range
-              </p>
-              <ul className='grid gap-1 sm:grid-cols-2'>
-                <li>
-                  Price: {bounds.minPrice} to {bounds.maxPrice}
-                </li>
-                <li>
-                  Payment: {bounds.minPaymentDays} to {bounds.maxPaymentDays}{" "}
-                  days
-                </li>
-                <li>
-                  Delivery: {bounds.minDeliveryDays} to {bounds.maxDeliveryDays}{" "}
-                  days
-                </li>
-                <li>
-                  Contract: {bounds.minContractMonths} to{" "}
-                  {bounds.maxContractMonths} months
-                </li>
-              </ul>
+      <div className='mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
+        <div className='space-y-3'>
+          {error && (
+            <div className='rounded-2xl border border-[var(--danger-ink)]/15 bg-[var(--danger-soft)] px-4 py-3 text-sm leading-6 text-[var(--danger-ink)]'>
+              {error}
             </div>
           )}
 
-          <Button
-            className='w-full'
-            disabled={!session || disabled || submittingOffer}
-            type='submit'
-          >
-            {submittingOffer ? (
-              <LoaderCircle className='h-4 w-4 animate-spin' />
-            ) : (
-              <SendHorizontal className='h-4 w-4' />
-            )}
-            Submit supplier offer
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+          {parsedDraft.complete ? (
+            <div className='flex flex-wrap gap-2 text-sm text-[var(--ink-muted)]'>
+              <DetectedTerm
+                label='Price'
+                value={formatMoney(parsedDraft.terms.price)}
+              />
+              <DetectedTerm
+                label='Payment'
+                value={`${parsedDraft.terms.paymentDays} days`}
+              />
+              <DetectedTerm
+                label='Delivery'
+                value={`${parsedDraft.terms.deliveryDays} days`}
+              />
+              <DetectedTerm
+                label='Contract'
+                value={`${parsedDraft.terms.contractMonths} months`}
+              />
+              {parsedDraft.inheritedFields?.length > 0 && (
+                <span className='rounded-full border border-dashed border-[var(--line)] px-3 py-1.5 text-[12px]'>
+                  Reused: {parsedDraft.inheritedFields.join(", ")}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className='text-sm text-[var(--ink-muted)]'>
+              Mention at least one commercial term. Missing terms are reused
+              from the latest confirmed offer or selected buyer option when
+              available.
+            </p>
+          )}
+        </div>
+
+        <Button
+          disabled={
+            disabled || !session || draft.trim().length === 0 || submittingOffer
+          }
+          type='submit'
+        >
+          {submittingOffer ? (
+            <LoaderCircle className='h-4 w-4 animate-spin' />
+          ) : (
+            <SendHorizontal className='h-4 w-4' />
+          )}
+          Send offer
+        </Button>
+      </div>
+
+      {bounds && (
+        <details className='mt-3 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--page-bg)] px-4 py-3 text-sm text-[var(--ink-muted)]'>
+          <summary className='cursor-pointer text-[12px] font-semibold uppercase tracking-[0.18em] text-[var(--ink-soft)]'>
+            Format help
+          </summary>
+          <div className='mt-3 space-y-2 leading-7'>
+            <p>Allowed ranges:</p>
+            <ul>
+              <li>
+                Price: {formatMoney(bounds.minPrice)} to{" "}
+                {formatMoney(bounds.maxPrice)}
+              </li>
+              <li>
+                Payment: {bounds.minPaymentDays} to {bounds.maxPaymentDays} days
+              </li>
+              <li>
+                Delivery: {bounds.minDeliveryDays} to {bounds.maxDeliveryDays}{" "}
+                days
+              </li>
+              <li>
+                Contract: {bounds.minContractMonths} to{" "}
+                {bounds.maxContractMonths} months
+              </li>
+            </ul>
+          </div>
+        </details>
+      )}
+    </form>
   );
 }
 
-function minimumValue(bounds, key) {
-  if (!bounds) {
-    return undefined;
-  }
-
-  return {
-    price: bounds.minPrice,
-    paymentDays: bounds.minPaymentDays,
-    deliveryDays: bounds.minDeliveryDays,
-    contractMonths: bounds.minContractMonths,
-  }[key];
-}
-
-function maximumValue(bounds, key) {
-  if (!bounds) {
-    return undefined;
-  }
-
-  return {
-    price: bounds.maxPrice,
-    paymentDays: bounds.maxPaymentDays,
-    deliveryDays: bounds.maxDeliveryDays,
-    contractMonths: bounds.maxContractMonths,
-  }[key];
+function DetectedTerm({ label, value }) {
+  return (
+    <span className='rounded-full border border-[var(--line)] bg-[var(--page-bg)] px-3 py-1.5 text-[12px] font-medium'>
+      {label}: {value}
+    </span>
+  );
 }

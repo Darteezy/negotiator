@@ -22,6 +22,8 @@ public class BuyerUtilityCalculator {
             NegotiationEngine.NegotiationBounds bounds
     ) {
 
+        NegotiationEngine.IssueWeights normalizedWeights = profile.weights().normalized();
+
         BigDecimal priceScore = normalizePrice(
                 offer.price(),
                 bounds.minPrice(),
@@ -44,10 +46,10 @@ public class BuyerUtilityCalculator {
                 bounds.maxContractMonths()
         );
 
-        BigDecimal weightedPrice = priceScore.multiply(profile.weights().price());
-        BigDecimal weightedPayment = paymentScore.multiply(profile.weights().paymentDays());
-        BigDecimal weightedDelivery = deliveryScore.multiply(profile.weights().deliveryDays());
-        BigDecimal weightedContract = contractScore.multiply(profile.weights().contractMonths());
+        BigDecimal weightedPrice = priceScore.multiply(normalizedWeights.price());
+        BigDecimal weightedPayment = paymentScore.multiply(normalizedWeights.paymentDays());
+        BigDecimal weightedDelivery = deliveryScore.multiply(normalizedWeights.deliveryDays());
+        BigDecimal weightedContract = contractScore.multiply(normalizedWeights.contractMonths());
 
         BigDecimal utility = weightedPrice
                 .add(weightedPayment)
@@ -56,61 +58,6 @@ public class BuyerUtilityCalculator {
 
         return clamp(utility);
     }
-
-    public static void main(String[] args) {
-        BuyerUtilityCalculator calculator = new BuyerUtilityCalculator();
-
-        NegotiationEngine.NegotiationBounds bounds = new NegotiationEngine.NegotiationBounds(
-                new BigDecimal("80"),
-                new BigDecimal("120"),
-                10,
-                60,
-                5,
-                20,
-                6,
-                24
-        );
-
-        NegotiationEngine.IssueWeights weights = new NegotiationEngine.IssueWeights(
-                new BigDecimal("0.40"),
-                new BigDecimal("0.20"),
-                new BigDecimal("0.25"),
-                new BigDecimal("0.15")
-        );
-
-        NegotiationEngine.BuyerProfile profile = new NegotiationEngine.BuyerProfile(
-                new NegotiationEngine.OfferVector(new BigDecimal("90"), 45, 10, 12),
-                new NegotiationEngine.OfferVector(new BigDecimal("120"), 10, 20, 24),
-                weights,
-                new BigDecimal("0.50"),
-                new BigDecimal("0.00"),
-                new BigDecimal("0.00")
-        );
-
-        logUtility(calculator, bounds, profile,
-                new NegotiationEngine.OfferVector(new BigDecimal("100"), 45, 12, 12),
-                "Case A: balanced");
-
-        logUtility(calculator, bounds, profile,
-                new NegotiationEngine.OfferVector(new BigDecimal("85"), 20, 18, 18),
-                "Case B: low price, worse terms");
-
-        logUtility(calculator, bounds, profile,
-                new NegotiationEngine.OfferVector(new BigDecimal("110"), 55, 7, 6),
-                "Case C: higher price, better terms");
-    }
-
-    private static void logUtility(
-            BuyerUtilityCalculator calculator,
-            NegotiationEngine.NegotiationBounds bounds,
-            NegotiationEngine.BuyerProfile profile,
-            NegotiationEngine.OfferVector offer,
-            String label
-    ) {
-        BigDecimal utility = calculator.calculate(offer, profile, bounds);
-        System.out.println(label + " -> offer=" + offer + " utility=" + utility);
-    }
-
     BigDecimal normalizePrice(BigDecimal value, BigDecimal min, BigDecimal max) {
         if (max.compareTo(min) == 0) {
             return ZERO;
@@ -143,18 +90,6 @@ public class BuyerUtilityCalculator {
 
         return clamp(normalized);
     }
-    private BigDecimal normalizeNegative(BigDecimal value, BigDecimal min, BigDecimal max) {
-        if (max.compareTo(min) == 0)
-        {
-            return ZERO;
-        }
-
-        BigDecimal normalized = max.subtract(value)
-                .divide(max.subtract(min), SCALE, RoundingMode.HALF_UP);
-
-        return clamp(normalized);
-    }
-
     private BigDecimal clamp(BigDecimal value) {
         BigDecimal scaledValue = value.setScale(SCALE, RoundingMode.HALF_UP);
 

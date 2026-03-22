@@ -9,9 +9,11 @@ import org.GLM.negoriator.domain.NegotiationParty;
 import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.domain.NegotiationSessionRepository;
 import org.GLM.negoriator.domain.NegotiationSessionStatus;
+import org.GLM.negoriator.domain.NegotiationStrategyChangeTrigger;
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierArchetype;
 import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierModel;
@@ -34,6 +36,7 @@ class NegotiationApplicationServiceTest {
 	@Test
 	void submitsSupplierOfferAndPersistsTheFullEngineResponseLoop() {
 		NegotiationSession startedSession = service.startSession(new NegotiationApplicationService.StartSessionCommand(
+			NegotiationStrategy.MESO,
 			8,
 			BigDecimal.valueOf(0.15),
 			new BuyerProfile(
@@ -70,21 +73,31 @@ class NegotiationApplicationServiceTest {
 			new OfferVector(BigDecimal.valueOf(104), 45, 10, 12));
 
 		assertThat(updatedSession.getStatus()).isEqualTo(NegotiationSessionStatus.COUNTERED);
+		assertThat(updatedSession.getStrategy()).isEqualTo(NegotiationStrategy.MESO);
 		assertThat(updatedSession.getCurrentRound()).isEqualTo(2);
-		assertThat(updatedSession.getOffers()).hasSize(2);
+		assertThat(updatedSession.getStrategyChanges()).hasSize(1);
+		assertThat(updatedSession.getStrategyChanges().getFirst().getTrigger()).isEqualTo(NegotiationStrategyChangeTrigger.INITIAL_SELECTION);
+		assertThat(updatedSession.getOffers()).hasSizeGreaterThanOrEqualTo(2);
 		assertThat(updatedSession.getOffers().get(0).getParty()).isEqualTo(NegotiationParty.SUPPLIER);
 		assertThat(updatedSession.getOffers().get(1).getParty()).isEqualTo(NegotiationParty.BUYER);
 		assertThat(updatedSession.getDecisions()).hasSize(1);
 		assertThat(updatedSession.getDecisions().getFirst().getEvaluation().getBuyerUtility()).isNotNull();
 		assertThat(updatedSession.getDecisions().getFirst().getCounterOffer()).isNotNull();
+		assertThat(updatedSession.getDecisions().getFirst().getReasonCode()).isNotNull();
+		assertThat(updatedSession.getDecisions().getFirst().getStrategyUsed()).isEqualTo(NegotiationStrategy.MESO);
+		assertThat(updatedSession.getDecisions().getFirst().getStrategyRationale()).isNotBlank();
 
 		NegotiationSession reloadedSession = repository.findById(startedSession.getId()).orElseThrow();
 		assertThat(reloadedSession.getStatus()).isEqualTo(NegotiationSessionStatus.COUNTERED);
 		assertThat(reloadedSession.getCurrentRound()).isEqualTo(2);
-		assertThat(reloadedSession.getOffers()).hasSize(2);
+		assertThat(reloadedSession.getStrategy()).isEqualTo(NegotiationStrategy.MESO);
+		assertThat(reloadedSession.getStrategyChanges()).hasSize(1);
+		assertThat(reloadedSession.getOffers()).hasSizeGreaterThanOrEqualTo(2);
 		assertThat(reloadedSession.getDecisions()).hasSize(1);
 		assertThat(reloadedSession.getDecisions().getFirst().getSupplierOffer().getParty()).isEqualTo(NegotiationParty.SUPPLIER);
 		assertThat(reloadedSession.getDecisions().getFirst().getCounterOffer().getParty()).isEqualTo(NegotiationParty.BUYER);
 		assertThat(reloadedSession.getDecisions().getFirst().getEvaluation().getTargetUtility()).isNotNull();
+		assertThat(reloadedSession.getDecisions().getFirst().getReasonCode()).isNotNull();
+		assertThat(reloadedSession.getDecisions().getFirst().getStrategyUsed()).isEqualTo(NegotiationStrategy.MESO);
 	}
 }
