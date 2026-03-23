@@ -106,7 +106,7 @@ public class NegotiationApplicationService {
 			OfferTermsSnapshot.from(supplierOfferTerms),
 			supplierMessage);
 		StrategySwitchPolicy.StrategyContext strategyContext = strategySwitchPolicy.describeCurrentStrategy(session);
-		NegotiationOffer acceptedBuyerOffer = matchingActiveBuyerOffer(session, supplierOfferTerms);
+		NegotiationOffer acceptedBuyerOffer = matchingActiveBuyerOffer(session, supplierOfferTerms, supplierMessage);
 
 		NegotiationEngine.NegotiationResponse response = negotiationEngine.negotiate(
 			new NegotiationEngine.NegotiationRequest(
@@ -213,8 +213,16 @@ public class NegotiationApplicationService {
 		return feasibleOffers;
 	}
 
-	private NegotiationOffer matchingActiveBuyerOffer(NegotiationSession session, OfferVector supplierOfferTerms) {
+	private NegotiationOffer matchingActiveBuyerOffer(
+		NegotiationSession session,
+		OfferVector supplierOfferTerms,
+		String supplierMessage
+	) {
 		if (session.getCurrentRound() <= 1) {
+			return null;
+		}
+
+		if (!isExplicitAcceptanceMessage(supplierMessage)) {
 			return null;
 		}
 
@@ -226,6 +234,31 @@ public class NegotiationApplicationService {
 			.filter(offer -> offer.toOfferVector().matches(supplierOfferTerms))
 			.findFirst()
 			.orElse(null);
+	}
+
+	private boolean isExplicitAcceptanceMessage(String supplierMessage) {
+		if (supplierMessage == null || supplierMessage.isBlank()) {
+			return true;
+		}
+
+		String normalized = supplierMessage.toLowerCase(java.util.Locale.ROOT);
+		if (normalized.contains("counter")
+			|| normalized.contains("i propose")
+			|| normalized.contains("i offer")
+			|| normalized.contains("final offer")
+			|| normalized.contains("if you accept")
+			|| normalized.contains("cannot")
+			|| normalized.contains("can't")
+			|| normalized.contains("not settling")) {
+			return false;
+		}
+
+		return normalized.contains("accept")
+			|| normalized.contains("agreed")
+			|| normalized.contains("confirm")
+			|| normalized.contains("works for us")
+			|| normalized.contains("we can proceed")
+			|| normalized.contains("we have a deal");
 	}
 
 	public record StartSessionCommand(

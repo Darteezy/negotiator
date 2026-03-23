@@ -90,6 +90,22 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             focusIssue = proposal.issue();
             }
 
+            counterOffers = counterOffers.stream()
+                .filter(offer -> isBuyerFriendlyCounter(offer, supplierOffer))
+                .filter(offer -> !offer.matches(supplierOffer))
+                .toList();
+
+            if (counterOffers.isEmpty()) {
+                OfferVector safeFallback = counterOfferGenerator.counterOffer(
+                    buyerProfile,
+                    context,
+                    request.bounds(),
+                    supplierOffer);
+                if (isBuyerFriendlyCounter(safeFallback, supplierOffer) && !safeFallback.matches(supplierOffer)) {
+                    counterOffers = List.of(safeFallback);
+                }
+            }
+
             return new NegotiationResponse(
                     decision,
                     nextState,
@@ -112,6 +128,13 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             decision == Decision.ACCEPT
                 ? acceptanceExplanation(buyerUtility, targetUtility)
                 : rejectionExplanation(buyerUtility, buyerProfile.reservationUtility(), decisionOutcome.reasonCode()));
+    }
+
+    private boolean isBuyerFriendlyCounter(OfferVector counterOffer, OfferVector supplierOffer) {
+        return counterOffer.price().compareTo(supplierOffer.price()) <= 0
+            && counterOffer.paymentDays() >= supplierOffer.paymentDays()
+            && counterOffer.deliveryDays() <= supplierOffer.deliveryDays()
+            && counterOffer.contractMonths() <= supplierOffer.contractMonths();
     }
 
     private boolean violatesBuyerReservation(OfferVector offer, OfferVector reservationOffer) {

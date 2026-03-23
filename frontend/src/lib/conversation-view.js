@@ -120,8 +120,7 @@ function buildConversationModel(
         counterOffers: [],
         debug: {
           reasonLabel: "Supplier input",
-          narrative:
-            "The frontend normalized the supplier message and sent the extracted terms to the backend engine.",
+          narrative: buildSupplierDebugNarrative(round.supplierOffer),
         },
       });
 
@@ -315,7 +314,6 @@ function buildBuyerLetter(event) {
       primaryTerms
         ? `The buyer accepts the agreed terms: ${formatTermsSentence(primaryTerms)}.`
         : "The buyer accepts the agreed terms and closes the negotiation.",
-      event.explanation ?? "This negotiation is now closed.",
     ].join("\n\n");
   }
 
@@ -323,8 +321,7 @@ function buildBuyerLetter(event) {
     return [
       "Dear Supplier,",
       "Thank you for your proposal.",
-      event.explanation ??
-        "The buyer cannot approve the current terms and requests a revised commercial offer.",
+      "The buyer cannot approve the current terms and requests a revised commercial offer.",
     ].join("\n\n");
   }
 
@@ -357,6 +354,17 @@ function buildBuyerLetter(event) {
     `After review, the buyer can continue under the following terms: ${formatTermsSentence(primaryTerms)}.`,
     "Please let us know whether you can proceed on this basis.",
   ].join("\n\n");
+}
+
+function buildSupplierDebugNarrative(supplierOffer) {
+  const rawMessage = supplierOffer?.rawMessage?.trim();
+  const shownMessage = supplierOffer?.message?.trim();
+
+  if (rawMessage && shownMessage && rawMessage !== shownMessage) {
+    return `Raw supplier model output:\n\n${rawMessage}`;
+  }
+
+  return "The frontend normalized the supplier message and sent the extracted terms to the backend engine.";
 }
 
 function formatTermsSentence(terms) {

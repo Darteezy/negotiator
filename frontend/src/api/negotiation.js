@@ -1,5 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/negotiations";
 const AI_BASE = "/api/ai";
+const SIMULATION_BASE = "/api/simulations";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -51,6 +52,34 @@ export function parseSupplierOfferWithAi(payload) {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function runSimulation(payload) {
+  return requestAbsolute(SIMULATION_BASE, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function openSimulationStream(payload = {}) {
+  const params = new URLSearchParams();
+
+  if (payload.strategy) {
+    params.set("strategy", payload.strategy);
+  }
+
+  if (payload.supplierPersonality) {
+    params.set("supplierPersonality", payload.supplierPersonality);
+  }
+
+  if (payload.maxRounds) {
+    params.set("maxRounds", String(payload.maxRounds));
+  }
+
+  const query = params.toString();
+  return new EventSource(
+    `${SIMULATION_BASE}/stream${query ? `?${query}` : ""}`,
+  );
 }
 
 async function requestAbsolute(path, options = {}) {

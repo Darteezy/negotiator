@@ -30,6 +30,10 @@ public class AiStrategyAdvisor {
 	}
 
 	public StrategyAdvice advise(NegotiationSession session, OfferEvaluation evaluation) {
+		if (session.getStrategy() != NegotiationStrategy.MESO || session.getCurrentRound() < 4) {
+			return StrategyAdvice.none();
+		}
+
 		try {
 			String systemPrompt = buildSystemPrompt();
 			String userPrompt = buildUserPrompt(session, evaluation);

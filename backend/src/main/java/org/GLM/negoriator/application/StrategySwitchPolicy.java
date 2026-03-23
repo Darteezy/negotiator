@@ -18,6 +18,8 @@ import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 
 class StrategySwitchPolicy {
 
+	private static final int MIN_MESO_ROUNDS_BEFORE_SWITCH = 3;
+
 	StrategyContext describeCurrentStrategy(NegotiationSession session) {
 		return new StrategyContext(session.getStrategy(), rationaleFor(session.getStrategy()));
 	}
@@ -42,6 +44,11 @@ class StrategySwitchPolicy {
 				"Switched to Conceder because the session is approaching its round limit and the buyer should now prioritize closing probability over continued exploration.");
 		}
 
+		if (currentStrategy == NegotiationStrategy.MESO
+			&& session.getCurrentRound() < MIN_MESO_ROUNDS_BEFORE_SWITCH) {
+			return StrategyCheckpoint.none();
+		}
+
 		if (currentStrategy == NegotiationStrategy.MESO && supplierRejectedPriorMenu(session, supplierOffer)) {
 			return StrategyCheckpoint.switchTo(
 				NegotiationStrategy.TIT_FOR_TAT,
@@ -57,7 +64,7 @@ class StrategySwitchPolicy {
 		}
 
 		if (currentStrategy == NegotiationStrategy.MESO
-			&& session.getCurrentRound() >= 3
+			&& session.getCurrentRound() >= 4
 			&& utilityGap.compareTo(new BigDecimal("0.18")) > 0) {
 			return StrategyCheckpoint.switchTo(
 				NegotiationStrategy.BOULWARE,

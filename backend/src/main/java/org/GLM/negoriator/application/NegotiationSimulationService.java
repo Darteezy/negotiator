@@ -1,7 +1,10 @@
 package org.GLM.negoriator.application;
 
 import java.math.BigDecimal;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,6 +25,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class NegotiationSimulationService {
 
 	private static final Logger log = LoggerFactory.getLogger(NegotiationSimulationService.class);
+	// Each pattern has two alternatives: keyword-then-number and number-then-keyword.
+	// matchInt() returns the first non-null capturing group.
+	private static final Pattern PRICE_PATTERN = Pattern.compile(
+		"(?:price(?:[_ ]?eur)?)\\D{0,20}(\\d+(?:\\.\\d+)?)",
+		Pattern.CASE_INSENSITIVE);
+	private static final Pattern PAYMENT_PATTERN = Pattern.compile(
+		"(?:payment(?:[_ ]?days)?|pay(?:ment)?(?:\\s*in)?)\\D{0,20}(\\d{1,3})" +
+		"|(\\d{1,3})\\s*-?\\s*days?\\s*(?:payment|pay(?:\\s*term)?)",
+		Pattern.CASE_INSENSITIVE);
+	private static final Pattern DELIVERY_PATTERN = Pattern.compile(
+		"(?:delivery(?:[_ ]?days)?|lead\\s*time|deliver(?:y)?(?:\\s*in)?)\\D{0,20}(\\d{1,3})" +
+		"|(\\d{1,3})\\s*-?\\s*days?\\s*(?:delivery|deliver|lead)",
+		Pattern.CASE_INSENSITIVE);
+	private static final Pattern CONTRACT_PATTERN = Pattern.compile(
+		"(?:contract(?:[_ ]?months)?|commitment)\\D{0,20}(\\d{1,3})" +
+		"|(\\d{1,3})\\s*-?\\s*months?\\s*(?:contract|term|commitment)",
+		Pattern.CASE_INSENSITIVE);
+	private static final Pattern FULL_PROPOSAL_PATTERN = Pattern.compile(
+		"(?is)price\\D{0,20}\\d+(?:\\.\\d+)?[^\\n\\r]{0,220}?payment[^\\n\\r]{0,80}?\\d{1,3}[^\\n\\r]{0,220}?delivery[^\\n\\r]{0,80}?\\d{1,3}[^\\n\\r]{0,220}?(?:contract|term|commitment)[^\\n\\r]{0,80}?\\d{1,3}");
 
 	private final NegotiationApplicationService negotiationService;
 	private final AiGatewayService aiGateway;
@@ -39,6 +61,11 @@ public class NegotiationSimulationService {
 
 	@Transactional
 	public SimulationResult runSimulation(SimulationConfig config) {
+		return runSimulation(config, SimulationListener.NO_OP);
+	}
+
+	@Transactional
+	public SimulationResult runSimulation(SimulationConfig config, SimulationListener listener) {
 		NegotiationSession session = negotiationService.startSession(
 			startSessionCommand(config));
 
@@ -49,6 +76,7 @@ public class NegotiationSimulationService {
 
 		log.info("Simulation started: session={}, strategy={}, maxRounds={}",
 			sessionId, config.strategy(), session.getMaxRounds());
+		listener.onStarted(session);
 
 		for (int round = 1; round <= session.getMaxRounds(); round++) {
 			session = negotiationService.getSession(sessionId);
@@ -64,7 +92,9 @@ public class NegotiationSimulationService {
 				supplierTurn = generateSupplierTurn(conversationContext, round, bounds);
 			} catch (Exception e) {
 				log.warn("Round {}: AI supplier failed to generate valid offer: {}", round, e.getMessage());
-				rounds.add(new SimulationRound(round, "AI_ERROR: " + e.getMessage(), null, null, null));
+				SimulationRound failedRound = new SimulationRound(round, "AI_ERROR: " + e.getMessage(), null, null, null);
+				rounds.add(failedRound);
+				listener.onRound(negotiationService.getSession(sessionId), failedRound);
 				break;
 			}
 
@@ -79,7 +109,9 @@ public class NegotiationSimulationService {
 				session = negotiationService.submitSupplierOffer(sessionId, supplierOffer, null, supplierMessage);
 			} catch (Exception e) {
 				log.error("Round {}: Engine error: {}", round, e.getMessage());
-				rounds.add(new SimulationRound(round, supplierMessage, supplierOffer, null, "ENGINE_ERROR: " + e.getMessage()));
+				SimulationRound failedRound = new SimulationRound(round, supplierMessage, supplierOffer, null, "ENGINE_ERROR: " + e.getMessage());
+				rounds.add(failedRound);
+				listener.onRound(negotiationService.getSession(sessionId), failedRound);
 				break;
 			}
 
@@ -87,7 +119,9 @@ public class NegotiationSimulationService {
 			String strategy = session.getStrategy().name();
 			BuyerRoundSummary buyerSummary = extractBuyerSummary(session, round);
 
-			rounds.add(new SimulationRound(round, supplierMessage, supplierOffer, buyerSummary, null));
+			SimulationRound completedRound = new SimulationRound(round, supplierMessage, supplierOffer, buyerSummary, null);
+			rounds.add(completedRound);
+			listener.onRound(session, completedRound);
 
 			log.info("Round {}: Buyer decision={}, status={}, strategy={}", round, buyerSummary.decision(), status, strategy);
 
@@ -119,6 +153,7 @@ public class NegotiationSimulationService {
 		for (String anomaly : result.anomalies()) {
 			log.warn("  ANOMALY: {}", anomaly);
 		}
+		listener.onCompleted(session, result);
 
 		return result;
 	}
@@ -152,8 +187,12 @@ public class NegotiationSimulationService {
 
 			Personality: %s
 
-			IMPORTANT: Each message MUST include specific numbers for price, payment days, delivery days, and contract months.
-			Format example: "I propose price 105, payment in 45 days, delivery in 7 days, and a 12 month contract."
+			IMPORTANT:
+			- Each message MUST include specific numbers for price, payment days, delivery days, and contract months.
+			- Return one short supplier reply only.
+			- Do NOT include reasoning, markdown, tables, bullet lists, or roleplay sections.
+			- Do NOT quote the buyer's previous offer unless you are explicitly accepting it.
+			- Format example: "I propose price 105, payment in 45 days, delivery in 7 days, and a 12 month contract."
 
 			The negotiation is about to begin. The buyer will respond with counter-offers.
 			""",
@@ -168,32 +207,18 @@ public class NegotiationSimulationService {
 
 	private SupplierTurn generateSupplierTurn(String context, int round, NegotiationBounds bounds) {
 		String userPrompt = round == 1
-			? "Return JSON only with keys: message, price, paymentDays, deliveryDays, contractMonths."
-			: "Continue the negotiation based on the buyer's latest response and return JSON only with keys: message, price, paymentDays, deliveryDays, contractMonths.";
+			? "Send your opening supplier proposal as one short reply. Include explicit numeric values for price, payment days, delivery days, and contract months. No reasoning, no markdown, no tables."
+			: "Continue the negotiation as one short supplier reply. Include explicit numeric values for price, payment days, delivery days, and contract months. No reasoning, no markdown, no tables.";
 
 		String response = aiGateway.complete(context, userPrompt);
 		String cleaned = response.trim();
-		int start = cleaned.indexOf('{');
-		int end = cleaned.lastIndexOf('}');
-		if (start < 0 || end <= start) {
-			throw new IllegalArgumentException("No JSON object in AI response: " + cleaned);
-		}
 
-		JsonNode json;
-
-		try {
-			json = objectMapper.readTree(cleaned.substring(start, end + 1));
-		} catch (JsonProcessingException e) {
-			throw new IllegalArgumentException("Failed to parse AI response as JSON: " + response, e);
-		}
-
-		JsonNode termsNode = extractTermsNode(json);
-		String message = extractMessage(cleaned, json, termsNode);
-
-		BigDecimal price = decimalField(termsNode, "price", "price_eur");
-		Integer paymentDays = intField(termsNode, "paymentDays", "payment_days", "payment");
-		Integer deliveryDays = intField(termsNode, "deliveryDays", "delivery_days", "delivery");
-		Integer contractMonths = intField(termsNode, "contractMonths", "contract_months", "contract");
+		ParsedTerms parsedTerms = parseSupplierTerms(cleaned);
+		String message = parsedTerms.message();
+		BigDecimal price = parsedTerms.price();
+		Integer paymentDays = parsedTerms.paymentDays();
+		Integer deliveryDays = parsedTerms.deliveryDays();
+		Integer contractMonths = parsedTerms.contractMonths();
 
 		if (message == null || message.isBlank() || price == null || paymentDays == null || deliveryDays == null || contractMonths == null) {
 			throw new IllegalArgumentException("AI response missing fields: " + response);
@@ -207,6 +232,56 @@ public class NegotiationSimulationService {
 		return new SupplierTurn(
 			message.trim(),
 			new OfferVector(price, paymentDays, deliveryDays, contractMonths));
+	}
+
+	private ParsedTerms parseSupplierTerms(String rawResponse) {
+		JsonNode json = tryReadJsonObject(rawResponse);
+		if (json != null) {
+			JsonNode termsNode = extractTermsNode(json);
+			String message = extractMessage(rawResponse, json, termsNode);
+			BigDecimal price = decimalField(termsNode, "price", "price_eur");
+			Integer paymentDays = intField(termsNode, "paymentDays", "payment_days", "payment");
+			Integer deliveryDays = intField(termsNode, "deliveryDays", "delivery_days", "delivery");
+			Integer contractMonths = intField(termsNode, "contractMonths", "contract_months", "contract");
+
+			if (message != null && price != null && paymentDays != null && deliveryDays != null && contractMonths != null) {
+				return new ParsedTerms(message, price, paymentDays, deliveryDays, contractMonths);
+			}
+		}
+
+		String proposalSegment = extractProposalSegment(rawResponse);
+		BigDecimal price = matchDecimal(proposalSegment, PRICE_PATTERN);
+		Integer paymentDays = matchInt(proposalSegment, PAYMENT_PATTERN);
+		Integer deliveryDays = matchInt(proposalSegment, DELIVERY_PATTERN);
+		Integer contractMonths = matchInt(proposalSegment, CONTRACT_PATTERN);
+
+		if (price == null || paymentDays == null || deliveryDays == null || contractMonths == null) {
+			price = matchDecimal(rawResponse, PRICE_PATTERN);
+			paymentDays = matchInt(rawResponse, PAYMENT_PATTERN);
+			deliveryDays = matchInt(rawResponse, DELIVERY_PATTERN);
+			contractMonths = matchInt(rawResponse, CONTRACT_PATTERN);
+		}
+
+		if (price == null || paymentDays == null || deliveryDays == null || contractMonths == null) {
+			throw new IllegalArgumentException("AI response missing fields: " + rawResponse);
+		}
+
+		return new ParsedTerms(rawResponse.trim(), price, paymentDays, deliveryDays, contractMonths);
+	}
+
+	private JsonNode tryReadJsonObject(String rawResponse) {
+		String cleaned = rawResponse == null ? "" : rawResponse.trim();
+		int start = cleaned.indexOf('{');
+		int end = cleaned.lastIndexOf('}');
+		if (start < 0 || end <= start) {
+			return null;
+		}
+
+		try {
+			return objectMapper.readTree(cleaned.substring(start, end + 1));
+		} catch (JsonProcessingException e) {
+			return null;
+		}
 	}
 
 	private JsonNode extractTermsNode(JsonNode json) {
@@ -288,6 +363,84 @@ public class NegotiationSimulationService {
 		return null;
 	}
 
+	private BigDecimal matchDecimal(String text, Pattern pattern) {
+		Matcher matcher = pattern.matcher(text);
+		if (!matcher.find()) {
+			return null;
+		}
+		for (int i = 1; i <= matcher.groupCount(); i++) {
+			String g = matcher.group(i);
+			if (g != null) {
+				return new BigDecimal(g);
+			}
+		}
+		return null;
+	}
+
+	private Integer matchInt(String text, Pattern pattern) {
+		Matcher matcher = pattern.matcher(text);
+		if (!matcher.find()) {
+			return null;
+		}
+		for (int i = 1; i <= matcher.groupCount(); i++) {
+			String g = matcher.group(i);
+			if (g != null) {
+				return Integer.parseInt(g);
+			}
+		}
+		return null;
+	}
+
+	private String extractProposalSegment(String rawResponse) {
+		String sanitized = sanitizeSupplierResponse(rawResponse);
+
+		for (String paragraph : Arrays.stream(sanitized.split("(?:\\n\\s*\\n)+")).map(String::trim).toList()) {
+			if (looksLikeProposalParagraph(paragraph)) {
+				return paragraph;
+			}
+		}
+
+		Matcher matcher = FULL_PROPOSAL_PATTERN.matcher(sanitized);
+		if (matcher.find()) {
+			return matcher.group().trim();
+		}
+
+		return sanitized;
+	}
+
+	private String sanitizeSupplierResponse(String rawResponse) {
+		if (rawResponse == null) {
+			return "";
+		}
+
+		StringBuilder sanitized = new StringBuilder();
+		for (String line : rawResponse.replace("```", "").replace("**", "").split("\\R")) {
+			String trimmed = line.trim();
+			if (trimmed.isBlank()) {
+				sanitized.append("\n\n");
+				continue;
+			}
+			if (trimmed.startsWith("|") || trimmed.startsWith("- ") || trimmed.startsWith("You said:")) {
+				continue;
+			}
+			if (trimmed.equalsIgnoreCase("My Response:")
+				|| trimmed.equalsIgnoreCase("Reasoning:")
+				|| trimmed.equalsIgnoreCase("Negotiation Logic:")) {
+				continue;
+			}
+			sanitized.append(trimmed).append('\n');
+		}
+		return sanitized.toString().trim();
+	}
+
+	private boolean looksLikeProposalParagraph(String text) {
+		String lower = text.toLowerCase();
+		return lower.contains("price")
+			&& lower.contains("payment")
+			&& lower.contains("delivery")
+			&& (lower.contains("contract") || lower.contains("term") || lower.contains("commitment"));
+	}
+
 	private String updateConversation(String context, int round, String supplierMessage, BuyerRoundSummary buyer) {
 		StringBuilder sb = new StringBuilder(context);
 		sb.append("\n\n--- Round ").append(round).append(" ---\n");
@@ -318,8 +471,14 @@ public class NegotiationSimulationService {
 			.orElse(null);
 
 		if (decision == null) {
-			return new BuyerRoundSummary("UNKNOWN", null, null, List.of());
+			return new BuyerRoundSummary("UNKNOWN", null, null, List.of(), null, null, null);
 		}
+
+		var strategyChange = session.getStrategyChanges().stream()
+			.filter(change -> change.getRoundNumber() == round)
+			.filter(change -> change.getPreviousStrategy() != null)
+			.max(java.util.Comparator.comparing(change -> change.getCreatedAt(), java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+			.orElse(null);
 
 		var counterOffers = session.getOffers().stream()
 			.filter(o -> o.getRoundNumber() == round)
@@ -331,7 +490,10 @@ public class NegotiationSimulationService {
 			decision.getDecision().name(),
 			decision.getExplanation(),
 			decision.toOfferEvaluation(),
-			counterOffers);
+			counterOffers,
+			decision.getStrategyUsed() != null ? decision.getStrategyUsed().name() : null,
+			strategyChange != null ? strategyChange.getRationale() : decision.getStrategyRationale(),
+			strategyChange != null && strategyChange.getTrigger() != null ? strategyChange.getTrigger().name() : null);
 	}
 
 	private List<String> detectAnomalies(List<SimulationRound> rounds, NegotiationSession session) {
@@ -368,6 +530,19 @@ public class NegotiationSimulationService {
 					anomalies.add(String.format(
 						"Round %d: REJECTED with high buyer utility %.4f — possible missed deal",
 						round.round(), buyerUtility));
+				}
+			}
+
+			if (round.supplierOffer() != null && round.buyer().counterOffers() != null) {
+				for (OfferVector counterOffer : round.buyer().counterOffers()) {
+					if (counterOffer.price().compareTo(round.supplierOffer().price()) > 0
+						|| counterOffer.paymentDays() < round.supplierOffer().paymentDays()
+						|| counterOffer.deliveryDays() > round.supplierOffer().deliveryDays()
+						|| counterOffer.contractMonths() > round.supplierOffer().contractMonths()) {
+						anomalies.add(String.format(
+							"Round %d: Buyer counteroffer is worse for the buyer than the supplier offer (%s vs %s)",
+							round.round(), counterOffer, round.supplierOffer()));
+					}
 				}
 			}
 		}
@@ -430,13 +605,39 @@ public class NegotiationSimulationService {
 		String decision,
 		String explanation,
 		org.GLM.negoriator.negotiation.NegotiationEngine.OfferEvaluation evaluation,
-		List<OfferVector> counterOffers
+		List<OfferVector> counterOffers,
+		String strategyUsed,
+		String strategyRationale,
+		String switchTrigger
 	) {
+	}
+
+	public interface SimulationListener {
+		SimulationListener NO_OP = new SimulationListener() {
+		};
+
+		default void onStarted(NegotiationSession session) {
+		}
+
+		default void onRound(NegotiationSession session, SimulationRound round) {
+		}
+
+		default void onCompleted(NegotiationSession session, SimulationResult result) {
+		}
 	}
 
 	private record SupplierTurn(
 		String message,
 		OfferVector offer
+	) {
+	}
+
+	private record ParsedTerms(
+		String message,
+		BigDecimal price,
+		Integer paymentDays,
+		Integer deliveryDays,
+		Integer contractMonths
 	) {
 	}
 }

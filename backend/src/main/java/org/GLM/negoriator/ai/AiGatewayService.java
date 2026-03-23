@@ -1,17 +1,18 @@
 package org.GLM.negoriator.ai;
 
-import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StreamUtils;
 import org.springframework.util.StringUtils;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Service
@@ -30,8 +31,6 @@ public class AiGatewayService {
 		@Value("${AI_PROVIDER:ollama}") String provider,
 		@Value("${AI_BASE_URL:http://localhost:11434}") String baseUrl,
 		@Value("${AI_CHAT_MODEL:qwen2.5:7b-instruct}") String model,
-		@Value("${AI_CONNECT_TIMEOUT_MS:5000}") int connectTimeoutMs,
-		@Value("${AI_READ_TIMEOUT_MS:45000}") int readTimeoutMs,
 		@Value("${AI_API_KEY:}") String apiKey
 	) {
 		this.provider = AiProvider.from(provider);
@@ -39,14 +38,10 @@ public class AiGatewayService {
 		this.model = model;
 		this.apiKey = apiKey;
 		this.objectMapper = objectMapper;
-		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-		requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
-		requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 		this.restClient = restClientBuilder
 			.baseUrl(this.baseUrl)
 			.defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
 			.defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-			.requestFactory(requestFactory)
 			.build();
 	}
 
@@ -58,7 +53,7 @@ public class AiGatewayService {
 	}
 
 	private String completeWithOllama(String systemPrompt, String userPrompt) {
-		String responseBody = restClient.post()
+		byte[] responseBytes = restClient.post()
 			.uri("/api/chat")
 			.body(new OllamaChatRequest(
 				model,
@@ -67,25 +62,56 @@ public class AiGatewayService {
 					new ChatMessage("user", userPrompt)
 				),
 				false))
-			.retrieve()
-			.body(String.class);
+			.exchange((request, response) -> StreamUtils.copyToByteArray(response.getBody()));
+
+		String responseBody = responseBytes == null ? null : new String(responseBytes, StandardCharsets.UTF_8);
 
 		if (!StringUtils.hasText(responseBody)) {
 			throw new IllegalArgumentException("AI provider returned an empty response.");
 		}
 
-		OllamaChatResponse response;
 		try {
-			response = objectMapper.readValue(responseBody, OllamaChatResponse.class);
+			return extractOllamaContent(responseBody);
 		} catch (Exception e) {
 			throw new IllegalArgumentException("Failed to parse Ollama response: " + responseBody, e);
 		}
+	}
 
-		if (response == null || response.message() == null || !StringUtils.hasText(response.message().content())) {
-			throw new IllegalArgumentException("AI provider returned an empty response.");
+	private String extractOllamaContent(String responseBody) throws Exception {
+		String trimmed = responseBody.trim();
+
+		if (!trimmed.startsWith("{")) {
+			return trimmed;
 		}
 
-		return response.message().content();
+		JsonNode payload = objectMapper.readTree(trimmed);
+		String messageContent = text(payload, "message", "content");
+		if (StringUtils.hasText(messageContent)) {
+			return messageContent;
+		}
+
+		String directContent = payload.path("content").asText(null);
+		if (StringUtils.hasText(directContent)) {
+			return directContent;
+		}
+
+		String responseContent = payload.path("response").asText(null);
+		if (StringUtils.hasText(responseContent)) {
+			return responseContent;
+		}
+
+		throw new IllegalArgumentException("AI provider returned an empty response.");
+	}
+
+	private String text(JsonNode node, String parentField, String childField) {
+		JsonNode parent = node.path(parentField);
+		if (parent.isObject()) {
+			String value = parent.path(childField).asText(null);
+			if (StringUtils.hasText(value)) {
+				return value;
+			}
+		}
+		return null;
 	}
 
 	private String completeWithOpenAi(String systemPrompt, String userPrompt) {
