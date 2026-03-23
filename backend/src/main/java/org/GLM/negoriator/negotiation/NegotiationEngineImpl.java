@@ -227,9 +227,16 @@ public class NegotiationEngineImpl implements NegotiationEngine {
     ) {
         List<NegotiationIssue> rankedIssues = counterOfferGenerator.rankedIssues(buyerProfile, context, bounds, supplierOffer);
         List<OfferVector> offers = new ArrayList<>();
+        BigDecimal reservationUtility = buyerProfile.reservationUtility();
 
         for (NegotiationIssue issue : rankedIssues) {
             OfferVector offer = counterOfferGenerator.counterOfferForIssue(buyerProfile, bounds, supplierOffer, issue);
+
+            BigDecimal utility = utilityCalculator.calculate(offer, buyerProfile, bounds);
+            if (utility.compareTo(reservationUtility) < 0) {
+                continue;
+            }
+
             if (offers.stream().noneMatch(existing -> existing.matches(offer))) {
                 offers.add(offer);
             }

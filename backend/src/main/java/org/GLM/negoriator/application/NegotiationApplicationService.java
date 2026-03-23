@@ -116,7 +116,9 @@ public class NegotiationApplicationService {
 				session.currentSupplierModel(),
 				session.toNegotiationBounds()));
 
-		if (acceptedBuyerOffer != null) {
+		if (acceptedBuyerOffer != null
+			&& response.decision() != NegotiationEngine.Decision.REJECT
+			&& response.evaluation().buyerUtility().compareTo(session.toBuyerProfile().reservationUtility()) >= 0) {
 			response = new NegotiationEngine.NegotiationResponse(
 				NegotiationEngine.Decision.ACCEPT,
 				NegotiationEngine.NegotiationState.ACCEPTED,

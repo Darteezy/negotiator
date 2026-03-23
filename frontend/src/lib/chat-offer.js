@@ -247,6 +247,13 @@ export function shouldUseAiParsing(message, parsedDraft) {
     return true;
   }
 
+  if (
+    parsedDraft.detectedFields.length === 0 &&
+    parsedDraft.optionReference === null
+  ) {
+    return true;
+  }
+
   return /\boption\s+\d+\b|\b(same|keep)\b/i.test(normalizedMessage);
 }
 
