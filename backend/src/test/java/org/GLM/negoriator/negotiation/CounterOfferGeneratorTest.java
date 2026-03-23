@@ -1,64 +1,55 @@
 package org.GLM.negoriator.negotiation;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationContext;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationIssue;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationState;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.junit.jupiter.api.Test;
 
 class CounterOfferGeneratorTest {
 
-    private final CounterOfferGenerator counterOfferGenerator = new CounterOfferGenerator();
+	private final CounterOfferGenerator generator = new CounterOfferGenerator();
 
-    @Test
-    void choosesHigherWeightedGapWhenIssuesAreClose() {
-        OfferVector supplierOffer = new OfferVector(new BigDecimal("94"), 60, 5, 6);
+	@Test
+	void ranksPriceGapUsingBuyerPreferenceSpanInsteadOfGlobalBounds() {
+		BuyerProfile buyerProfile = new BuyerProfile(
+			new OfferVector(new BigDecimal("130.00"), 60, 3, 6),
+			new OfferVector(new BigDecimal("140.00"), 30, 14, 24),
+			new IssueWeights(
+				new BigDecimal("0.40"),
+				new BigDecimal("0.20"),
+				new BigDecimal("0.25"),
+				new BigDecimal("0.15")),
+			new BigDecimal("0.45"));
+		NegotiationBounds bounds = new NegotiationBounds(
+			new BigDecimal("50.00"),
+			new BigDecimal("200.00"),
+			7,
+			120,
+			1,
+			45,
+			1,
+			36);
+		NegotiationContext context = new NegotiationContext(
+			1,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.PENDING,
+			new BigDecimal("0.15"),
+			List.of());
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("138.00"), 50, 10, 18);
 
-        assertThat(counterOfferGenerator.issueToImprove(buyerProfile(), bounds(), supplierOffer))
-                .isEqualTo("delivery");
-        assertThat(counterOfferGenerator.counterOffer(
-                buyerProfile(),
-                new NegotiationContext(2, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
-                bounds(),
-                supplierOffer))
-                .isEqualTo(new OfferVector(new BigDecimal("94"), 60, 4, 6));
-    }
+		NegotiationIssue issue = generator.issueToImprove(buyerProfile, context, bounds, supplierOffer);
 
-    @Test
-    void onlyMovesTheRemainingNonIdealIssue() {
-        OfferVector supplierOffer = new OfferVector(new BigDecimal("92"), 60, 3, 6);
-
-        assertThat(counterOfferGenerator.issueToImprove(buyerProfile(), bounds(), supplierOffer))
-                .isEqualTo("price");
-        assertThat(counterOfferGenerator.counterOffer(
-                buyerProfile(),
-                new NegotiationContext(2, 6, NegotiationState.PENDING, BigDecimal.ZERO, java.util.List.of()),
-                bounds(),
-                supplierOffer))
-                .isEqualTo(new OfferVector(new BigDecimal("91.00"), 60, 3, 6));
-    }
-
-    private BuyerProfile buyerProfile() {
-        return new BuyerProfile(
-                new OfferVector(new BigDecimal("90"), 60, 3, 6),
-                new OfferVector(new BigDecimal("120"), 30, 14, 24),
-                new IssueWeights(
-                        new BigDecimal("0.40"),
-                        new BigDecimal("0.20"),
-                        new BigDecimal("0.25"),
-                        new BigDecimal("0.15")),
-                new BigDecimal("0.45"),
-                BigDecimal.ZERO,
-                BigDecimal.ZERO);
-    }
-
-    private NegotiationBounds bounds() {
-        return new NegotiationBounds(new BigDecimal("80"), new BigDecimal("120"), 30, 90, 3, 14, 3, 24);
-    }
+		assertEquals(NegotiationIssue.PRICE, issue);
+	}
 }

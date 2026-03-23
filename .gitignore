@@ -41,5 +41,8 @@ build/
 ### VS Code ###
 .vscode/
 
+# Local simulation artifacts
+.local/
+
 pactum.pdf
 design.md

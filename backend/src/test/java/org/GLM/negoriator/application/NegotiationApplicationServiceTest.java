@@ -1,90 +1,91 @@
 package org.GLM.negoriator.application;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.math.BigDecimal;
-import java.util.Map;
 
-import org.GLM.negoriator.domain.NegotiationParty;
+import org.GLM.negoriator.domain.NegotiationDecision;
+import org.GLM.negoriator.domain.NegotiationDecisionType;
 import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.domain.NegotiationSessionRepository;
 import org.GLM.negoriator.domain.NegotiationSessionStatus;
-import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
-import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
-import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
-import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierArchetype;
-import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierModel;
-import org.GLM.negoriator.negotiation.NegotiationEngineImpl;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
-@DataJpaTest
-@Import({NegotiationApplicationService.class, NegotiationEngineImpl.class})
+@SpringBootTest(properties = {
+	"spring.datasource.url=jdbc:h2:mem:negotiator-service-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+	"spring.datasource.driverClassName=org.h2.Driver",
+	"spring.datasource.username=sa",
+	"spring.datasource.password=",
+	"spring.jpa.hibernate.ddl-auto=create-drop",
+	"spring.jpa.open-in-view=false"
+})
+@ActiveProfiles("test")
 class NegotiationApplicationServiceTest {
 
 	@Autowired
 	private NegotiationApplicationService service;
 
 	@Autowired
-	private NegotiationSessionRepository repository;
+	private NegotiationSessionRepository sessionRepository;
+
+	@AfterEach
+	void cleanUp() {
+		sessionRepository.deleteAll();
+	}
 
 	@Test
-	void submitsSupplierOfferAndPersistsTheFullEngineResponseLoop() {
-		NegotiationSession startedSession = service.startSession(new NegotiationApplicationService.StartSessionCommand(
-			8,
-			BigDecimal.valueOf(0.15),
-			new BuyerProfile(
-				new OfferVector(BigDecimal.valueOf(90), 60, 3, 6),
-				new OfferVector(BigDecimal.valueOf(120), 30, 14, 24),
-				new IssueWeights(
-					BigDecimal.valueOf(0.4),
-					BigDecimal.valueOf(0.2),
-					BigDecimal.valueOf(0.25),
-					BigDecimal.valueOf(0.15)),
-				BigDecimal.valueOf(0.45),
-				BigDecimal.valueOf(2.0),
-				BigDecimal.valueOf(0.1)),
-			new NegotiationBounds(
-				BigDecimal.valueOf(80),
-				BigDecimal.valueOf(120),
-				30,
-				90,
-				3,
-				14,
-				3,
-				24),
-			new SupplierModel(
-				Map.of(
-					SupplierArchetype.MARGIN_FOCUSED, BigDecimal.valueOf(0.25),
-					SupplierArchetype.CASHFLOW_FOCUSED, BigDecimal.valueOf(0.25),
-					SupplierArchetype.OPERATIONS_FOCUSED, BigDecimal.valueOf(0.25),
-					SupplierArchetype.STABILITY_FOCUSED, BigDecimal.valueOf(0.25)),
-				BigDecimal.valueOf(0.50),
-				BigDecimal.valueOf(0.35))));
+	void keepsAcceptableSupplierCounterOpenUntilSupplierExplicitlyAccepts() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
 
-		NegotiationSession updatedSession = service.submitSupplierOffer(
-			startedSession.getId(),
-			new OfferVector(BigDecimal.valueOf(104), 45, 10, 12));
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 30, 14, 24), "Price 120, payment days 30, delivery 14 days, contract length 24 months");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 30, 14, 18), "Increase price to 120 and contract term 18 months");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 30, 14, 12), "Increase price to 120 and contract term 12 months");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 30, 7, 6), "Increase price to 120 and contract term decrease to 6 months and delivery in 7 days");
 
-		assertThat(updatedSession.getStatus()).isEqualTo(NegotiationSessionStatus.COUNTERED);
-		assertThat(updatedSession.getCurrentRound()).isEqualTo(2);
-		assertThat(updatedSession.getOffers()).hasSize(2);
-		assertThat(updatedSession.getOffers().get(0).getParty()).isEqualTo(NegotiationParty.SUPPLIER);
-		assertThat(updatedSession.getOffers().get(1).getParty()).isEqualTo(NegotiationParty.BUYER);
-		assertThat(updatedSession.getDecisions()).hasSize(1);
-		assertThat(updatedSession.getDecisions().getFirst().getEvaluation().getBuyerUtility()).isNotNull();
-		assertThat(updatedSession.getDecisions().getFirst().getCounterOffer()).isNotNull();
+		NegotiationSession pendingAcceptanceSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+			"Increase price to 120 and increase payment days to 60 days");
+		NegotiationDecision pendingAcceptanceDecision = latestDecision(pendingAcceptanceSession);
 
-		NegotiationSession reloadedSession = repository.findById(startedSession.getId()).orElseThrow();
-		assertThat(reloadedSession.getStatus()).isEqualTo(NegotiationSessionStatus.COUNTERED);
-		assertThat(reloadedSession.getCurrentRound()).isEqualTo(2);
-		assertThat(reloadedSession.getOffers()).hasSize(2);
-		assertThat(reloadedSession.getDecisions()).hasSize(1);
-		assertThat(reloadedSession.getDecisions().getFirst().getSupplierOffer().getParty()).isEqualTo(NegotiationParty.SUPPLIER);
-		assertThat(reloadedSession.getDecisions().getFirst().getCounterOffer().getParty()).isEqualTo(NegotiationParty.BUYER);
-		assertThat(reloadedSession.getDecisions().getFirst().getEvaluation().getTargetUtility()).isNotNull();
+		assertEquals(NegotiationSessionStatus.COUNTERED, pendingAcceptanceSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, pendingAcceptanceDecision.getDecision());
+		assertNotNull(pendingAcceptanceDecision.getCounterOffer());
+		assertEquals(
+			"Buyer is ready to close on these terms. Reply with accept to finalize the deal.",
+			pendingAcceptanceDecision.getExplanation());
+		assertEquals(0, new BigDecimal("120.00").compareTo(pendingAcceptanceDecision.getCounterOffer().toOfferVector().price()));
+		assertEquals(60, pendingAcceptanceDecision.getCounterOffer().toOfferVector().paymentDays());
+		assertEquals(7, pendingAcceptanceDecision.getCounterOffer().toOfferVector().deliveryDays());
+		assertEquals(12, pendingAcceptanceDecision.getCounterOffer().toOfferVector().contractMonths());
+
+		NegotiationSession acceptedSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+			"accept");
+		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
+
+		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
+		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
+		assertEquals(
+			"Accepted because the supplier agreed to the buyer's active offer from the previous round.",
+			acceptedDecision.getExplanation());
+	}
+
+	private NegotiationSession submit(NegotiationSession session, OfferVector offer, String message) {
+		NegotiationSession updatedSession = service.submitSupplierOffer(session.getId(), offer, null, message);
+		return service.getSession(updatedSession.getId());
+	}
+
+	private NegotiationDecision latestDecision(NegotiationSession session) {
+		return session.getDecisions().stream()
+			.reduce((first, second) -> second)
+			.orElseThrow();
 	}
 }

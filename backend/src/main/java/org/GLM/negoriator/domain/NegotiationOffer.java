@@ -52,6 +52,9 @@ public class NegotiationOffer {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
+	@Column(name = "supplier_message", columnDefinition = "TEXT")
+	private String supplierMessage;
+
 	protected NegotiationOffer() {
 	}
 
@@ -59,6 +62,13 @@ public class NegotiationOffer {
 		this.roundNumber = roundNumber;
 		this.party = party;
 		this.terms = terms;
+	}
+
+	public NegotiationOffer(Integer roundNumber, NegotiationParty party, OfferTermsSnapshot terms, String supplierMessage) {
+		this.roundNumber = roundNumber;
+		this.party = party;
+		this.terms = terms;
+		this.supplierMessage = supplierMessage;
 	}
 
 	public OfferVector toOfferVector() {
@@ -98,5 +108,9 @@ public class NegotiationOffer {
 
 	public Instant getCreatedAt() {
 		return createdAt;
+	}
+
+	public String getSupplierMessage() {
+		return supplierMessage;
 	}
 }

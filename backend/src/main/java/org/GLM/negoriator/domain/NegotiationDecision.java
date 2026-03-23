@@ -21,6 +21,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferEvaluation;
+import org.GLM.negoriator.negotiation.NegotiationEngine.DecisionReason;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationIssue;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierModel;
 
 @Entity
@@ -66,6 +69,21 @@ public class NegotiationDecision {
 	})
 	private SupplierBeliefSnapshot updatedSupplierBeliefs;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "reason_code", nullable = false, length = 40)
+	private DecisionReason reasonCode;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "focus_issue", length = 32)
+	private NegotiationIssue focusIssue;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "strategy_used", nullable = false, length = 24)
+	private NegotiationStrategy strategyUsed;
+
+	@Column(name = "strategy_rationale", nullable = false, length = 1000)
+	private String strategyRationale;
+
 	@Column(name = "explanation", nullable = false, length = 1000)
 	private String explanation;
 
@@ -83,6 +101,10 @@ public class NegotiationDecision {
 		NegotiationOffer counterOffer,
 		OfferEvaluationSnapshot evaluation,
 		SupplierBeliefSnapshot updatedSupplierBeliefs,
+		DecisionReason reasonCode,
+		NegotiationIssue focusIssue,
+		NegotiationStrategy strategyUsed,
+		String strategyRationale,
 		String explanation
 	) {
 		this.roundNumber = roundNumber;
@@ -92,6 +114,10 @@ public class NegotiationDecision {
 		this.counterOffer = counterOffer;
 		this.evaluation = evaluation;
 		this.updatedSupplierBeliefs = updatedSupplierBeliefs;
+		this.reasonCode = reasonCode;
+		this.focusIssue = focusIssue;
+		this.strategyUsed = strategyUsed;
+		this.strategyRationale = strategyRationale;
 		this.explanation = explanation;
 	}
 
@@ -103,8 +129,8 @@ public class NegotiationDecision {
 		return evaluation.toOfferEvaluation();
 	}
 
-	public SupplierModel toSupplierModel(BigDecimal updateSensitivity, BigDecimal reservationUtility) {
-		return new SupplierModel(updatedSupplierBeliefs.toBeliefMap(), updateSensitivity, reservationUtility);
+	public SupplierModel toSupplierModel(BigDecimal reservationUtility) {
+		return new SupplierModel(updatedSupplierBeliefs.toBeliefMap(), reservationUtility);
 	}
 
 	@PrePersist
@@ -148,6 +174,22 @@ public class NegotiationDecision {
 
 	public SupplierBeliefSnapshot getUpdatedSupplierBeliefs() {
 		return updatedSupplierBeliefs;
+	}
+
+	public DecisionReason getReasonCode() {
+		return reasonCode;
+	}
+
+	public NegotiationIssue getFocusIssue() {
+		return focusIssue;
+	}
+
+	public NegotiationStrategy getStrategyUsed() {
+		return strategyUsed;
+	}
+
+	public String getStrategyRationale() {
+		return strategyRationale;
 	}
 
 	public String getExplanation() {

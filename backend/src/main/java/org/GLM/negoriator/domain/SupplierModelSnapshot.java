@@ -22,38 +22,29 @@ public class SupplierModelSnapshot {
 	})
 	private SupplierBeliefSnapshot beliefs;
 
-	@Column(name = "supplier_update_sensitivity", nullable = false, precision = 10, scale = 4)
-	private BigDecimal updateSensitivity;
-
 	@Column(name = "supplier_reservation_utility", nullable = false, precision = 10, scale = 4)
 	private BigDecimal reservationUtility;
 
 	protected SupplierModelSnapshot() {
 	}
 
-	public SupplierModelSnapshot(SupplierBeliefSnapshot beliefs, BigDecimal updateSensitivity, BigDecimal reservationUtility) {
+	public SupplierModelSnapshot(SupplierBeliefSnapshot beliefs, BigDecimal reservationUtility) {
 		this.beliefs = beliefs;
-		this.updateSensitivity = updateSensitivity;
 		this.reservationUtility = reservationUtility;
 	}
 
 	public static SupplierModelSnapshot from(SupplierModel supplierModel) {
 		return new SupplierModelSnapshot(
 			SupplierBeliefSnapshot.from(supplierModel.archetypeBeliefs()),
-			supplierModel.updateSensitivity(),
 			supplierModel.reservationUtility());
 	}
 
 	public SupplierModel toSupplierModel() {
-		return new SupplierModel(beliefs.toBeliefMap(), updateSensitivity, reservationUtility);
+		return new SupplierModel(beliefs.toBeliefMap(), reservationUtility);
 	}
 
 	public SupplierBeliefSnapshot getBeliefs() {
 		return beliefs;
-	}
-
-	public BigDecimal getUpdateSensitivity() {
-		return updateSensitivity;
 	}
 
 	public BigDecimal getReservationUtility() {

@@ -43,12 +43,6 @@ public class BuyerProfileSnapshot {
 	@Column(name = "buyer_reservation_utility", nullable = false, precision = 10, scale = 4)
 	private BigDecimal reservationUtility;
 
-	@Column(name = "buyer_price_penalty_alpha", nullable = false, precision = 10, scale = 4)
-	private BigDecimal pricePenaltyAlpha;
-
-	@Column(name = "buyer_price_delivery_interaction_lambda", nullable = false, precision = 10, scale = 4)
-	private BigDecimal priceDeliveryInteractionLambda;
-
 	protected BuyerProfileSnapshot() {
 	}
 
@@ -56,16 +50,12 @@ public class BuyerProfileSnapshot {
 		OfferTermsSnapshot idealOffer,
 		OfferTermsSnapshot reservationOffer,
 		IssueWeightsSnapshot weights,
-		BigDecimal reservationUtility,
-		BigDecimal pricePenaltyAlpha,
-		BigDecimal priceDeliveryInteractionLambda
+		BigDecimal reservationUtility
 	) {
 		this.idealOffer = idealOffer;
 		this.reservationOffer = reservationOffer;
 		this.weights = weights;
 		this.reservationUtility = reservationUtility;
-		this.pricePenaltyAlpha = pricePenaltyAlpha;
-		this.priceDeliveryInteractionLambda = priceDeliveryInteractionLambda;
 	}
 
 	public static BuyerProfileSnapshot from(BuyerProfile buyerProfile) {
@@ -73,9 +63,7 @@ public class BuyerProfileSnapshot {
 			OfferTermsSnapshot.from(buyerProfile.idealOffer()),
 			OfferTermsSnapshot.from(buyerProfile.reservationOffer()),
 			IssueWeightsSnapshot.from(buyerProfile.weights()),
-			buyerProfile.reservationUtility(),
-			buyerProfile.pricePenaltyAlpha(),
-			buyerProfile.priceDeliveryInteractionLambda());
+			buyerProfile.reservationUtility());
 	}
 
 	public BuyerProfile toBuyerProfile() {
@@ -83,9 +71,7 @@ public class BuyerProfileSnapshot {
 			idealOffer.toOfferVector(),
 			reservationOffer.toOfferVector(),
 			weights.toIssueWeights(),
-			reservationUtility,
-			pricePenaltyAlpha,
-			priceDeliveryInteractionLambda);
+			reservationUtility);
 	}
 
 	public OfferTermsSnapshot getIdealOffer() {
@@ -102,13 +88,5 @@ public class BuyerProfileSnapshot {
 
 	public BigDecimal getReservationUtility() {
 		return reservationUtility;
-	}
-
-	public BigDecimal getPricePenaltyAlpha() {
-		return pricePenaltyAlpha;
-	}
-
-	public BigDecimal getPriceDeliveryInteractionLambda() {
-		return priceDeliveryInteractionLambda;
 	}
 }

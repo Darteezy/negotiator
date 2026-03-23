@@ -24,8 +24,21 @@ services:
       - .env
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_started
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: negotiator-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:

@@ -1,6 +1,6 @@
 package org.GLM.negoriator.negotiation;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 
@@ -12,63 +12,28 @@ import org.junit.jupiter.api.Test;
 
 class BuyerUtilityCalculatorTest {
 
-    private final BuyerUtilityCalculator calculator = new BuyerUtilityCalculator();
+	private final BuyerUtilityCalculator calculator = new BuyerUtilityCalculator();
 
-    @Test
-    void normalizePriceKeepsFractionalPrecision() {
-        assertThat(calculator.normalizePrice(new BigDecimal("80"), new BigDecimal("80"), new BigDecimal("120")))
-                .isEqualByComparingTo("1.0000");
-        assertThat(calculator.normalizePrice(new BigDecimal("85"), new BigDecimal("80"), new BigDecimal("120")))
-                .isEqualByComparingTo("0.8750");
-        assertThat(calculator.normalizePrice(new BigDecimal("120"), new BigDecimal("80"), new BigDecimal("120")))
-                .isEqualByComparingTo("0.0000");
-    }
+	@Test
+	void scoresPriceAgainstConfiguredBuyerSpanNotValidationBounds() {
+		BuyerProfile buyerProfile = new BuyerProfile(
+			new OfferVector(new BigDecimal("130.00"), 60, 3, 6),
+			new OfferVector(new BigDecimal("200.00"), 30, 14, 24),
+			new IssueWeights(BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO),
+			new BigDecimal("0.10"));
+		NegotiationBounds bounds = new NegotiationBounds(
+			new BigDecimal("50.00"),
+			new BigDecimal("200.00"),
+			7,
+			120,
+			1,
+			45,
+			1,
+			36);
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("180.00"), 30, 14, 24);
 
-    @Test
-    void calculateReturnsExpectedUtilitiesAtExactBounds() {
-        assertThat(calculator.calculate(
-                new OfferVector(new BigDecimal("80"), 90, 3, 3),
-                buyerProfile(),
-                bounds()))
-                .isEqualByComparingTo("1.0000");
+		BigDecimal utility = calculator.calculate(supplierOffer, buyerProfile, bounds);
 
-        assertThat(calculator.calculate(
-                new OfferVector(new BigDecimal("120"), 30, 14, 24),
-                buyerProfile(),
-                bounds()))
-                .isEqualByComparingTo("0.0000");
-    }
-
-    @Test
-    void calculateClampsOutOfBoundsOffersIntoZeroToOneRange() {
-        assertThat(calculator.calculate(
-                new OfferVector(new BigDecimal("70"), 120, 1, 1),
-                buyerProfile(),
-                bounds()))
-                .isEqualByComparingTo("1.0000");
-
-        assertThat(calculator.calculate(
-                new OfferVector(new BigDecimal("130"), 0, 30, 36),
-                buyerProfile(),
-                bounds()))
-                .isEqualByComparingTo("0.0000");
-    }
-
-    private BuyerProfile buyerProfile() {
-        return new BuyerProfile(
-                new OfferVector(new BigDecimal("90"), 60, 3, 6),
-                new OfferVector(new BigDecimal("120"), 30, 14, 24),
-                new IssueWeights(
-                        new BigDecimal("0.40"),
-                        new BigDecimal("0.20"),
-                        new BigDecimal("0.25"),
-                        new BigDecimal("0.15")),
-                new BigDecimal("0.45"),
-                BigDecimal.ZERO,
-                BigDecimal.ZERO);
-    }
-
-    private NegotiationBounds bounds() {
-        return new NegotiationBounds(new BigDecimal("80"), new BigDecimal("120"), 30, 90, 3, 14, 3, 24);
-    }
+		assertEquals(new BigDecimal("0.2857"), utility);
+	}
 }
