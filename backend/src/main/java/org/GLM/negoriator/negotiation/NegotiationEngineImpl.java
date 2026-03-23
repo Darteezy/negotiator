@@ -132,19 +132,19 @@ public class NegotiationEngineImpl implements NegotiationEngine {
     private BigDecimal estimateSupplierUtility(OfferVector offer, NegotiationRequest request) {
         Map<SupplierArchetype, BigDecimal> beliefs = request.supplierModel().archetypeBeliefs();
 
-        BigDecimal priceUtility = normalizePositiveDecimal(
+        BigDecimal priceUtility = Normalization.normalizePositiveDecimal(
                 offer.price(),
                 request.bounds().minPrice(),
                 request.bounds().maxPrice());
-        BigDecimal paymentUtility = normalizeNegativeInt(
+        BigDecimal paymentUtility = Normalization.normalizeNegativeInt(
                 offer.paymentDays(),
                 request.bounds().minPaymentDays(),
                 request.bounds().maxPaymentDays());
-        BigDecimal deliveryUtility = normalizePositiveInt(
+        BigDecimal deliveryUtility = Normalization.normalizePositiveInt(
                 offer.deliveryDays(),
                 request.bounds().minDeliveryDays(),
                 request.bounds().maxDeliveryDays());
-        BigDecimal contractUtility = normalizePositiveInt(
+        BigDecimal contractUtility = Normalization.normalizePositiveInt(
                 offer.contractMonths(),
                 request.bounds().minContractMonths(),
                 request.bounds().maxContractMonths());
@@ -184,49 +184,6 @@ public class NegotiationEngineImpl implements NegotiationEngine {
 
         return buyerGain.multiply(supplierGain)
                 .setScale(SCALE, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal normalizePositiveDecimal(BigDecimal value, BigDecimal min, BigDecimal max) {
-        if (max.compareTo(min) == 0) {
-            return BigDecimal.ZERO;
-        }
-
-        BigDecimal normalized = value.subtract(min)
-                .divide(max.subtract(min), SCALE, RoundingMode.HALF_UP);
-
-        return clamp(normalized);
-    }
-
-    private BigDecimal normalizePositiveInt(int value, int min, int max) {
-        if (max == min) {
-            return BigDecimal.ZERO;
-        }
-
-        BigDecimal normalized = BigDecimal.valueOf(value - min)
-                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
-
-        return clamp(normalized);
-    }
-
-    private BigDecimal normalizeNegativeInt(int value, int min, int max) {
-        if (max == min) {
-            return BigDecimal.ZERO;
-        }
-
-        BigDecimal normalized = BigDecimal.valueOf(max - value)
-                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
-
-        return clamp(normalized);
-    }
-
-    private BigDecimal clamp(BigDecimal value) {
-        if (value.compareTo(BigDecimal.ZERO) < 0) {
-            return BigDecimal.ZERO;
-        }
-        if (value.compareTo(BigDecimal.ONE) > 0) {
-            return BigDecimal.ONE;
-        }
-        return value;
     }
 
     private String acceptanceExplanation(BigDecimal buyerUtility, BigDecimal targetUtility) {
@@ -273,7 +230,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
 
         for (NegotiationIssue issue : rankedIssues) {
             OfferVector offer = counterOfferGenerator.counterOfferForIssue(buyerProfile, bounds, supplierOffer, issue);
-            if (offers.stream().noneMatch(existing -> sameOffer(existing, offer))) {
+            if (offers.stream().noneMatch(existing -> existing.matches(offer))) {
                 offers.add(offer);
             }
 
@@ -287,13 +244,6 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         return offers;
-    }
-
-    private boolean sameOffer(OfferVector left, OfferVector right) {
-        return left.price().compareTo(right.price()) == 0
-                && left.paymentDays() == right.paymentDays()
-                && left.deliveryDays() == right.deliveryDays()
-                && left.contractMonths() == right.contractMonths();
     }
 
     private String rejectionExplanation(

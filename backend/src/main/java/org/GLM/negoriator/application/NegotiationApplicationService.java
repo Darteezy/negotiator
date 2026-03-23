@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import jakarta.persistence.EntityNotFoundException;
 
+import org.GLM.negoriator.ai.AiStrategyAdvisor;
 import org.GLM.negoriator.domain.BuyerProfileSnapshot;
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationDecisionType;
@@ -37,14 +38,17 @@ public class NegotiationApplicationService {
 	private final NegotiationSessionRepository sessionRepository;
 	private final NegotiationEngine negotiationEngine;
 	private final StrategySwitchPolicy strategySwitchPolicy;
+	private final AiStrategyAdvisor aiStrategyAdvisor;
 
 	public NegotiationApplicationService(
 		NegotiationSessionRepository sessionRepository,
-		NegotiationEngine negotiationEngine
+		NegotiationEngine negotiationEngine,
+		AiStrategyAdvisor aiStrategyAdvisor
 	) {
 		this.sessionRepository = sessionRepository;
 		this.negotiationEngine = negotiationEngine;
 		this.strategySwitchPolicy = new StrategySwitchPolicy();
+		this.aiStrategyAdvisor = aiStrategyAdvisor;
 	}
 
 	public NegotiationSession startSession(StartSessionCommand command) {
@@ -77,13 +81,14 @@ public class NegotiationApplicationService {
 	}
 
 	public NegotiationSession submitSupplierOffer(UUID sessionId, OfferVector supplierOfferTerms) {
-		return submitSupplierOffer(sessionId, supplierOfferTerms, null);
+		return submitSupplierOffer(sessionId, supplierOfferTerms, null, null);
 	}
 
 	public NegotiationSession submitSupplierOffer(
 		UUID sessionId,
 		OfferVector supplierOfferTerms,
-		SupplierConstraintsSnapshot supplierConstraints
+		SupplierConstraintsSnapshot supplierConstraints,
+		String supplierMessage
 	) {
 		NegotiationSession session = sessionRepository.findById(sessionId)
 			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));
@@ -98,7 +103,8 @@ public class NegotiationApplicationService {
 		NegotiationOffer supplierOffer = new NegotiationOffer(
 			session.getCurrentRound(),
 			NegotiationParty.SUPPLIER,
-			OfferTermsSnapshot.from(supplierOfferTerms));
+			OfferTermsSnapshot.from(supplierOfferTerms),
+			supplierMessage);
 		StrategySwitchPolicy.StrategyContext strategyContext = strategySwitchPolicy.describeCurrentStrategy(session);
 		NegotiationOffer acceptedBuyerOffer = matchingActiveBuyerOffer(session, supplierOfferTerms);
 
@@ -157,6 +163,16 @@ public class NegotiationApplicationService {
 			session,
 			response,
 			supplierOfferTerms);
+		if (!strategyCheckpoint.switched()) {
+			AiStrategyAdvisor.StrategyAdvice aiAdvice = aiStrategyAdvisor.advise(session, response.evaluation());
+			if (aiAdvice.switched()) {
+				strategyCheckpoint = new StrategySwitchPolicy.StrategyCheckpoint(
+					aiAdvice.nextStrategy(),
+					aiAdvice.trigger(),
+					aiAdvice.rationale(),
+					true);
+			}
+		}
 		if (strategyCheckpoint.switched()) {
 			session.switchStrategy(
 				strategyCheckpoint.nextStrategy(),
@@ -183,11 +199,11 @@ public class NegotiationApplicationService {
 		for (OfferVector counterOffer : counterOffers) {
 			OfferVector constrainedOffer = supplierConstraints.clamp(counterOffer);
 
-			if (sameOffer(constrainedOffer, supplierOfferTerms)) {
+			if (constrainedOffer.matches(supplierOfferTerms)) {
 				continue;
 			}
 
-			if (feasibleOffers.stream().noneMatch(existing -> sameOffer(existing, constrainedOffer))) {
+			if (feasibleOffers.stream().noneMatch(existing -> existing.matches(constrainedOffer))) {
 				feasibleOffers.add(constrainedOffer);
 			}
 		}
@@ -205,16 +221,9 @@ public class NegotiationApplicationService {
 		return session.getOffers().stream()
 			.filter(offer -> offer.getParty() == NegotiationParty.BUYER)
 			.filter(offer -> offer.getRoundNumber() == activeBuyerRound)
-			.filter(offer -> sameOffer(offer.toOfferVector(), supplierOfferTerms))
+			.filter(offer -> offer.toOfferVector().matches(supplierOfferTerms))
 			.findFirst()
 			.orElse(null);
-	}
-
-	private boolean sameOffer(OfferVector left, OfferVector right) {
-		return left.price().compareTo(right.price()) == 0
-			&& left.paymentDays() == right.paymentDays()
-			&& left.deliveryDays() == right.deliveryDays()
-			&& left.contractMonths() == right.contractMonths();
 	}
 
 	public record StartSessionCommand(

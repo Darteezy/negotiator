@@ -59,6 +59,12 @@ public interface NegotiationEngine {
 		int deliveryDays,
 		int contractMonths
 	) {
+		public boolean matches(OfferVector other) {
+			return price.compareTo(other.price) == 0
+				&& paymentDays == other.paymentDays
+				&& deliveryDays == other.deliveryDays
+				&& contractMonths == other.contractMonths;
+		}
 	}
 
 	record IssueWeights(
@@ -97,32 +103,26 @@ public interface NegotiationEngine {
 		}
 	}
 
-	// TODO: We have weights here, but there is still no formula that turns one offer into a final score or percent for comparison e.g. 0.78
 	record BuyerProfile(
 		OfferVector idealOffer,
 		OfferVector reservationOffer,
 		IssueWeights weights,
-		BigDecimal reservationUtility,
-		BigDecimal pricePenaltyAlpha,
-		BigDecimal priceDeliveryInteractionLambda
+		BigDecimal reservationUtility
 	) {
 	}
 
 	record SupplierModel(
 		Map<SupplierArchetype, BigDecimal> archetypeBeliefs,
-		BigDecimal updateSensitivity,
 		BigDecimal reservationUtility
 	) {
 	}
 
 	record NegotiationContext(
 		int round,
-		// TODO: AI or algoritm should be more agressive in earlier rounds, but with more compromise at later rounds. (Adaptiveness)
 		int maxRounds,
 		NegotiationStrategy strategy,
 		NegotiationState state,
 		BigDecimal riskOfWalkaway,
-		// TODO: Put who made the offer in the history too so the engine can learn from that as well.
 		List<OfferVector> history
 	) {
 	}

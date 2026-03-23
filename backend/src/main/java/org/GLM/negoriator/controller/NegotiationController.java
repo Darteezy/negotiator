@@ -80,7 +80,8 @@ public class NegotiationController {
 		NegotiationSession updatedSession = negotiationApplicationService.submitSupplierOffer(
 			sessionId,
 			request.toOfferVector(),
-			request.toSupplierConstraints());
+			request.toSupplierConstraints(),
+			request.supplierMessage());
 
 		return NegotiationSessionResponse.from(negotiationApplicationService.getSession(updatedSession.getId()));
 	}
@@ -135,6 +136,7 @@ public class NegotiationController {
 		Integer paymentDays,
 		Integer deliveryDays,
 		Integer contractMonths,
+		String supplierMessage,
 		SupplierConstraintsRequest supplierConstraints
 	) {
 		OfferVector toOfferVector() {
@@ -459,18 +461,14 @@ public class NegotiationController {
 		OfferTermsResponse idealOffer,
 		OfferTermsResponse reservationOffer,
 		IssueWeightsRequest weights,
-		BigDecimal reservationUtility,
-		BigDecimal pricePenaltyAlpha,
-		BigDecimal priceDeliveryInteractionLambda
+		BigDecimal reservationUtility
 	) {
 		BuyerProfile toBuyerProfile() {
 			return new BuyerProfile(
 				require(idealOffer, "buyerProfile.idealOffer").toOfferVector(),
 				require(reservationOffer, "buyerProfile.reservationOffer").toOfferVector(),
 				require(weights, "buyerProfile.weights").toIssueWeights(),
-				require(reservationUtility, "buyerProfile.reservationUtility"),
-				require(pricePenaltyAlpha, "buyerProfile.pricePenaltyAlpha"),
-				require(priceDeliveryInteractionLambda, "buyerProfile.priceDeliveryInteractionLambda"));
+				require(reservationUtility, "buyerProfile.reservationUtility"));
 		}
 	}
 
@@ -491,13 +489,11 @@ public class NegotiationController {
 
 	public record SupplierModelRequest(
 		Map<SupplierArchetype, BigDecimal> archetypeBeliefs,
-		BigDecimal updateSensitivity,
 		BigDecimal reservationUtility
 	) {
 		SupplierModel toSupplierModel() {
 			return new SupplierModel(
 				require(archetypeBeliefs, "supplierModel.archetypeBeliefs"),
-				require(updateSensitivity, "supplierModel.updateSensitivity"),
 				require(reservationUtility, "supplierModel.reservationUtility"));
 		}
 	}

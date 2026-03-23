@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import {
+  LoaderCircle,
+  PanelRightClose,
+  PanelRightOpen,
+  RotateCcw,
+} from "lucide-react";
 
 import {
   fetchSessionDefaults,
@@ -25,6 +30,7 @@ function App() {
     [],
   );
   const [pendingSupplierMessage, setPendingSupplierMessage] = useState("");
+  const [showDebug, setShowDebug] = useState(false);
   const [error, setError] = useState("");
 
   const bounds = session?.bounds ?? defaults?.bounds ?? null;
@@ -137,6 +143,7 @@ function App() {
 
       const nextSession = await submitSupplierOffer(session.id, {
         ...resolvedDraft.terms,
+        supplierMessage: messageDraft.trim(),
         supplierConstraints: resolvedDraft.constraints,
       });
       setSubmittedSupplierMessages((currentMessages) => [
@@ -166,30 +173,93 @@ function App() {
           />
         ) : (
           <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>
-            <div className='grid min-h-0 flex-1 grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)] divide-x divide-[var(--line)]'>
-              <ConversationPane
-                loading={loadingDefaults}
-                pendingSupplierMessage={pendingSupplierMessage}
-                session={session}
-                supplierMessages={submittedSupplierMessages}
-              />
-              <DebugPane
-                pendingSupplierMessage={pendingSupplierMessage}
-                session={session}
-                supplierMessages={submittedSupplierMessages}
-              />
+            <div className='flex min-h-0 flex-1'>
+              <div
+                className={`min-h-0 flex-1 ${showDebug ? "hidden lg:flex" : "flex"}`}
+              >
+                <ConversationPane
+                  loading={loadingDefaults}
+                  pendingSupplierMessage={pendingSupplierMessage}
+                  session={session}
+                  supplierMessages={submittedSupplierMessages}
+                />
+              </div>
+              <div
+                className={`min-h-0 flex-1 border-l border-[var(--line)] lg:max-w-[38%] ${showDebug ? "flex" : "hidden lg:flex"}`}
+              >
+                <DebugPane
+                  pendingSupplierMessage={pendingSupplierMessage}
+                  session={session}
+                  supplierMessages={submittedSupplierMessages}
+                />
+              </div>
             </div>
-            <OfferComposer
-              bounds={bounds}
-              disabled={session.closed || submittingOffer}
-              draft={messageDraft}
-              error={error}
-              onChange={setMessageDraft}
-              onSubmit={handleSubmitOffer}
-              parsedDraft={parsedDraft}
-              session={session}
-              submittingOffer={submittingOffer}
-            />
+            {session.closed ? (
+              <div className='shrink-0 border-t border-[var(--line)] bg-[var(--panel)] px-3 py-3 sm:px-4'>
+                <div className='flex items-center justify-between'>
+                  <span className='text-sm text-[var(--ink-muted)]'>
+                    Negotiation{" "}
+                    {session.status === "ACCEPTED"
+                      ? "accepted"
+                      : session.status === "REJECTED"
+                        ? "rejected"
+                        : "ended"}
+                    .
+                  </span>
+                  <div className='flex items-center gap-2'>
+                    <Button
+                      className='lg:hidden'
+                      onClick={() => setShowDebug((d) => !d)}
+                      size='sm'
+                      variant='ghost'
+                    >
+                      {showDebug ? (
+                        <PanelRightClose className='h-4 w-4' />
+                      ) : (
+                        <PanelRightOpen className='h-4 w-4' />
+                      )}
+                      <span className='ml-1 text-xs'>
+                        {showDebug ? "Chat" : "Debug"}
+                      </span>
+                    </Button>
+                    <Button onClick={handleRestartSession} variant='outline'>
+                      <RotateCcw className='mr-2 h-4 w-4' />
+                      New Negotiation
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className='shrink-0 border-t border-[var(--line)] bg-[var(--panel)]'>
+                <div className='flex items-center justify-end px-3 py-1 lg:hidden'>
+                  <Button
+                    onClick={() => setShowDebug((d) => !d)}
+                    size='sm'
+                    variant='ghost'
+                  >
+                    {showDebug ? (
+                      <PanelRightClose className='h-4 w-4' />
+                    ) : (
+                      <PanelRightOpen className='h-4 w-4' />
+                    )}
+                    <span className='ml-1 text-xs'>
+                      {showDebug ? "Chat" : "Debug"}
+                    </span>
+                  </Button>
+                </div>
+                <OfferComposer
+                  bounds={bounds}
+                  disabled={submittingOffer}
+                  draft={messageDraft}
+                  error={error}
+                  onChange={setMessageDraft}
+                  onSubmit={handleSubmitOffer}
+                  parsedDraft={parsedDraft}
+                  session={session}
+                  submittingOffer={submittingOffer}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

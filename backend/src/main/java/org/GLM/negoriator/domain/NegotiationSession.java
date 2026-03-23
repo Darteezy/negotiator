@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import jakarta.persistence.CascadeType;
@@ -159,16 +160,30 @@ public class NegotiationSession {
 			.orElseThrow();
 
 		return latestDecision.toSupplierModel(
-			supplierModelSnapshot.getUpdateSensitivity(),
 			supplierModelSnapshot.getReservationUtility());
 	}
 
 	public NegotiationContext toNegotiationContext() {
-		List<OfferVector> history = offers.stream()
+		List<OfferVector> history = new ArrayList<>();
+
+		Map<Integer, List<NegotiationOffer>> offersByRound = offers.stream()
 			.sorted(Comparator.comparing(NegotiationOffer::getRoundNumber)
 				.thenComparing(NegotiationOffer::getCreatedAt))
-			.map(NegotiationOffer::toOfferVector)
-			.toList();
+			.collect(java.util.stream.Collectors.groupingBy(
+				NegotiationOffer::getRoundNumber,
+				java.util.LinkedHashMap::new,
+				java.util.stream.Collectors.toList()));
+
+		for (List<NegotiationOffer> roundOffers : offersByRound.values()) {
+			for (NegotiationOffer offer : roundOffers) {
+				if (offer.getParty() == NegotiationParty.SUPPLIER) {
+					history.add(offer.toOfferVector());
+				} else if (offer.getParty() == NegotiationParty.BUYER) {
+					history.add(offer.toOfferVector());
+					break;
+				}
+			}
+		}
 
 		return new NegotiationContext(
 			currentRound,

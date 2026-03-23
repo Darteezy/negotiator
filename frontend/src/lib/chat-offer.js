@@ -126,10 +126,13 @@ const constraintPatterns = {
   ],
 };
 
-export function parseSupplierMessage(message, bounds) {
+export function parseSupplierMessage(
+  message,
+  bounds,
+  referenceTerms = null,
+  counterOffers = [],
+) {
   const normalizedMessage = message.trim();
-  const referenceTerms = arguments[2] ?? null;
-  const counterOffers = arguments[3] ?? [];
   const optionIndex = detectOptionReference(normalizedMessage, counterOffers);
   const baseTerms =
     optionIndex === null ? referenceTerms : counterOffers[optionIndex];

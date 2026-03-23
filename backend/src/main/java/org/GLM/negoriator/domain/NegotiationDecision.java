@@ -129,8 +129,8 @@ public class NegotiationDecision {
 		return evaluation.toOfferEvaluation();
 	}
 
-	public SupplierModel toSupplierModel(BigDecimal updateSensitivity, BigDecimal reservationUtility) {
-		return new SupplierModel(updatedSupplierBeliefs.toBeliefMap(), updateSensitivity, reservationUtility);
+	public SupplierModel toSupplierModel(BigDecimal reservationUtility) {
+		return new SupplierModel(updatedSupplierBeliefs.toBeliefMap(), reservationUtility);
 	}
 
 	@PrePersist

@@ -57,13 +57,6 @@ Each session has a buyer profile with four important parts:
 4. `reservationUtility`
    - the minimum overall quality level the buyer can live with
 
-Two fields still exist in the model but do not affect decisions yet:
-
-- `pricePenaltyAlpha`
-- `priceDeliveryInteractionLambda`
-
-They should be treated as unused for now.
-
 ## How The Buyer Scores An Offer
 
 The engine converts every offer into a buyer utility score between `0.0000` and `1.0000`.

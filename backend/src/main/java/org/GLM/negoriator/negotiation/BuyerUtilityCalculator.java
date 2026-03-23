@@ -1,13 +1,9 @@
 package org.GLM.negoriator.negotiation;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 
 public class BuyerUtilityCalculator {
 
-    private static final int SCALE = 4;
-    private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(SCALE, RoundingMode.HALF_UP);
-    private static final BigDecimal ONE = BigDecimal.ONE.setScale(SCALE, RoundingMode.HALF_UP);
     /**
      * Calculates the buyer-side utility score for a supplier offer.
      * Expected output:
@@ -24,23 +20,23 @@ public class BuyerUtilityCalculator {
 
         NegotiationEngine.IssueWeights normalizedWeights = profile.weights().normalized();
 
-        BigDecimal priceScore = normalizePrice(
+        BigDecimal priceScore = Normalization.normalizeInvertedDecimal(
                 offer.price(),
                 bounds.minPrice(),
                 bounds.maxPrice()
         );
-        BigDecimal paymentScore = normalizePositive(
+        BigDecimal paymentScore = Normalization.normalizePositiveInt(
                 offer.paymentDays(),
                 bounds.minPaymentDays(),
                 bounds.maxPaymentDays()
         );
-        BigDecimal deliveryScore = normalizeNegative(
+        BigDecimal deliveryScore = Normalization.normalizeNegativeInt(
                 offer.deliveryDays(),
                 bounds.minDeliveryDays(),
                 bounds.maxDeliveryDays()
         );
 
-        BigDecimal contractScore = normalizeNegative(
+        BigDecimal contractScore = Normalization.normalizeNegativeInt(
                 offer.contractMonths(),
                 bounds.minContractMonths(),
                 bounds.maxContractMonths()
@@ -56,49 +52,6 @@ public class BuyerUtilityCalculator {
                 .add(weightedDelivery)
                 .add(weightedContract);
 
-        return clamp(utility);
-    }
-    BigDecimal normalizePrice(BigDecimal value, BigDecimal min, BigDecimal max) {
-        if (max.compareTo(min) == 0) {
-            return ZERO;
-        }
-
-        BigDecimal normalized = max.subtract(value)
-                .divide(max.subtract(min), SCALE, RoundingMode.HALF_UP);
-
-        return clamp(normalized);
-    }
-
-
-    private BigDecimal normalizePositive(int value, int min, int max) {
-        if (max == min) {
-            return ZERO;
-        }
-
-        BigDecimal normalized = BigDecimal.valueOf(value - min)
-                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
-
-        return clamp(normalized);
-    }
-    private BigDecimal normalizeNegative(int value, int min, int max) {
-        if (max == min) {
-            return ZERO;
-        }
-
-        BigDecimal normalized = BigDecimal.valueOf(max - value)
-                .divide(BigDecimal.valueOf(max - min), SCALE, RoundingMode.HALF_UP);
-
-        return clamp(normalized);
-    }
-    private BigDecimal clamp(BigDecimal value) {
-        BigDecimal scaledValue = value.setScale(SCALE, RoundingMode.HALF_UP);
-
-        if (scaledValue.compareTo(ZERO) < 0) {
-            return ZERO;
-        }
-        if (scaledValue.compareTo(ONE) > 0) {
-            return ONE;
-        }
-        return scaledValue;
+        return Normalization.clamp(utility);
     }
 }

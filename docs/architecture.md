@@ -172,11 +172,6 @@ Controls:
 - per-issue weights
 - reservation utility
 
-Also present but not yet used in decision logic:
-
-- `pricePenaltyAlpha`
-- `priceDeliveryInteractionLambda`
-
 ### Negotiation bounds
 
 Bounds define normalization ranges for every issue. They are essential because both buyer utility and estimated supplier utility are calculated from normalized issue scores.

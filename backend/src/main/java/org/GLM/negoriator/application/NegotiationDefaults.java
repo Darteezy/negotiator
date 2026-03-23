@@ -45,9 +45,7 @@ public final class NegotiationDefaults {
 				new BigDecimal("0.20"),
 				new BigDecimal("0.25"),
 				new BigDecimal("0.15")),
-			new BigDecimal("0.45"),
-			BigDecimal.ZERO,
-			BigDecimal.ZERO);
+			new BigDecimal("0.45"));
 	}
 
 	public static NegotiationBounds bounds() {
@@ -69,7 +67,6 @@ public final class NegotiationDefaults {
 				SupplierArchetype.CASHFLOW_FOCUSED, new BigDecimal("0.25"),
 				SupplierArchetype.OPERATIONS_FOCUSED, new BigDecimal("0.25"),
 				SupplierArchetype.STABILITY_FOCUSED, new BigDecimal("0.25")),
-			new BigDecimal("0.50"),
 			new BigDecimal("0.35"));
 	}
 
