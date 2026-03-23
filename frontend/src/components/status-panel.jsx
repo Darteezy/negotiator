@@ -58,7 +58,7 @@ export function StatusPanel({
           <MetricCard
             label='Strategy'
             value={humanStrategyName(
-              session?.strategy ?? defaults?.defaultStrategy ?? "MESO",
+              session?.strategy ?? defaults?.defaultStrategy ?? "BASELINE",
             )}
           />
           <MetricCard

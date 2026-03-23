@@ -37,8 +37,6 @@ public class NegotiationApplicationService {
 
 	private final NegotiationSessionRepository sessionRepository;
 	private final NegotiationEngine negotiationEngine;
-	private final StrategySwitchPolicy strategySwitchPolicy;
-	private final AiStrategyAdvisor aiStrategyAdvisor;
 	private final SessionConfigurationValidator sessionConfigurationValidator;
 
 	public NegotiationApplicationService(
@@ -48,8 +46,6 @@ public class NegotiationApplicationService {
 	) {
 		this.sessionRepository = sessionRepository;
 		this.negotiationEngine = negotiationEngine;
-		this.strategySwitchPolicy = new StrategySwitchPolicy();
-		this.aiStrategyAdvisor = aiStrategyAdvisor;
 		this.sessionConfigurationValidator = new SessionConfigurationValidator();
 	}
 
@@ -109,7 +105,6 @@ public class NegotiationApplicationService {
 			NegotiationParty.SUPPLIER,
 			OfferTermsSnapshot.from(supplierOfferTerms),
 			supplierMessage);
-		StrategySwitchPolicy.StrategyContext strategyContext = strategySwitchPolicy.describeCurrentStrategy(session);
 		NegotiationOffer acceptedBuyerOffer = matchingActiveBuyerOffer(session, supplierOfferTerms, supplierMessage);
 
 		NegotiationEngine.NegotiationResponse response = negotiationEngine.negotiate(
@@ -161,31 +156,9 @@ public class NegotiationApplicationService {
 			SupplierBeliefSnapshot.from(response.updatedSupplierBeliefs()),
 			response.reasonCode(),
 			response.focusIssue(),
-			strategyContext.strategy(),
-			strategyContext.rationale(),
+			session.getStrategy(),
+			"Baseline policy remained active for this round.",
 			response.explanation()));
-
-		StrategySwitchPolicy.StrategyCheckpoint strategyCheckpoint = strategySwitchPolicy.evaluate(
-			session,
-			response,
-			supplierOfferTerms);
-		if (!strategyCheckpoint.switched()) {
-			AiStrategyAdvisor.StrategyAdvice aiAdvice = aiStrategyAdvisor.advise(session, response.evaluation());
-			if (aiAdvice.switched()) {
-				strategyCheckpoint = new StrategySwitchPolicy.StrategyCheckpoint(
-					aiAdvice.nextStrategy(),
-					aiAdvice.trigger(),
-					aiAdvice.rationale(),
-					true);
-			}
-		}
-		if (strategyCheckpoint.switched()) {
-			session.switchStrategy(
-				strategyCheckpoint.nextStrategy(),
-				supplierOffer.getRoundNumber(),
-				strategyCheckpoint.trigger(),
-				strategyCheckpoint.rationale());
-		}
 		session.moveTo(NegotiationSessionStatus.from(response.nextState()));
 
 		return sessionRepository.saveAndFlush(session);

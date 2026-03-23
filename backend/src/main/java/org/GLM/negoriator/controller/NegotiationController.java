@@ -104,7 +104,7 @@ public class NegotiationController {
 		) {
 			return new SessionDefaultsResponse(
 				defaultStrategy.name(),
-				List.of(NegotiationStrategy.values()).stream().map(Enum::name).toList(),
+				List.of(defaultStrategy.name()),
 				maxRounds,
 				riskOfWalkaway,
 				BuyerProfileResponse.from(buyerProfile),
@@ -121,17 +121,15 @@ public class NegotiationController {
 		SupplierModelRequest supplierModel
 	) {
 		NegotiationApplicationService.StartSessionCommand toCommand() {
-			NegotiationStrategy strategyValue = strategy == null
-				? NegotiationDefaults.defaultStrategy()
-				: NegotiationStrategy.valueOf(strategy);
+			NegotiationStrategy strategyValue = NegotiationDefaults.defaultStrategy();
 
 			return new NegotiationApplicationService.StartSessionCommand(
 				strategyValue,
 				maxRounds == null ? NegotiationDefaults.maxRounds(strategyValue) : maxRounds,
-				riskOfWalkaway == null ? NegotiationDefaults.riskOfWalkaway() : riskOfWalkaway,
+				NegotiationDefaults.riskOfWalkaway(),
 				buyerProfile == null ? NegotiationDefaults.buyerProfile() : buyerProfile.toBuyerProfile(),
-				bounds == null ? NegotiationDefaults.bounds() : bounds.toBounds(),
-				supplierModel == null ? NegotiationDefaults.supplierModel() : supplierModel.toSupplierModel());
+				NegotiationDefaults.bounds(),
+				NegotiationDefaults.supplierModel());
 		}
 	}
 
@@ -225,14 +223,17 @@ public class NegotiationController {
 		static NegotiationRoundResponse from(NegotiationSession session, NegotiationDecision decision) {
 			return new NegotiationRoundResponse(
 				decision.getRoundNumber(),
-				OfferMessageResponse.from(decision.getSupplierOffer().toOfferVector(), decision.getSupplierOffer().getCreatedAt()),
+				OfferMessageResponse.from(
+					decision.getSupplierOffer().toOfferVector(),
+					decision.getSupplierOffer().getCreatedAt(),
+					decision.getSupplierOffer().getSupplierMessage()),
 				BuyerReplyResponse.from(session, decision));
 		}
 	}
 
-	public record OfferMessageResponse(OfferTermsResponse terms, Instant at) {
-		static OfferMessageResponse from(OfferVector offerVector, Instant at) {
-			return new OfferMessageResponse(OfferTermsResponse.from(offerVector), at);
+	public record OfferMessageResponse(OfferTermsResponse terms, Instant at, String message) {
+		static OfferMessageResponse from(OfferVector offerVector, Instant at, String message) {
+			return new OfferMessageResponse(OfferTermsResponse.from(offerVector), at, message);
 		}
 	}
 
@@ -315,7 +316,9 @@ public class NegotiationController {
 					"SUPPLIER_OFFER",
 					"supplier",
 					"Supplier proposal",
-					supplierMessage(round.supplierOffer().terms()),
+					round.supplierOffer().message() == null || round.supplierOffer().message().isBlank()
+						? supplierMessage(round.supplierOffer().terms())
+						: round.supplierOffer().message(),
 					round.supplierOffer().at(),
 					round.supplierOffer().terms(),
 					List.of(),

@@ -1,11 +1,10 @@
-import { LoaderCircle, PlayCircle, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { LoaderCircle, RotateCcw, SlidersHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SESSION_TERM_FIELDS } from "@/lib/session-config";
 
 export function SessionSetupScreen({
-  availableStrategies = [],
   bounds,
   config,
   error,
@@ -14,8 +13,6 @@ export function SessionSetupScreen({
   onReset,
   onSessionSettingChange,
   onStartSession,
-  onStartSimulation,
-  runningSimulation,
   startingSession,
 }) {
   return (
@@ -130,32 +127,12 @@ export function SessionSetupScreen({
             <div className='space-y-5'>
               <div>
                 <div className='app-mono text-[11px] uppercase tracking-[0.16em] text-[var(--ink-soft)]'>
-                  Session controls
+                  Buyer policy
                 </div>
                 <h2 className='mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--ink-strong)]'>
-                  Choose how the buyer negotiates.
+                  One fixed buyer policy.
                 </h2>
               </div>
-
-              <label className='block space-y-2'>
-                <span className='text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--ink-soft)]'>
-                  Strategy
-                </span>
-                <select
-                  className='h-12 w-full rounded-2xl border border-[var(--line)] bg-[var(--page-bg)] px-4 text-sm text-[var(--ink-strong)] outline-none transition focus:border-[var(--accent)] focus:bg-white'
-                  disabled={loadingDefaults}
-                  onChange={(event) =>
-                    onSessionSettingChange("strategy", event.target.value)
-                  }
-                  value={config?.strategy ?? ""}
-                >
-                  {availableStrategies.map((strategy) => (
-                    <option key={strategy} value={strategy}>
-                      {strategy.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
 
               <label className='block space-y-2'>
                 <span className='text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--ink-soft)]'>
@@ -173,10 +150,10 @@ export function SessionSetupScreen({
               </label>
 
               <div className='border border-dashed border-[var(--line)] bg-white/70 p-4 text-sm leading-6 text-[var(--ink-muted)]'>
-                The buyer now uses trade-off aware counteroffers. If the
-                supplier improves payment days, delivery time, or contract
-                length, the buyer can give some price back instead of only
-                pushing price downward.
+                The buyer follows one baseline policy across every session. It
+                accepts strong offers early, counters with one revised offer,
+                and only gives limited price relief when the supplier improves a
+                non-price term.
               </div>
 
               <div className='flex flex-col gap-3'>
@@ -194,21 +171,6 @@ export function SessionSetupScreen({
 
                 <Button
                   className='w-full'
-                  disabled={loadingDefaults || runningSimulation}
-                  onClick={onStartSimulation}
-                  type='button'
-                  variant='secondary'
-                >
-                  {loadingDefaults || runningSimulation ? (
-                    <LoaderCircle className='h-4 w-4 animate-spin' />
-                  ) : (
-                    <PlayCircle className='h-4 w-4' />
-                  )}
-                  Run default simulation demo
-                </Button>
-
-                <Button
-                  className='w-full'
                   disabled={loadingDefaults || !config}
                   onClick={onReset}
                   type='button'
@@ -220,9 +182,8 @@ export function SessionSetupScreen({
               </div>
 
               <p className='text-xs leading-5 text-[var(--ink-muted)]'>
-                The live negotiation uses the configuration above. The
-                simulation demo still uses the default buyer profile and only
-                applies strategy and round count.
+                The live negotiation uses this exact buyer mandate inside the
+                fixed calibrated domain for the challenge.
               </p>
             </div>
           </aside>

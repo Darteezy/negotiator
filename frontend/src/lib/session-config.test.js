@@ -7,8 +7,8 @@ import {
 } from "@/lib/session-config";
 
 const defaults = {
-  defaultStrategy: "MESO",
-  maxRounds: 10,
+  defaultStrategy: "BASELINE",
+  maxRounds: 8,
   riskOfWalkaway: 0.15,
   buyerProfile: {
     idealOffer: {
@@ -29,25 +29,24 @@ const defaults = {
       deliveryDays: 0.25,
       contractMonths: 0.15,
     },
-    reservationUtility: 0.45,
+    reservationUtility: 0,
   },
   bounds: {
-    minPrice: 50,
-    maxPrice: 200,
-    minPaymentDays: 7,
-    maxPaymentDays: 120,
-    minDeliveryDays: 1,
-    maxDeliveryDays: 45,
-    minContractMonths: 1,
-    maxContractMonths: 36,
+    minPrice: 80,
+    maxPrice: 120,
+    minPaymentDays: 30,
+    maxPaymentDays: 90,
+    minDeliveryDays: 3,
+    maxDeliveryDays: 14,
+    minContractMonths: 3,
+    maxContractMonths: 24,
   },
 };
 
 describe("session-config", () => {
   it("creates editable session configuration from backend defaults", () => {
     expect(createSessionConfig(defaults)).toEqual({
-      strategy: "MESO",
-      maxRounds: "10",
+      maxRounds: "8",
       idealOffer: {
         price: "90",
         paymentDays: "60",
@@ -83,9 +82,7 @@ describe("session-config", () => {
     const payload = buildStartSessionPayload(createSessionConfig(defaults), defaults);
 
     expect(payload).toEqual({
-      strategy: "MESO",
-      maxRounds: 10,
-      riskOfWalkaway: 0.15,
+      maxRounds: 8,
       buyerProfile: {
         idealOffer: {
           price: 90,
@@ -105,17 +102,7 @@ describe("session-config", () => {
           deliveryDays: 0.25,
           contractMonths: 0.15,
         },
-        reservationUtility: 0.45,
-      },
-      bounds: {
-        minPrice: 50,
-        maxPrice: 200,
-        minPaymentDays: 7,
-        maxPaymentDays: 120,
-        minDeliveryDays: 1,
-        maxDeliveryDays: 45,
-        minContractMonths: 1,
-        maxContractMonths: 36,
+        reservationUtility: 0,
       },
     });
   });

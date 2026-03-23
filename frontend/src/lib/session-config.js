@@ -49,7 +49,6 @@ export const SESSION_TERM_FIELDS = [
 
 export function createSessionConfig(defaults) {
   return {
-    strategy: defaults?.defaultStrategy ?? "MESO",
     maxRounds: String(defaults?.maxRounds ?? 6),
     idealOffer: stringifyOffer(defaults?.buyerProfile?.idealOffer),
     reservationOffer: stringifyOffer(defaults?.buyerProfile?.reservationOffer),
@@ -150,9 +149,7 @@ export function buildStartSessionPayload(config, defaults) {
   const reservationOffer = parseOffer(config.reservationOffer);
 
   return {
-    strategy: config.strategy,
     maxRounds: Number.parseInt(config.maxRounds, 10),
-    riskOfWalkaway: Number(defaults.riskOfWalkaway),
     buyerProfile: {
       idealOffer,
       reservationOffer,
@@ -163,16 +160,6 @@ export function buildStartSessionPayload(config, defaults) {
         contractMonths: Number(defaults.buyerProfile.weights.contractMonths),
       },
       reservationUtility: Number(defaults.buyerProfile.reservationUtility),
-    },
-    bounds: {
-      minPrice: Number(defaults.bounds.minPrice),
-      maxPrice: Number(defaults.bounds.maxPrice),
-      minPaymentDays: Number(defaults.bounds.minPaymentDays),
-      maxPaymentDays: Number(defaults.bounds.maxPaymentDays),
-      minDeliveryDays: Number(defaults.bounds.minDeliveryDays),
-      maxDeliveryDays: Number(defaults.bounds.maxDeliveryDays),
-      minContractMonths: Number(defaults.bounds.minContractMonths),
-      maxContractMonths: Number(defaults.bounds.maxContractMonths),
     },
   };
 }

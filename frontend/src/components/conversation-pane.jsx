@@ -41,7 +41,7 @@ export function ConversationPane({
         {loading && (
           <TimelinePlaceholder
             title='Connecting to the negotiation backend'
-            copy='Opening the supplier chat and loading the first buyer strategy.'
+            copy='Opening the supplier chat and loading the buyer mandate.'
           />
         )}
 

@@ -296,10 +296,8 @@ function buildConversationModel(
 
 function buildOpeningBuyerLetter() {
   return [
-    "Dear Supplier,",
-    "Thank you for engaging with our procurement team.",
-    "The buyer is ready to review proposals across price, payment timing, delivery timing, and contract length.",
-    "Please send your initial commercial proposal when ready.",
+    "Buyer is ready to negotiate.",
+    "Send your opening offer with price, payment days, delivery days, and contract length.",
   ].join("\n\n");
 }
 
@@ -309,50 +307,44 @@ function buildBuyerLetter(event) {
 
   if (event.decision === "ACCEPT" || event.resultingStatus === "ACCEPTED") {
     return [
-      "Dear Supplier,",
-      "Thank you for your confirmation.",
+      "Buyer accepts the offer.",
       primaryTerms
-        ? `The buyer accepts the agreed terms: ${formatTermsSentence(primaryTerms)}.`
-        : "The buyer accepts the agreed terms and closes the negotiation.",
+        ? `Agreed terms: ${formatTermsSentence(primaryTerms)}.`
+        : "The negotiation is now closed.",
     ].join("\n\n");
   }
 
   if (event.decision === "REJECT" || event.resultingStatus === "REJECTED") {
     return [
-      "Dear Supplier,",
-      "Thank you for your proposal.",
-      "The buyer cannot approve the current terms and requests a revised commercial offer.",
+      "Buyer rejects the offer.",
+      "The current terms fall outside the buyer mandate.",
     ].join("\n\n");
   }
 
   if (!primaryTerms) {
     return [
-      "Dear Supplier,",
-      "Thank you for your proposal.",
-      "The buyer cannot approve the current terms and requests a revised commercial offer.",
+      "Buyer cannot continue on the current terms.",
+      "Send a revised offer to keep negotiating.",
     ].join("\n\n");
   }
 
   if (counterOffers.length > 1) {
     return [
-      "Dear Supplier,",
-      "Thank you for your proposal.",
-      "The buyer can continue under the following alternative arrangements:",
+      "Buyer can continue on one of these alternatives:",
       counterOffers
         .map(
           (terms, index) =>
             `Option ${index + 1}: ${formatTermsSentence(terms)}.`,
         )
         .join("\n"),
-      "Please confirm which arrangement you would like to discuss further.",
+      "Confirm which option you want to discuss further.",
     ].join("\n\n");
   }
 
   return [
-    "Dear Supplier,",
-    "Thank you for your proposal.",
-    `After review, the buyer can continue under the following terms: ${formatTermsSentence(primaryTerms)}.`,
-    "Please let us know whether you can proceed on this basis.",
+    "Buyer can continue on these terms:",
+    formatTermsSentence(primaryTerms),
+    "Send your next offer if you want to keep negotiating.",
   ].join("\n\n");
 }
 

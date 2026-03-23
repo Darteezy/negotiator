@@ -5,12 +5,11 @@ import java.math.RoundingMode;
 
 import org.GLM.negoriator.negotiation.NegotiationEngine.Decision;
 import org.GLM.negoriator.negotiation.NegotiationEngine.DecisionReason;
-import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 
 public class DecisionMaker {
 
     private static final BigDecimal ONE = BigDecimal.ONE;
-    private static final BigDecimal HALF = new BigDecimal("0.5");
+    private static final BigDecimal ZERO = BigDecimal.ZERO;
     private static final int SCALE = 4;
 
     /**
@@ -33,21 +32,14 @@ public class DecisionMaker {
             NegotiationEngine.NegotiationContext context
     ) {
         BigDecimal targetUtility = targetUtility(profile, context);
-        BigDecimal hardRejectThreshold = profile.reservationUtility()
-                .multiply(HALF)
-                .setScale(SCALE, RoundingMode.HALF_UP);
+        BigDecimal hardRejectThreshold = ZERO.setScale(SCALE, RoundingMode.HALF_UP);
 
         if (utility.compareTo(targetUtility) >= 0) {
             return new DecisionOutcome(Decision.ACCEPT, targetUtility, hardRejectThreshold, DecisionReason.TARGET_UTILITY_MET);
         }
 
-        if (utility.compareTo(hardRejectThreshold) < 0) {
-            return new DecisionOutcome(Decision.REJECT, targetUtility, hardRejectThreshold, DecisionReason.BELOW_HARD_REJECT_THRESHOLD);
-        }
-
-        if (context.round() >= context.maxRounds()
-                && utility.compareTo(profile.reservationUtility()) < 0) {
-            return new DecisionOutcome(Decision.REJECT, targetUtility, hardRejectThreshold, DecisionReason.FINAL_ROUND_BELOW_RESERVATION);
+        if (context.round() >= context.maxRounds()) {
+            return new DecisionOutcome(Decision.ACCEPT, targetUtility, hardRejectThreshold, DecisionReason.FINAL_ROUND_WITHIN_LIMITS);
         }
 
         return new DecisionOutcome(Decision.COUNTER, targetUtility, hardRejectThreshold, DecisionReason.COUNTER_TO_CLOSE_GAP);
@@ -58,31 +50,13 @@ public class DecisionMaker {
             NegotiationEngine.NegotiationContext context
     ) {
         if (context.maxRounds() <= 0) {
-            return profile.reservationUtility().setScale(SCALE, RoundingMode.HALF_UP);
+            return ZERO.setScale(SCALE, RoundingMode.HALF_UP);
         }
 
-        BigDecimal progress = BigDecimal.valueOf(Math.max(0, Math.min(context.round(), context.maxRounds())))
+        BigDecimal progress = BigDecimal.valueOf(Math.max(1, Math.min(context.round(), context.maxRounds())))
                 .divide(BigDecimal.valueOf(context.maxRounds()), SCALE, RoundingMode.HALF_UP);
-        BigDecimal stretch = ONE.subtract(profile.reservationUtility())
-                .multiply(HALF);
-                BigDecimal weightedProgress = strategyProgress(progress, context.strategy());
-
-        return profile.reservationUtility()
-                        .add(stretch.multiply(ONE.subtract(weightedProgress)))
-                .setScale(SCALE, RoundingMode.HALF_UP);
+        return ONE.subtract(progress).max(ZERO).setScale(SCALE, RoundingMode.HALF_UP);
     }
-
-        private BigDecimal strategyProgress(BigDecimal progress, NegotiationStrategy strategy) {
-                return switch (strategy) {
-                        case BOULWARE -> decimal(Math.pow(progress.doubleValue(), 3));
-                        case CONCEDER -> decimal(Math.sqrt(progress.doubleValue()));
-                        case MESO, TIT_FOR_TAT, BASELINE -> progress;
-                };
-        }
-
-        private BigDecimal decimal(double value) {
-                return BigDecimal.valueOf(value).setScale(SCALE, RoundingMode.HALF_UP);
-        }
 
     record DecisionOutcome(
             Decision decision,

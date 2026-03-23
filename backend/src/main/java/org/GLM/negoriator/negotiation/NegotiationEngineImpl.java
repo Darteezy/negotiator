@@ -2,14 +2,12 @@ package org.GLM.negoriator.negotiation;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 import org.GLM.negoriator.negotiation.CounterOfferGenerator.CounterProposal;
 import org.GLM.negoriator.negotiation.NegotiationEngine.DecisionReason;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationIssue;
-import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,8 +17,8 @@ import org.springframework.stereotype.Component;
 public class NegotiationEngineImpl implements NegotiationEngine {
 
     private static final int SCALE = 4;
-    private static final BigDecimal COUNTER_TARGET_PROGRESS_FLOOR = new BigDecimal("0.15");
-    private static final BigDecimal SUPPLIER_CONCESSION_RECIPROCITY = new BigDecimal("0.75");
+    private static final BigDecimal MIN_COUNTER_IMPROVEMENT = new BigDecimal("0.0100");
+    private static final BigDecimal SUPPLIER_CONCESSION_RECIPROCITY = new BigDecimal("0.35");
     private static final BigDecimal ZERO = BigDecimal.ZERO;
 
     private final BuyerUtilityCalculator utilityCalculator;
@@ -77,26 +75,17 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         NegotiationState nextState = nextState(decision);
 
         if (decision == Decision.COUNTER) {
-            List<OfferVector> counterOffers;
-            NegotiationIssue focusIssue;
-
-            if (context.strategy() == NegotiationStrategy.MESO) {
-            counterOffers = mesoCounterOffers(request, buyerUtility, targetUtility);
-            focusIssue = counterOfferGenerator.issueToImprove(buyerProfile, context, request.bounds(), supplierOffer);
-            } else {
             CounterProposal proposal = counterOfferGenerator.counterProposal(
                 buyerProfile,
                 context,
                 request.bounds(),
                 supplierOffer);
-            counterOffers = List.of(tuneCounterOffer(
+            List<OfferVector> counterOffers = List.of(tuneCounterOffer(
                 proposal.offer(),
                 supplierOffer,
                 request,
-                buyerUtility,
-                targetUtility));
-            focusIssue = proposal.issue();
-            }
+                buyerUtility));
+            NegotiationIssue focusIssue = proposal.issue();
 
             counterOffers = counterOffers.stream()
                 .filter(offer -> isViableCounterOffer(offer, supplierOffer, buyerProfile, request.bounds(), buyerUtility))
@@ -112,8 +101,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                     supplierOffer),
                     supplierOffer,
                     request,
-                    buyerUtility,
-                    targetUtility);
+                    buyerUtility);
                 if (isViableCounterOffer(safeFallback, supplierOffer, buyerProfile, request.bounds(), buyerUtility)
                     && !safeFallback.matches(supplierOffer)) {
                     counterOffers = List.of(safeFallback);
@@ -128,7 +116,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                     request.supplierModel().archetypeBeliefs(),
                 decisionOutcome.reasonCode(),
                 focusIssue,
-                counterExplanation(buyerUtility, targetUtility, focusIssue, context.strategy(), counterOffers.size()));
+                counterExplanation(buyerUtility, targetUtility, focusIssue));
         }
 
         return new NegotiationResponse(
@@ -140,8 +128,8 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             decisionOutcome.reasonCode(),
             null,
             decision == Decision.ACCEPT
-                ? acceptanceExplanation(buyerUtility, targetUtility)
-                : rejectionExplanation(buyerUtility, buyerProfile.reservationUtility(), decisionOutcome.reasonCode()));
+                ? acceptanceExplanation(buyerUtility, targetUtility, decisionOutcome.reasonCode())
+                : rejectionExplanation(buyerUtility));
     }
 
     private boolean isViableCounterOffer(
@@ -156,8 +144,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         BigDecimal counterUtility = utilityCalculator.calculate(counterOffer, buyerProfile, bounds);
-        return counterUtility.compareTo(buyerProfile.reservationUtility()) >= 0
-            && counterUtility.compareTo(supplierUtility) > 0;
+        return counterUtility.compareTo(supplierUtility) > 0;
     }
 
     private boolean violatesBuyerReservation(OfferVector offer, OfferVector reservationOffer) {
@@ -233,6 +220,18 @@ public class NegotiationEngineImpl implements NegotiationEngine {
     }
 
     private String acceptanceExplanation(BigDecimal buyerUtility, BigDecimal targetUtility) {
+        return acceptanceExplanation(buyerUtility, targetUtility, DecisionReason.TARGET_UTILITY_MET);
+    }
+
+    private String acceptanceExplanation(
+            BigDecimal buyerUtility,
+            BigDecimal targetUtility,
+            DecisionReason reasonCode
+    ) {
+        if (reasonCode == DecisionReason.FINAL_ROUND_WITHIN_LIMITS) {
+            return "Accepted because the final round was reached and the supplier offer stays within the buyer's configured limits.";
+        }
+
         return "Accepted because the offer reached buyer utility "
                 + buyerUtility
                 + ", which meets the current round target of "
@@ -243,88 +242,28 @@ public class NegotiationEngineImpl implements NegotiationEngine {
     private String counterExplanation(
             BigDecimal buyerUtility,
             BigDecimal targetUtility,
-            NegotiationIssue issue,
-            NegotiationStrategy strategy,
-            int counterOfferCount
+            NegotiationIssue issue
     ) {
-        String prefix = strategy == NegotiationStrategy.MESO
-                ? "Countered with multiple equivalent options because the offer is still below the current target. Buyer utility is "
-                : "Countered because the offer is still below the current target. Buyer utility is ";
-        String suffix = strategy == NegotiationStrategy.MESO && counterOfferCount > 1
-                ? ". The leading option focuses on "
-                + humanIssueName(issue)
-                + ", and the remaining options test nearby trade-offs."
-                : ". The counteroffer changes "
-                + humanIssueName(issue)
-                + " because it is the most important remaining gap for the buyer.";
-
-        return prefix
+        return "Countered because the offer is still below the current target. Buyer utility is "
                 + buyerUtility
                 + " versus a target of "
                 + targetUtility
-                + suffix;
-    }
-
-    private List<OfferVector> mesoCounterOffers(
-            NegotiationRequest request,
-            BigDecimal supplierUtility,
-            BigDecimal targetUtility
-    ) {
-        BuyerProfile buyerProfile = request.buyerProfile();
-        NegotiationContext context = request.context();
-        NegotiationBounds bounds = request.bounds();
-        OfferVector supplierOffer = request.supplierOffer();
-        List<NegotiationIssue> rankedIssues = counterOfferGenerator.rankedIssues(buyerProfile, context, bounds, supplierOffer);
-        List<OfferVector> offers = new ArrayList<>();
-        BigDecimal reservationUtility = buyerProfile.reservationUtility();
-
-        for (NegotiationIssue issue : rankedIssues) {
-            OfferVector offer = tuneCounterOffer(
-                counterOfferGenerator.counterOfferForIssue(buyerProfile, bounds, supplierOffer, issue),
-                supplierOffer,
-                request,
-                supplierUtility,
-                targetUtility);
-
-            BigDecimal utility = utilityCalculator.calculate(offer, buyerProfile, bounds);
-            if (utility.compareTo(reservationUtility) < 0) {
-                continue;
-            }
-
-            if (offers.stream().noneMatch(existing -> existing.matches(offer))) {
-                offers.add(offer);
-            }
-
-            if (offers.size() == 3) {
-                break;
-            }
-        }
-
-        if (offers.isEmpty()) {
-            offers.add(tuneCounterOffer(
-                counterOfferGenerator.counterOffer(buyerProfile, context, bounds, supplierOffer),
-                supplierOffer,
-                request,
-                supplierUtility,
-                targetUtility));
-        }
-
-        return offers;
+                + ". The counteroffer changes "
+                + humanIssueName(issue)
+                + " because it is the most important remaining gap for the buyer.";
     }
 
     private OfferVector tuneCounterOffer(
             OfferVector counterOffer,
             OfferVector supplierOffer,
             NegotiationRequest request,
-            BigDecimal supplierUtility,
-            BigDecimal targetUtility
+            BigDecimal supplierOfferUtility
     ) {
         OfferVector rebalanced = rebalancePriceForTradeoffs(
             counterOffer,
             supplierOffer,
             request,
-            supplierUtility,
-            targetUtility);
+            supplierOfferUtility);
 
         BigDecimal reservationPrice = request.buyerProfile().reservationOffer().price();
         if (rebalanced.price().compareTo(reservationPrice) > 0) {
@@ -342,14 +281,12 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             OfferVector counterOffer,
             OfferVector supplierOffer,
             NegotiationRequest request,
-            BigDecimal supplierUtility,
-            BigDecimal targetUtility
+            BigDecimal supplierOfferUtility
     ) {
         BuyerProfile buyerProfile = request.buyerProfile();
         NegotiationBounds bounds = request.bounds();
-        BigDecimal utilityGivebackBudget = nonPriceUtilityGain(supplierOffer, counterOffer, buyerProfile)
-            .add(recentSupplierConcessionUtility(request.context(), supplierOffer, buyerProfile)
-                .multiply(SUPPLIER_CONCESSION_RECIPROCITY))
+        BigDecimal utilityGivebackBudget = recentSupplierConcessionUtility(request.context(), supplierOffer, buyerProfile)
+            .multiply(SUPPLIER_CONCESSION_RECIPROCITY)
             .setScale(SCALE, RoundingMode.HALF_UP);
 
         if (utilityGivebackBudget.compareTo(ZERO) <= 0) {
@@ -357,8 +294,9 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         BigDecimal counterUtility = utilityCalculator.calculate(counterOffer, buyerProfile, bounds);
-        BigDecimal counterFloor = counterUtilityFloor(supplierUtility, targetUtility, buyerProfile.reservationUtility());
-        BigDecimal maxUtilityGiveback = counterUtility.subtract(counterFloor);
+        BigDecimal maxUtilityGiveback = counterUtility
+            .subtract(supplierOfferUtility)
+            .subtract(MIN_COUNTER_IMPROVEMENT);
 
         if (maxUtilityGiveback.compareTo(ZERO) <= 0) {
             return counterOffer;
@@ -370,7 +308,9 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             return counterOffer;
         }
 
-        BigDecimal maxPrice = bounds.maxPrice().min(buyerProfile.reservationOffer().price());
+        BigDecimal maxPrice = supplierOffer.price()
+            .min(bounds.maxPrice())
+            .min(buyerProfile.reservationOffer().price());
         BigDecimal nextPrice = counterOffer.price().add(priceIncrease).min(maxPrice).setScale(2, RoundingMode.HALF_UP);
 
         if (nextPrice.compareTo(counterOffer.price()) <= 0) {
@@ -384,37 +324,6 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             counterOffer.contractMonths());
     }
 
-    private BigDecimal counterUtilityFloor(
-            BigDecimal supplierUtility,
-            BigDecimal targetUtility,
-            BigDecimal reservationUtility
-    ) {
-        BigDecimal targetGap = targetUtility.subtract(supplierUtility).max(ZERO);
-        BigDecimal progressFloor = supplierUtility.add(targetGap.multiply(COUNTER_TARGET_PROGRESS_FLOOR));
-        return progressFloor.max(reservationUtility).setScale(SCALE, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal nonPriceUtilityGain(
-            OfferVector fromOffer,
-            OfferVector toOffer,
-            BuyerProfile buyerProfile
-    ) {
-        BigDecimal paymentGain = positiveContributionDelta(
-            BuyerPreferenceScoring.paymentScore(fromOffer, buyerProfile),
-            BuyerPreferenceScoring.paymentScore(toOffer, buyerProfile),
-            buyerProfile.weights().normalized().paymentDays());
-        BigDecimal deliveryGain = positiveContributionDelta(
-            BuyerPreferenceScoring.deliveryScore(fromOffer, buyerProfile),
-            BuyerPreferenceScoring.deliveryScore(toOffer, buyerProfile),
-            buyerProfile.weights().normalized().deliveryDays());
-        BigDecimal contractGain = positiveContributionDelta(
-            BuyerPreferenceScoring.contractScore(fromOffer, buyerProfile),
-            BuyerPreferenceScoring.contractScore(toOffer, buyerProfile),
-            buyerProfile.weights().normalized().contractMonths());
-
-        return paymentGain.add(deliveryGain).add(contractGain).setScale(SCALE, RoundingMode.HALF_UP);
-    }
-
     private BigDecimal recentSupplierConcessionUtility(
             NegotiationContext context,
             OfferVector currentSupplierOffer,
@@ -425,7 +334,20 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             return ZERO;
         }
 
-        return nonPriceUtilityGain(previousSupplierOffer, currentSupplierOffer, buyerProfile);
+        BigDecimal paymentGain = positiveContributionDelta(
+            BuyerPreferenceScoring.paymentScore(previousSupplierOffer, buyerProfile),
+            BuyerPreferenceScoring.paymentScore(currentSupplierOffer, buyerProfile),
+            buyerProfile.weights().normalized().paymentDays());
+        BigDecimal deliveryGain = positiveContributionDelta(
+            BuyerPreferenceScoring.deliveryScore(previousSupplierOffer, buyerProfile),
+            BuyerPreferenceScoring.deliveryScore(currentSupplierOffer, buyerProfile),
+            buyerProfile.weights().normalized().deliveryDays());
+        BigDecimal contractGain = positiveContributionDelta(
+            BuyerPreferenceScoring.contractScore(previousSupplierOffer, buyerProfile),
+            BuyerPreferenceScoring.contractScore(currentSupplierOffer, buyerProfile),
+            buyerProfile.weights().normalized().contractMonths());
+
+        return paymentGain.add(deliveryGain).add(contractGain).setScale(SCALE, RoundingMode.HALF_UP);
     }
 
     private OfferVector previousSupplierOffer(NegotiationContext context) {
@@ -471,22 +393,10 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         return increase;
     }
 
-    private String rejectionExplanation(
-            BigDecimal buyerUtility,
-            BigDecimal reservationUtility,
-            DecisionReason reasonCode
-    ) {
-        if (reasonCode == DecisionReason.FINAL_ROUND_BELOW_RESERVATION) {
-            return "Rejected because the final round was reached and buyer utility "
-                    + buyerUtility
-                    + " is still below the buyer minimum of "
-                    + reservationUtility
-                    + ".";
-        }
-
+    private String rejectionExplanation(BigDecimal buyerUtility) {
         return "Rejected because buyer utility "
                 + buyerUtility
-                + " is below the hard continuation floor for this negotiation.";
+                + " is outside the buyer's configured term limits.";
     }
 
     private String reservationLimitExplanation(OfferVector offer, OfferVector reservationOffer) {

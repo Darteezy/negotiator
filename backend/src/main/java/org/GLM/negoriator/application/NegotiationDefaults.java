@@ -17,7 +17,7 @@ public final class NegotiationDefaults {
 	}
 
 	public static NegotiationStrategy defaultStrategy() {
-		return NegotiationStrategy.MESO;
+		return NegotiationStrategy.BASELINE;
 	}
 
 	public static int maxRounds() {
@@ -25,11 +25,7 @@ public final class NegotiationDefaults {
 	}
 
 	public static int maxRounds(NegotiationStrategy strategy) {
-		return switch (strategy) {
-			case MESO, BOULWARE -> 10;
-			case CONCEDER -> 6;
-			case TIT_FOR_TAT, BASELINE -> 8;
-		};
+		return 8;
 	}
 
 	public static BigDecimal riskOfWalkaway() {
@@ -45,19 +41,19 @@ public final class NegotiationDefaults {
 				new BigDecimal("0.20"),
 				new BigDecimal("0.25"),
 				new BigDecimal("0.15")),
-			new BigDecimal("0.45"));
+			BigDecimal.ZERO);
 	}
 
 	public static NegotiationBounds bounds() {
 		return new NegotiationBounds(
-			new BigDecimal("50.00"),
-			new BigDecimal("200.00"),
-			7,
-			120,
-			1,
-			45,
-			1,
-			36);
+			new BigDecimal("80.00"),
+			new BigDecimal("120.00"),
+			30,
+			90,
+			3,
+			14,
+			3,
+			24);
 	}
 
 	public static SupplierModel supplierModel() {
