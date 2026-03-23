@@ -71,7 +71,7 @@ public class AiStrategyAdvisor {
 
 		List<NegotiationOffer> offers = session.getOffers().stream()
 			.sorted(java.util.Comparator.comparing(NegotiationOffer::getRoundNumber)
-				.thenComparing(NegotiationOffer::getCreatedAt))
+				.thenComparing(NegotiationOffer::getCreatedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
 			.toList();
 
 		for (NegotiationOffer offer : offers) {

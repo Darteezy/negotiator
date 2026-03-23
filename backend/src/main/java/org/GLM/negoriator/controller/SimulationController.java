@@ -48,7 +48,10 @@ public class SimulationController {
 			personality = request.supplierPersonality();
 		}
 
-		SimulationConfig config = SimulationConfig.of(strategy, personality);
+		SimulationConfig config = SimulationConfig.of(
+			strategy,
+			personality,
+			request != null ? request.maxRounds() : null);
 
 		log.info("Starting simulation: strategy={}, personality='{}'", config.strategy(), config.supplierPersonality());
 
@@ -75,7 +78,7 @@ public class SimulationController {
 			log.info("Batch simulation {}/{}: personality='{}'", i + 1, personalities.size(), personality);
 
 			try {
-				SimulationConfig config = SimulationConfig.of(strategy, personality);
+				SimulationConfig config = SimulationConfig.of(strategy, personality, null);
 				SimulationResult result = simulationService.runSimulation(config);
 				results.add(result);
 
@@ -93,7 +96,8 @@ public class SimulationController {
 
 	record SimulationRequest(
 		String strategy,
-		String supplierPersonality
+		String supplierPersonality,
+		Integer maxRounds
 	) {
 	}
 

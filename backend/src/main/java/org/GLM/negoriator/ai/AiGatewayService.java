@@ -1,14 +1,17 @@
 package org.GLM.negoriator.ai;
 
+import java.time.Duration;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Service
@@ -19,21 +22,31 @@ public class AiGatewayService {
 	private final String model;
 	private final AiProvider provider;
 	private final RestClient restClient;
+	private final ObjectMapper objectMapper;
 
 	public AiGatewayService(
 		RestClient.Builder restClientBuilder,
+		ObjectMapper objectMapper,
 		@Value("${AI_PROVIDER:ollama}") String provider,
 		@Value("${AI_BASE_URL:http://localhost:11434}") String baseUrl,
 		@Value("${AI_CHAT_MODEL:qwen2.5:7b-instruct}") String model,
+		@Value("${AI_CONNECT_TIMEOUT_MS:5000}") int connectTimeoutMs,
+		@Value("${AI_READ_TIMEOUT_MS:45000}") int readTimeoutMs,
 		@Value("${AI_API_KEY:}") String apiKey
 	) {
 		this.provider = AiProvider.from(provider);
 		this.baseUrl = trimTrailingSlash(baseUrl);
 		this.model = model;
 		this.apiKey = apiKey;
+		this.objectMapper = objectMapper;
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+		requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 		this.restClient = restClientBuilder
 			.baseUrl(this.baseUrl)
 			.defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+			.defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+			.requestFactory(requestFactory)
 			.build();
 	}
 
@@ -45,7 +58,7 @@ public class AiGatewayService {
 	}
 
 	private String completeWithOllama(String systemPrompt, String userPrompt) {
-		OllamaChatResponse response = restClient.post()
+		String responseBody = restClient.post()
 			.uri("/api/chat")
 			.body(new OllamaChatRequest(
 				model,
@@ -55,7 +68,18 @@ public class AiGatewayService {
 				),
 				false))
 			.retrieve()
-			.body(OllamaChatResponse.class);
+			.body(String.class);
+
+		if (!StringUtils.hasText(responseBody)) {
+			throw new IllegalArgumentException("AI provider returned an empty response.");
+		}
+
+		OllamaChatResponse response;
+		try {
+			response = objectMapper.readValue(responseBody, OllamaChatResponse.class);
+		} catch (Exception e) {
+			throw new IllegalArgumentException("Failed to parse Ollama response: " + responseBody, e);
+		}
 
 		if (response == null || response.message() == null || !StringUtils.hasText(response.message().content())) {
 			throw new IllegalArgumentException("AI provider returned an empty response.");
