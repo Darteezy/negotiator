@@ -33,19 +33,36 @@ class StrategySwitchPolicy {
 
 		NegotiationStrategy currentStrategy = session.getStrategy();
 		int roundsRemainingAfterCounter = Math.max(0, session.getMaxRounds() - session.getCurrentRound());
+		BigDecimal utilityGap = response.evaluation().targetUtility().subtract(response.evaluation().buyerUtility());
 
-		if (roundsRemainingAfterCounter <= 1 && currentStrategy != NegotiationStrategy.CONCEDER) {
+		if (roundsRemainingAfterCounter <= 2 && currentStrategy != NegotiationStrategy.CONCEDER) {
 			return StrategyCheckpoint.switchTo(
 				NegotiationStrategy.CONCEDER,
 				NegotiationStrategyChangeTrigger.DEADLINE_PRESSURE,
-				"Switched to Conceder because the session is close to its round limit and the buyer should prioritize closing probability over exploration.");
+				"Switched to Conceder because the session is approaching its round limit and the buyer should now prioritize closing probability over continued exploration.");
 		}
 
-		if (currentStrategy == NegotiationStrategy.MESO && supplierStalled(session, supplierOffer)) {
+		if (currentStrategy == NegotiationStrategy.MESO && supplierRejectedPriorMenu(session, supplierOffer)) {
 			return StrategyCheckpoint.switchTo(
 				NegotiationStrategy.TIT_FOR_TAT,
 				NegotiationStrategyChangeTrigger.STALLED_NEGOTIATION,
-				"Switched from MESO to Tit-for-Tat because the supplier repeated nearly the same position and the buyer should respond more directly to observed movement.");
+				"Switched from MESO to Tit-for-Tat because the supplier did not accept any of the buyer's previous MESO options, so continued menu-style exploration is no longer productive.");
+		}
+
+		if (currentStrategy == NegotiationStrategy.MESO && supplierRepeatedPosition(session, supplierOffer)) {
+			return StrategyCheckpoint.switchTo(
+				NegotiationStrategy.TIT_FOR_TAT,
+				NegotiationStrategyChangeTrigger.STALLED_NEGOTIATION,
+				"Switched from MESO to Tit-for-Tat because the supplier repeated nearly the same position across consecutive rounds and the buyer should respond more directly to observed movement.");
+		}
+
+		if (currentStrategy == NegotiationStrategy.MESO
+			&& session.getCurrentRound() >= 3
+			&& utilityGap.compareTo(new BigDecimal("0.18")) > 0) {
+			return StrategyCheckpoint.switchTo(
+				NegotiationStrategy.BOULWARE,
+				NegotiationStrategyChangeTrigger.STALLED_NEGOTIATION,
+				"Switched from MESO to Boulware because exploration is not closing the utility gap quickly enough and the buyer should anchor more firmly.");
 		}
 
 		if (currentStrategy == NegotiationStrategy.CONCEDER && supplierMadeMaterialProgress(session, supplierOffer)) {
@@ -56,6 +73,25 @@ class StrategySwitchPolicy {
 		}
 
 		return StrategyCheckpoint.none();
+	}
+
+	private boolean supplierRejectedPriorMenu(NegotiationSession session, OfferVector supplierOffer) {
+		if (session.getCurrentRound() <= 1) {
+			return false;
+		}
+
+		int previousRound = session.getCurrentRound() - 1;
+		List<OfferVector> previousBuyerOptions = session.getOffers().stream()
+			.filter(offer -> offer.getParty() == NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == previousRound)
+			.map(NegotiationOffer::toOfferVector)
+			.toList();
+
+		if (previousBuyerOptions.size() <= 1) {
+			return false;
+		}
+
+		return previousBuyerOptions.stream().noneMatch(option -> option.matches(supplierOffer));
 	}
 
 	String humanIssueExplanation(NegotiationIssue issue) {
@@ -71,14 +107,16 @@ class StrategySwitchPolicy {
 		};
 	}
 
-	private boolean supplierStalled(NegotiationSession session, OfferVector supplierOffer) {
+	private boolean supplierRepeatedPosition(NegotiationSession session, OfferVector supplierOffer) {
 		List<OfferVector> supplierHistory = supplierHistory(session);
-		if (supplierHistory.size() < 2) {
+		if (supplierHistory.size() < 3) {
 			return false;
 		}
 
 		OfferVector previousOffer = supplierHistory.get(supplierHistory.size() - 2);
-		return distance(previousOffer, supplierOffer).compareTo(new BigDecimal("0.05")) <= 0;
+		OfferVector earlierOffer = supplierHistory.get(supplierHistory.size() - 3);
+		return distance(previousOffer, supplierOffer).compareTo(new BigDecimal("0.08")) <= 0
+			&& distance(earlierOffer, previousOffer).compareTo(new BigDecimal("0.08")) <= 0;
 	}
 
 	private boolean supplierMadeMaterialProgress(NegotiationSession session, OfferVector supplierOffer) {

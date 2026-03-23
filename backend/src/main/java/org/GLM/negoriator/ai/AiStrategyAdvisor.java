@@ -1,8 +1,10 @@
 package org.GLM.negoriator.ai;
 
+import java.util.Locale;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.GLM.negoriator.domain.NegotiationOffer;
 import org.GLM.negoriator.domain.NegotiationParty;
@@ -19,16 +21,12 @@ public class AiStrategyAdvisor {
 
 	private static final Logger log = LoggerFactory.getLogger(AiStrategyAdvisor.class);
 
-	private static final Pattern STRATEGY_PATTERN = Pattern.compile(
-		"\"strategy\"\\s*:\\s*\"(MESO|BOULWARE|CONCEDER|TIT_FOR_TAT|BASELINE)\"",
-		Pattern.CASE_INSENSITIVE);
-	private static final Pattern RATIONALE_PATTERN = Pattern.compile(
-		"\"rationale\"\\s*:\\s*\"([^\"]+)\"");
-
 	private final AiGatewayService aiGateway;
+	private final ObjectMapper objectMapper;
 
-	public AiStrategyAdvisor(AiGatewayService aiGateway) {
+	public AiStrategyAdvisor(AiGatewayService aiGateway, ObjectMapper objectMapper) {
 		this.aiGateway = aiGateway;
+		this.objectMapper = objectMapper;
 	}
 
 	public StrategyAdvice advise(NegotiationSession session, OfferEvaluation evaluation) {
@@ -58,6 +56,8 @@ public class AiStrategyAdvisor {
 			Respond with JSON only. No markdown fencing. Two keys:
 			- "strategy": one of MESO, BOULWARE, CONCEDER, TIT_FOR_TAT, BASELINE, or "KEEP" if no switch needed
 			- "rationale": one sentence explaining why
+
+			Use TIT_FOR_TAT exactly with underscores if you recommend that strategy.
 			""";
 	}
 
@@ -94,34 +94,63 @@ public class AiStrategyAdvisor {
 	}
 
 	private StrategyAdvice parseAdvice(String response, NegotiationStrategy currentStrategy) {
-		Matcher strategyMatcher = STRATEGY_PATTERN.matcher(response);
-		if (!strategyMatcher.find()) {
-			return StrategyAdvice.none();
-		}
-
-		String recommended = strategyMatcher.group(1).toUpperCase();
-		if ("KEEP".equals(recommended)) {
-			return StrategyAdvice.none();
-		}
-
-		NegotiationStrategy nextStrategy;
 		try {
-			nextStrategy = NegotiationStrategy.valueOf(recommended);
-		} catch (IllegalArgumentException e) {
+			JsonNode payload = objectMapper.readTree(extractJsonObject(response));
+			String recommended = normalizeStrategy(payload.path("strategy").asText());
+
+			if (recommended == null || "KEEP".equals(recommended)) {
+				return StrategyAdvice.none();
+			}
+
+			NegotiationStrategy nextStrategy = NegotiationStrategy.valueOf(recommended);
+			if (nextStrategy == currentStrategy) {
+				return StrategyAdvice.none();
+			}
+
+			String rationale = payload.path("rationale").asText();
+			if (rationale == null || rationale.isBlank()) {
+				rationale = "AI recommended switching to " + nextStrategy.name();
+			}
+
+			return new StrategyAdvice(true, nextStrategy, NegotiationStrategyChangeTrigger.AI_RECOMMENDATION, rationale);
+		} catch (Exception e) {
+			log.warn("Could not parse AI strategy advice '{}': {}", response, e.getMessage());
 			return StrategyAdvice.none();
 		}
+	}
 
-		if (nextStrategy == currentStrategy) {
-			return StrategyAdvice.none();
+	private String extractJsonObject(String response) {
+		String trimmed = response == null ? "" : response.trim();
+		int start = trimmed.indexOf('{');
+		int end = trimmed.lastIndexOf('}');
+
+		if (start < 0 || end <= start) {
+			throw new IllegalArgumentException("AI response did not contain a JSON object");
 		}
 
-		String rationale = "AI recommended switching to " + nextStrategy.name();
-		Matcher rationaleMatcher = RATIONALE_PATTERN.matcher(response);
-		if (rationaleMatcher.find()) {
-			rationale = rationaleMatcher.group(1);
+		return trimmed.substring(start, end + 1);
+	}
+
+	private String normalizeStrategy(String rawStrategy) {
+		if (rawStrategy == null || rawStrategy.isBlank()) {
+			return null;
 		}
 
-		return new StrategyAdvice(true, nextStrategy, NegotiationStrategyChangeTrigger.AI_RECOMMENDATION, rationale);
+		String normalized = rawStrategy.trim()
+			.toUpperCase(Locale.ROOT)
+			.replace('-', '_')
+			.replace(' ', '_');
+
+		if ("TIT_FOR_TAT".equals(normalized)
+			|| "MESO".equals(normalized)
+			|| "BOULWARE".equals(normalized)
+			|| "CONCEDER".equals(normalized)
+			|| "BASELINE".equals(normalized)
+			|| "KEEP".equals(normalized)) {
+			return normalized;
+		}
+
+		return null;
 	}
 
 	public record StrategyAdvice(

@@ -301,7 +301,7 @@ function buildOpeningBuyerLetter(session) {
     "Thank you for engaging with our procurement team.",
     "The buyer is ready to review proposals across price, payment timing, delivery timing, and contract length.",
     "Please send your initial commercial proposal when ready.",
-  ].join(" ");
+  ].join("\n\n");
 }
 
 function buildBuyerLetter(event) {
@@ -316,7 +316,7 @@ function buildBuyerLetter(event) {
         ? `The buyer accepts the agreed terms: ${formatTermsSentence(primaryTerms)}.`
         : "The buyer accepts the agreed terms and closes the negotiation.",
       event.explanation ?? "This negotiation is now closed.",
-    ].join(" ");
+    ].join("\n\n");
   }
 
   if (event.decision === "REJECT" || event.resultingStatus === "REJECTED") {
@@ -325,7 +325,7 @@ function buildBuyerLetter(event) {
       "Thank you for your proposal.",
       event.explanation ??
         "The buyer cannot approve the current terms and requests a revised commercial offer.",
-    ].join(" ");
+    ].join("\n\n");
   }
 
   if (!primaryTerms) {
@@ -333,7 +333,7 @@ function buildBuyerLetter(event) {
       "Dear Supplier,",
       "Thank you for your proposal.",
       "The buyer cannot approve the current terms and requests a revised commercial offer.",
-    ].join(" ");
+    ].join("\n\n");
   }
 
   if (counterOffers.length > 1) {
@@ -346,9 +346,9 @@ function buildBuyerLetter(event) {
           (terms, index) =>
             `Option ${index + 1}: ${formatTermsSentence(terms)}.`,
         )
-        .join(" "),
+        .join("\n"),
       "Please confirm which arrangement you would like to discuss further.",
-    ].join(" ");
+    ].join("\n\n");
   }
 
   return [
@@ -356,7 +356,7 @@ function buildBuyerLetter(event) {
     "Thank you for your proposal.",
     `After review, the buyer can continue under the following terms: ${formatTermsSentence(primaryTerms)}.`,
     "Please let us know whether you can proceed on this basis.",
-  ].join(" ");
+  ].join("\n\n");
 }
 
 function formatTermsSentence(terms) {

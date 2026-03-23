@@ -62,7 +62,7 @@ export function ConversationPane({
             title={actorTitle(event.actor, event.title)}
             timestamp={event.at}
           >
-            <div className='border border-[var(--line)] bg-white px-2 py-1.5 text-[13px] leading-5 text-[var(--ink-muted)]'>
+            <div className='whitespace-pre-line border border-[var(--line)] bg-white px-2 py-1.5 text-[13px] leading-5 text-[var(--ink-muted)]'>
               {event.message}
             </div>
           </MessageCard>
