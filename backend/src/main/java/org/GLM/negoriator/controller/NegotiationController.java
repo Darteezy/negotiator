@@ -257,6 +257,11 @@ public class NegotiationController {
 				.sorted(Comparator.comparing(offer -> offer.getCreatedAt()))
 				.map(offer -> OfferTermsResponse.from(offer.toOfferVector()))
 				.toList();
+			OfferTermsResponse visibleTerms = decision.getCounterOffer() != null
+				? OfferTermsResponse.from(decision.getCounterOffer().toOfferVector())
+				: decision.getDecision() == org.GLM.negoriator.domain.NegotiationDecisionType.ACCEPT
+					? OfferTermsResponse.from(decision.getSupplierOffer().toOfferVector())
+					: null;
 
 			return new BuyerReplyResponse(
 				decision.getDecision().name(),
@@ -267,7 +272,7 @@ public class NegotiationController {
 				decision.getStrategyRationale(),
 				decision.getExplanation(),
 				decision.getDecidedAt(),
-				decision.getCounterOffer() == null ? null : OfferTermsResponse.from(decision.getCounterOffer().toOfferVector()),
+				visibleTerms,
 				counterOffers,
 				EvaluationResponse.from(decision.toOfferEvaluation()));
 		}

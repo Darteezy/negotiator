@@ -21,8 +21,8 @@ class SessionConfigurationValidatorTest {
 	@Test
 	void rejectsPriceGoalAboveReservationLimit() {
 		BuyerProfile invalidBuyerProfile = new BuyerProfile(
-			new OfferVector(new BigDecimal("121.00"), 60, 3, 6),
-			new OfferVector(new BigDecimal("120.00"), 30, 14, 24),
+			new OfferVector(new BigDecimal("121.00"), 60, 7, 6),
+			new OfferVector(new BigDecimal("120.00"), 30, 30, 24),
 			NegotiationDefaults.buyerProfile().weights(),
 			NegotiationDefaults.buyerProfile().reservationUtility());
 

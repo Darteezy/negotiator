@@ -264,17 +264,21 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             supplierOffer,
             request,
             supplierOfferUtility);
+        OfferVector ratcheted = applyHistoricalPriceFloor(
+            rebalanced,
+            supplierOffer,
+            request);
 
         BigDecimal reservationPrice = request.buyerProfile().reservationOffer().price();
-        if (rebalanced.price().compareTo(reservationPrice) > 0) {
+        if (ratcheted.price().compareTo(reservationPrice) > 0) {
             return new OfferVector(
                 reservationPrice,
-                rebalanced.paymentDays(),
-                rebalanced.deliveryDays(),
-                rebalanced.contractMonths());
+                ratcheted.paymentDays(),
+                ratcheted.deliveryDays(),
+                ratcheted.contractMonths());
         }
 
-        return rebalanced;
+        return ratcheted;
     }
 
     private OfferVector rebalancePriceForTradeoffs(
@@ -324,6 +328,36 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             counterOffer.contractMonths());
     }
 
+    private OfferVector applyHistoricalPriceFloor(
+            OfferVector counterOffer,
+            OfferVector currentSupplierOffer,
+            NegotiationRequest request
+    ) {
+        BigDecimal ratchetFloor = historicalPriceFloor(
+            request.context(),
+            currentSupplierOffer,
+            request.buyerProfile());
+
+        if (ratchetFloor.compareTo(counterOffer.price()) <= 0) {
+            return counterOffer;
+        }
+
+        BigDecimal nextPrice = ratchetFloor
+            .min(currentSupplierOffer.price())
+            .min(request.buyerProfile().reservationOffer().price())
+            .setScale(2, RoundingMode.HALF_UP);
+
+        if (nextPrice.compareTo(counterOffer.price()) <= 0) {
+            return counterOffer;
+        }
+
+        return new OfferVector(
+            nextPrice,
+            counterOffer.paymentDays(),
+            counterOffer.deliveryDays(),
+            counterOffer.contractMonths());
+    }
+
     private BigDecimal recentSupplierConcessionUtility(
             NegotiationContext context,
             OfferVector currentSupplierOffer,
@@ -350,6 +384,30 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         return paymentGain.add(deliveryGain).add(contractGain).setScale(SCALE, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal historicalPriceFloor(
+            NegotiationContext context,
+            OfferVector currentSupplierOffer,
+            BuyerProfile buyerProfile
+    ) {
+        List<OfferVector> history = context.history();
+        BigDecimal floor = ZERO;
+
+        for (int index = 0; index + 1 < history.size(); index += 2) {
+            OfferVector previousSupplierOffer = history.get(index);
+            OfferVector previousBuyerOffer = history.get(index + 1);
+
+            if (!isEquivalentOrBetterNonPricePackage(currentSupplierOffer, previousSupplierOffer)) {
+                continue;
+            }
+
+            if (previousBuyerOffer.price().compareTo(floor) > 0) {
+                floor = previousBuyerOffer.price();
+            }
+        }
+
+        return floor;
+    }
+
     private OfferVector previousSupplierOffer(NegotiationContext context) {
         List<OfferVector> history = context.history();
         if (history.size() < 2) {
@@ -370,6 +428,15 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         return delta.multiply(weight);
+    }
+
+    private boolean isEquivalentOrBetterNonPricePackage(
+            OfferVector currentSupplierOffer,
+            OfferVector previousSupplierOffer
+    ) {
+        return currentSupplierOffer.paymentDays() >= previousSupplierOffer.paymentDays()
+            && currentSupplierOffer.deliveryDays() <= previousSupplierOffer.deliveryDays()
+            && currentSupplierOffer.contractMonths() <= previousSupplierOffer.contractMonths();
     }
 
     private BigDecimal priceIncreaseForUtilityDrop(

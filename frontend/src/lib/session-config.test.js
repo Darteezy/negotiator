@@ -14,13 +14,13 @@ const defaults = {
     idealOffer: {
       price: 90,
       paymentDays: 60,
-      deliveryDays: 3,
+      deliveryDays: 7,
       contractMonths: 6,
     },
     reservationOffer: {
       price: 120,
       paymentDays: 30,
-      deliveryDays: 14,
+      deliveryDays: 30,
       contractMonths: 24,
     },
     weights: {
@@ -36,8 +36,8 @@ const defaults = {
     maxPrice: 120,
     minPaymentDays: 30,
     maxPaymentDays: 90,
-    minDeliveryDays: 3,
-    maxDeliveryDays: 14,
+    minDeliveryDays: 7,
+    maxDeliveryDays: 30,
     minContractMonths: 3,
     maxContractMonths: 24,
   },
@@ -50,13 +50,13 @@ describe("session-config", () => {
       idealOffer: {
         price: "90",
         paymentDays: "60",
-        deliveryDays: "3",
+        deliveryDays: "7",
         contractMonths: "6",
       },
       reservationOffer: {
         price: "120",
         paymentDays: "30",
-        deliveryDays: "14",
+        deliveryDays: "30",
         contractMonths: "24",
       },
     });
@@ -87,13 +87,13 @@ describe("session-config", () => {
         idealOffer: {
           price: 90,
           paymentDays: 60,
-          deliveryDays: 3,
+          deliveryDays: 7,
           contractMonths: 6,
         },
         reservationOffer: {
           price: 120,
           paymentDays: 30,
-          deliveryDays: 14,
+          deliveryDays: 30,
           contractMonths: 24,
         },
         weights: {

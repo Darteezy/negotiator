@@ -36,6 +36,7 @@ function buildConversationModel(
   const debugEvents = [];
   const roundLinks = new Map();
   let nextMessageNumber = 1;
+  let latestSupplierTerms = null;
 
   const appendChatEvent = (event) => {
     const messageId = `M${nextMessageNumber}`;
@@ -62,19 +63,20 @@ function buildConversationModel(
     };
   };
 
-    if (session) {
-      appendChatEvent({
-        actor: "buyer",
-        title: "Buyer",
-        at: conversation[0]?.at ?? null,
-        message: buildOpeningBuyerLetter(),
-        isOpening: true,
-        eventType: "BUYER_OPENING",
-      });
-    }
+  if (session) {
+    appendChatEvent({
+      actor: "buyer",
+      title: "Buyer",
+      at: conversation[0]?.at ?? null,
+      message: buildOpeningBuyerLetter(),
+      isOpening: true,
+      eventType: "BUYER_OPENING",
+    });
+  }
 
   if (rounds.length > 0) {
     rounds.forEach((round, index) => {
+      latestSupplierTerms = round.supplierOffer?.terms ?? null;
       const supplierChatEvent = appendChatEvent({
         actor: "supplier",
         title: "You",
@@ -89,6 +91,8 @@ function buildConversationModel(
       let buyerChatEvent = null;
 
       if (round.buyerReply) {
+        const buyerVisibleTerms =
+          round.buyerReply.counterOffer ?? round.buyerReply.terms ?? null;
         buyerChatEvent = appendChatEvent({
           actor: "buyer",
           title: "Buyer",
@@ -97,8 +101,12 @@ function buildConversationModel(
             decision: round.buyerReply.decision,
             resultingStatus: round.buyerReply.resultingStatus,
             explanation: round.buyerReply.explanation,
-            terms: round.buyerReply.counterOffer ?? round.buyerReply.terms,
+            terms: buyerVisibleTerms,
             counterOffers: round.buyerReply.counterOffers,
+            requiresSupplierAcceptance:
+              round.buyerReply.decision === "COUNTER" &&
+              buyerVisibleTerms &&
+              matchesTerms(buyerVisibleTerms, round.supplierOffer?.terms),
           }),
           eventType: "BUYER_REPLY",
         });
@@ -182,6 +190,7 @@ function buildConversationModel(
 
     for (const event of conversation) {
       if (event.actor === "supplier") {
+        latestSupplierTerms = event.terms ?? latestSupplierTerms;
         const chatEvent = appendChatEvent({
           actor: "supplier",
           title: "You",
@@ -210,11 +219,19 @@ function buildConversationModel(
       }
 
       if (event.actor === "buyer") {
+        const buyerVisibleTerms = event.terms ?? event.counterOffers?.[0] ?? null;
         const chatEvent = appendChatEvent({
           actor: "buyer",
           title: "Buyer",
           at: event.at,
-          message: buildBuyerLetter(event),
+          message: buildBuyerLetter({
+            ...event,
+            terms: buyerVisibleTerms,
+            requiresSupplierAcceptance:
+              event.decision === "COUNTER" &&
+              buyerVisibleTerms &&
+              matchesTerms(buyerVisibleTerms, latestSupplierTerms),
+          }),
           eventType: event.eventType,
         });
 
@@ -328,6 +345,14 @@ function buildBuyerLetter(event) {
     ].join("\n\n");
   }
 
+  if (event.requiresSupplierAcceptance) {
+    return [
+      "Buyer is ready to close on these terms:",
+      formatTermsSentence(primaryTerms),
+      "Reply with accept to finalize the deal.",
+    ].join("\n\n");
+  }
+
   if (counterOffers.length > 1) {
     return [
       "Buyer can continue on one of these alternatives:",
@@ -379,4 +404,17 @@ function formatFallbackSupplierTerms(terms) {
     `delivery ${terms.deliveryDays} days`,
     `contract ${terms.contractMonths} months`,
   ].join(", ");
+}
+
+function matchesTerms(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    Number(left.price) === Number(right.price) &&
+    Number(left.paymentDays) === Number(right.paymentDays) &&
+    Number(left.deliveryDays) === Number(right.deliveryDays) &&
+    Number(left.contractMonths) === Number(right.contractMonths)
+  );
 }

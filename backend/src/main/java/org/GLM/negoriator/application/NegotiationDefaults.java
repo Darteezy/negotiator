@@ -34,8 +34,8 @@ public final class NegotiationDefaults {
 
 	public static BuyerProfile buyerProfile() {
 		return new BuyerProfile(
-			new OfferVector(new BigDecimal("90.00"), 60, 3, 6),
-			new OfferVector(new BigDecimal("120.00"), 30, 14, 24),
+			new OfferVector(new BigDecimal("90.00"), 60, 7, 6),
+			new OfferVector(new BigDecimal("120.00"), 30, 30, 24),
 			new IssueWeights(
 				new BigDecimal("0.40"),
 				new BigDecimal("0.20"),
@@ -50,8 +50,8 @@ public final class NegotiationDefaults {
 			new BigDecimal("120.00"),
 			30,
 			90,
-			3,
-			14,
+			7,
+			30,
 			3,
 			24);
 	}

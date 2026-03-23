@@ -25,8 +25,8 @@ class NegotiationEngineImplTest {
 		new BigDecimal("120.00"),
 		30,
 		90,
-		3,
-		14,
+		7,
+		30,
 		3,
 		24);
 
@@ -76,5 +76,31 @@ class NegotiationEngineImplTest {
 
 		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
 		assertEquals(new BigDecimal("102.50"), response.counterOffers().getFirst().price());
+	}
+
+	@Test
+	void keepsGrantedPriceForEquivalentSupplierPackages() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("120.00"), 30, 14, 12);
+		NegotiationContext context = new NegotiationContext(
+			3,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("120.00"), 30, 14, 24),
+				new OfferVector(new BigDecimal("105.00"), 30, 14, 24),
+				new OfferVector(new BigDecimal("120.00"), 30, 14, 12),
+				new OfferVector(new BigDecimal("107.63"), 30, 14, 12)));
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			context,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertEquals(new BigDecimal("107.63"), response.counterOffers().getFirst().price());
 	}
 }

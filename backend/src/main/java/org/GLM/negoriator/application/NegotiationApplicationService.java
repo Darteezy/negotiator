@@ -128,15 +128,34 @@ public class NegotiationApplicationService {
 				null,
 				"Accepted because the supplier agreed to the buyer's active offer from the previous round.");
 		}
+		boolean requiresExplicitSupplierAcceptance = acceptedBuyerOffer == null
+			&& response.decision() == NegotiationEngine.Decision.ACCEPT;
+
+		if (requiresExplicitSupplierAcceptance) {
+			response = new NegotiationEngine.NegotiationResponse(
+				NegotiationEngine.Decision.COUNTER,
+				NegotiationEngine.NegotiationState.COUNTERED,
+				java.util.List.of(supplierOfferTerms),
+				response.evaluation(),
+				response.updatedSupplierBeliefs(),
+				response.reasonCode(),
+				null,
+				"Buyer is ready to close on these terms. Reply with accept to finalize the deal.");
+		}
 
 		session.addOffer(supplierOffer);
 
-		var buyerCounterOffers = applySupplierConstraints(response.counterOffers(), supplierOfferTerms, activeConstraints).stream()
-			.map(offer -> new NegotiationOffer(
+		var buyerCounterOffers = requiresExplicitSupplierAcceptance
+			? java.util.List.of(new NegotiationOffer(
 				session.getCurrentRound(),
 				NegotiationParty.BUYER,
-				OfferTermsSnapshot.from(offer)))
-			.toList();
+				OfferTermsSnapshot.from(supplierOfferTerms)))
+			: applySupplierConstraints(response.counterOffers(), supplierOfferTerms, activeConstraints).stream()
+				.map(offer -> new NegotiationOffer(
+					session.getCurrentRound(),
+					NegotiationParty.BUYER,
+					OfferTermsSnapshot.from(offer)))
+				.toList();
 
 		NegotiationOffer counterOffer = buyerCounterOffers.stream()
 			.findFirst()
