@@ -62,16 +62,16 @@ function buildConversationModel(
     };
   };
 
-  if (session) {
-    appendChatEvent({
-      actor: "buyer",
-      title: "Buyer",
-      at: conversation[0]?.at ?? null,
-      message: buildOpeningBuyerLetter(session),
-      isOpening: true,
-      eventType: "BUYER_OPENING",
-    });
-  }
+    if (session) {
+      appendChatEvent({
+        actor: "buyer",
+        title: "Buyer",
+        at: conversation[0]?.at ?? null,
+        message: buildOpeningBuyerLetter(),
+        isOpening: true,
+        eventType: "BUYER_OPENING",
+      });
+    }
 
   if (rounds.length > 0) {
     rounds.forEach((round, index) => {
@@ -294,7 +294,7 @@ function buildConversationModel(
   return { chatEvents, debugEvents };
 }
 
-function buildOpeningBuyerLetter(session) {
+function buildOpeningBuyerLetter() {
   return [
     "Dear Supplier,",
     "Thank you for engaging with our procurement team.",

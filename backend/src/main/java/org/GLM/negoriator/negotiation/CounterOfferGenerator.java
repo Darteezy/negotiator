@@ -99,25 +99,25 @@ public class CounterOfferGenerator {
                 NegotiationIssue.PRICE,
                 weightedGap(
                         positiveGap(supplierOffer.price(), ideal.price()),
-                        bounds.maxPrice().subtract(bounds.minPrice()),
+                        BuyerPreferenceScoring.priceSpan(profile),
                         weights.price()));
         gapByIssue.put(
                 NegotiationIssue.PAYMENT_DAYS,
                 weightedGap(
                         BigDecimal.valueOf(Math.max(0, ideal.paymentDays() - supplierOffer.paymentDays())),
-                        BigDecimal.valueOf(bounds.maxPaymentDays() - bounds.minPaymentDays()),
+                        BuyerPreferenceScoring.paymentSpan(profile),
                         weights.paymentDays()));
         gapByIssue.put(
                 NegotiationIssue.DELIVERY_DAYS,
                 weightedGap(
                         BigDecimal.valueOf(Math.max(0, supplierOffer.deliveryDays() - ideal.deliveryDays())),
-                        BigDecimal.valueOf(bounds.maxDeliveryDays() - bounds.minDeliveryDays()),
+                        BuyerPreferenceScoring.deliverySpan(profile),
                         weights.deliveryDays()));
         gapByIssue.put(
                 NegotiationIssue.CONTRACT_MONTHS,
                 weightedGap(
                         BigDecimal.valueOf(Math.max(0, supplierOffer.contractMonths() - ideal.contractMonths())),
-                        BigDecimal.valueOf(bounds.maxContractMonths() - bounds.minContractMonths()),
+                        BuyerPreferenceScoring.contractSpan(profile),
                         weights.contractMonths()));
 
         List<Map.Entry<NegotiationIssue, BigDecimal>> rankedEntries = gapByIssue.entrySet().stream()

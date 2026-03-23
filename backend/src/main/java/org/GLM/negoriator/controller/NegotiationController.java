@@ -47,6 +47,7 @@ public class NegotiationController {
 			NegotiationDefaults.defaultStrategy(),
 			NegotiationDefaults.maxRounds(),
 			NegotiationDefaults.riskOfWalkaway(),
+			NegotiationDefaults.buyerProfile(),
 			NegotiationDefaults.bounds());
 	}
 
@@ -91,12 +92,14 @@ public class NegotiationController {
 		List<String> availableStrategies,
 		int maxRounds,
 		BigDecimal riskOfWalkaway,
+		BuyerProfileResponse buyerProfile,
 		BoundsResponse bounds
 	) {
 		static SessionDefaultsResponse from(
 			NegotiationStrategy defaultStrategy,
 			int maxRounds,
 			BigDecimal riskOfWalkaway,
+			BuyerProfile buyerProfile,
 			NegotiationBounds bounds
 		) {
 			return new SessionDefaultsResponse(
@@ -104,6 +107,7 @@ public class NegotiationController {
 				List.of(NegotiationStrategy.values()).stream().map(Enum::name).toList(),
 				maxRounds,
 				riskOfWalkaway,
+				BuyerProfileResponse.from(buyerProfile),
 				BoundsResponse.from(bounds));
 		}
 	}
@@ -157,8 +161,10 @@ public class NegotiationController {
 		String strategy,
 		int currentRound,
 		int maxRounds,
+		BigDecimal riskOfWalkaway,
 		String status,
 		boolean closed,
+		BuyerProfileResponse buyerProfile,
 		BoundsResponse bounds,
 		List<NegotiationRoundResponse> rounds,
 		List<StrategyHistoryResponse> strategyHistory,
@@ -181,8 +187,10 @@ public class NegotiationController {
 				session.getStrategy().name(),
 				session.getCurrentRound(),
 				session.getMaxRounds(),
+				session.getRiskOfWalkaway(),
 				session.getStatus().name(),
 				session.isClosed(),
+				BuyerProfileResponse.from(session.toBuyerProfile()),
 				BoundsResponse.from(session.toNegotiationBounds()),
 				rounds,
 				strategyHistory,
@@ -457,6 +465,21 @@ public class NegotiationController {
 		}
 	}
 
+	public record BuyerProfileResponse(
+		OfferTermsResponse idealOffer,
+		OfferTermsResponse reservationOffer,
+		IssueWeightsResponse weights,
+		BigDecimal reservationUtility
+	) {
+		static BuyerProfileResponse from(BuyerProfile buyerProfile) {
+			return new BuyerProfileResponse(
+				OfferTermsResponse.from(buyerProfile.idealOffer()),
+				OfferTermsResponse.from(buyerProfile.reservationOffer()),
+				IssueWeightsResponse.from(buyerProfile.weights()),
+				buyerProfile.reservationUtility());
+		}
+	}
+
 	public record BuyerProfileRequest(
 		OfferTermsResponse idealOffer,
 		OfferTermsResponse reservationOffer,
@@ -469,6 +492,21 @@ public class NegotiationController {
 				require(reservationOffer, "buyerProfile.reservationOffer").toOfferVector(),
 				require(weights, "buyerProfile.weights").toIssueWeights(),
 				require(reservationUtility, "buyerProfile.reservationUtility"));
+		}
+	}
+
+	public record IssueWeightsResponse(
+		BigDecimal price,
+		BigDecimal paymentDays,
+		BigDecimal deliveryDays,
+		BigDecimal contractMonths
+	) {
+		static IssueWeightsResponse from(IssueWeights issueWeights) {
+			return new IssueWeightsResponse(
+				issueWeights.price(),
+				issueWeights.paymentDays(),
+				issueWeights.deliveryDays(),
+				issueWeights.contractMonths());
 		}
 	}
 

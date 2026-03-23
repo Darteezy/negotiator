@@ -20,27 +20,10 @@ public class BuyerUtilityCalculator {
 
         NegotiationEngine.IssueWeights normalizedWeights = profile.weights().normalized();
 
-        BigDecimal priceScore = Normalization.normalizeInvertedDecimal(
-                offer.price(),
-                bounds.minPrice(),
-                bounds.maxPrice()
-        );
-        BigDecimal paymentScore = Normalization.normalizePositiveInt(
-                offer.paymentDays(),
-                bounds.minPaymentDays(),
-                bounds.maxPaymentDays()
-        );
-        BigDecimal deliveryScore = Normalization.normalizeNegativeInt(
-                offer.deliveryDays(),
-                bounds.minDeliveryDays(),
-                bounds.maxDeliveryDays()
-        );
-
-        BigDecimal contractScore = Normalization.normalizeNegativeInt(
-                offer.contractMonths(),
-                bounds.minContractMonths(),
-                bounds.maxContractMonths()
-        );
+        BigDecimal priceScore = BuyerPreferenceScoring.priceScore(offer, profile);
+        BigDecimal paymentScore = BuyerPreferenceScoring.paymentScore(offer, profile);
+        BigDecimal deliveryScore = BuyerPreferenceScoring.deliveryScore(offer, profile);
+        BigDecimal contractScore = BuyerPreferenceScoring.contractScore(offer, profile);
 
         BigDecimal weightedPrice = priceScore.multiply(normalizedWeights.price());
         BigDecimal weightedPayment = paymentScore.multiply(normalizedWeights.paymentDays());

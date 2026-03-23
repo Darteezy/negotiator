@@ -2,6 +2,11 @@ import { LoaderCircle, SendHorizontal } from "lucide-react";
 
 import { formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import {
+  formatTermRange,
+  getSessionTermField,
+  SESSION_TERM_FIELDS,
+} from "@/lib/session-config";
 
 export function OfferComposer({
   bounds,
@@ -51,15 +56,20 @@ export function OfferComposer({
                 value={formatMoney(parsedDraft.terms.price)}
               />
               <DetectedTerm
-                label='Payment'
+                label={getSessionTermField("paymentDays")?.label ?? "Payment days"}
                 value={`${parsedDraft.terms.paymentDays} days`}
               />
               <DetectedTerm
-                label='Delivery'
+                label={
+                  getSessionTermField("deliveryDays")?.label ?? "Delivery time"
+                }
                 value={`${parsedDraft.terms.deliveryDays} days`}
               />
               <DetectedTerm
-                label='Contract'
+                label={
+                  getSessionTermField("contractMonths")?.label ??
+                  "Contract length"
+                }
                 value={`${parsedDraft.terms.contractMonths} months`}
               />
               {parsedDraft.inheritedFields?.length > 0 && (
@@ -100,21 +110,9 @@ export function OfferComposer({
           <div className='mt-3 space-y-2 leading-7'>
             <p>Allowed ranges:</p>
             <ul>
-              <li>
-                Price: {formatMoney(bounds.minPrice)} to{" "}
-                {formatMoney(bounds.maxPrice)}
-              </li>
-              <li>
-                Payment: {bounds.minPaymentDays} to {bounds.maxPaymentDays} days
-              </li>
-              <li>
-                Delivery: {bounds.minDeliveryDays} to {bounds.maxDeliveryDays}{" "}
-                days
-              </li>
-              <li>
-                Contract: {bounds.minContractMonths} to{" "}
-                {bounds.maxContractMonths} months
-              </li>
+              {SESSION_TERM_FIELDS.map((field) => (
+                <li key={field.key}>{formatTermRange(field.key, bounds)}</li>
+              ))}
             </ul>
           </div>
         </details>

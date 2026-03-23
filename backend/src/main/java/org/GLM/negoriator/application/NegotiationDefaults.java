@@ -50,14 +50,14 @@ public final class NegotiationDefaults {
 
 	public static NegotiationBounds bounds() {
 		return new NegotiationBounds(
-			new BigDecimal("80.00"),
-			new BigDecimal("120.00"),
-			30,
-			90,
-			3,
-			14,
-			3,
-			24);
+			new BigDecimal("50.00"),
+			new BigDecimal("200.00"),
+			7,
+			120,
+			1,
+			45,
+			1,
+			36);
 	}
 
 	public static SupplierModel supplierModel() {

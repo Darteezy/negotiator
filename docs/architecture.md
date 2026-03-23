@@ -10,7 +10,7 @@ The current repository is a frontend-plus-backend negotiation system with persis
 
 Implemented components:
 
-- Supplier-facing React frontend for session start, structured offer submission, and timeline review.
+- Supplier-facing React frontend for buyer-mandate setup, structured offer submission, and timeline review.
 - Negotiation domain model and persistence.
 - Rule-based buyer negotiation engine.
 - Negotiation REST API.
@@ -221,12 +221,8 @@ The current tests validate three layers:
 
 Key tests:
 
-- [BuyerUtilityCalculatorTest](../backend/src/test/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculatorTest.java)
-- [DecisionMakerTest](../backend/src/test/java/org/GLM/negoriator/negotiation/DecisionMakerTest.java)
-- [CounterOfferGeneratorTest](../backend/src/test/java/org/GLM/negoriator/negotiation/CounterOfferGeneratorTest.java)
-- [NegotiationEngineTest](../backend/src/test/java/org/GLM/negoriator/negotiation/NegotiationEngineTest.java)
-- [NegotiationApplicationServiceTest](../backend/src/test/java/org/GLM/negoriator/application/NegotiationApplicationServiceTest.java)
-- [NegotiationSessionRepositoryTest](../backend/src/test/java/org/GLM/negoriator/domain/NegotiationSessionRepositoryTest.java)
+- [NegotiationEngineImplTest](../backend/src/test/java/org/GLM/negoriator/negotiation/NegotiationEngineImplTest.java)
+- [SessionConfigurationValidatorTest](../backend/src/test/java/org/GLM/negoriator/application/SessionConfigurationValidatorTest.java)
 
 Detailed test guidance is in [negotiation-engine.md](./negotiation-engine.md).
 

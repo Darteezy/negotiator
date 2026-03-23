@@ -27,6 +27,7 @@ That means the current MVP does work without any AI provider for the main negoti
 
 - Spring Boot backend with JPA persistence and PostgreSQL support.
 - Vite 8 + React 19 frontend for the human supplier experience.
+- Main-page buyer setup flow for configurable goals and reservation limits.
 - Negotiation REST API for session creation, retrieval, and supplier-offer submission.
 - Negotiation engine built from these components:
   - [BuyerUtilityCalculator](backend/src/main/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculator.java)
@@ -64,6 +65,7 @@ Current strategy behavior:
 - `BOULWARE` keeps the buyer stricter for longer.
 - `CONCEDER` relaxes faster.
 - `BASELINE` and `TIT_FOR_TAT` currently use the baseline target curve, with richer tit-for-tat behavior still planned.
+- Counteroffers can now give price back when stronger payment terms, faster delivery, or shorter contract length justify the trade.
 
 This behavior is implemented in [NegotiationEngineImpl](backend/src/main/java/org/GLM/negoriator/negotiation/NegotiationEngineImpl.java), [DecisionMaker](backend/src/main/java/org/GLM/negoriator/negotiation/DecisionMaker.java), and [CounterOfferGenerator](backend/src/main/java/org/GLM/negoriator/negotiation/CounterOfferGenerator.java).
 

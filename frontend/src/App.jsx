@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  LoaderCircle,
   PanelRightClose,
   PanelRightOpen,
   RotateCcw,
@@ -16,13 +15,20 @@ import {
 import { ConversationPane } from "@/components/conversation-pane";
 import { DebugPane } from "@/components/debug-pane";
 import { OfferComposer } from "@/components/offer-composer";
+import { SessionSetupScreen } from "@/components/session-setup-screen";
 import { Button } from "@/components/ui/button";
 import { parseSupplierMessage, shouldUseAiParsing } from "@/lib/chat-offer";
+import {
+  buildStartSessionPayload,
+  createSessionConfig,
+  formatTermRange,
+  validateSessionConfig,
+} from "@/lib/session-config";
 
 function App() {
   const [defaults, setDefaults] = useState(null);
   const [session, setSession] = useState(null);
-  const [sessionOptions, setSessionOptions] = useState(null);
+  const [sessionConfig, setSessionConfig] = useState(null);
   const [messageDraft, setMessageDraft] = useState("");
   const [loadingDefaults, setLoadingDefaults] = useState(true);
   const [startingSession, setStartingSession] = useState(false);
@@ -62,10 +68,7 @@ function App() {
         }
 
         setDefaults(nextDefaults);
-        setSessionOptions({
-          strategy: nextDefaults.defaultStrategy,
-          maxRounds: String(nextDefaults.maxRounds),
-        });
+        setSessionConfig(createSessionConfig(nextDefaults));
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError.message);
@@ -91,16 +94,25 @@ function App() {
   }, []);
 
   async function handleStartSession() {
+    if (!defaults || !sessionConfig) {
+      return;
+    }
+
+    const configErrors = validateSessionConfig(sessionConfig, defaults.bounds);
+    if (configErrors.length > 0) {
+      setError(configErrors[0]);
+      return;
+    }
+
     try {
       simulationStreamRef.current?.close();
       setStartingSession(true);
       setError("");
       setSessionMode("interactive");
       setSimulationMeta(null);
-      const nextSession = await startSession({
-        strategy: sessionOptions?.strategy ?? defaults?.defaultStrategy,
-        maxRounds: Number(sessionOptions?.maxRounds ?? defaults?.maxRounds),
-      });
+      const nextSession = await startSession(
+        buildStartSessionPayload(sessionConfig, defaults),
+      );
       setSession(nextSession);
       setSubmittedSupplierMessages([]);
       setMessageDraft("");
@@ -134,11 +146,11 @@ function App() {
       setError("");
       const startedAt = new Date();
       const maxRounds = Math.min(
-        Number(sessionOptions?.maxRounds ?? defaults?.maxRounds ?? 6),
+        Number(sessionConfig?.maxRounds ?? defaults?.maxRounds ?? 6),
         6,
       );
       const requestedStrategy =
-        sessionOptions?.strategy ?? defaults?.defaultStrategy ?? "MESO";
+        sessionConfig?.strategy ?? defaults?.defaultStrategy ?? "MESO";
       setSessionMode("simulation");
       setSimulationMeta({
         anomalyCount: 0,
@@ -233,8 +245,43 @@ function App() {
       setError(simulationError.message);
       setPendingSupplierMessage("");
       simulationStreamRef.current?.close();
-    } finally {
     }
+  }
+
+  function handleSessionTermChange(offerType, field, value) {
+    setSessionConfig((current) =>
+      current
+        ? {
+            ...current,
+            [offerType]: {
+              ...current[offerType],
+              [field]: value,
+            },
+          }
+        : current,
+    );
+    setError("");
+  }
+
+  function handleSessionSettingChange(field, value) {
+    setSessionConfig((current) =>
+      current
+        ? {
+            ...current,
+            [field]: value,
+          }
+        : current,
+    );
+    setError("");
+  }
+
+  function handleResetSessionConfig() {
+    if (!defaults) {
+      return;
+    }
+
+    setSessionConfig(createSessionConfig(defaults));
+    setError("");
   }
 
   async function handleSubmitOffer(event) {
@@ -265,8 +312,14 @@ function App() {
       }
 
       if (resolvedDraft.outOfBounds.length > 0) {
+        const rangeMessages = resolvedDraft.outOfBounds
+          .map((fieldKey) => formatTermRange(fieldKey, bounds))
+          .filter(Boolean);
+
         setError(
-          `Detected values are outside the allowed range for ${resolvedDraft.outOfBounds.join(", ")}.`,
+          rangeMessages.length > 0
+            ? `Detected values are outside the allowed range. ${rangeMessages.join(" ")}`
+            : `Detected values are outside the allowed range for ${resolvedDraft.outOfBounds.join(", ")}.`,
         );
         setPendingSupplierMessage("");
         return;
@@ -296,9 +349,15 @@ function App() {
     <main className='h-screen overflow-hidden bg-[var(--page-bg)] text-[var(--ink-strong)]'>
       <div className='flex h-screen w-full flex-col overflow-hidden'>
         {!session ? (
-          <ConnectScreen
+          <SessionSetupScreen
+            availableStrategies={defaults?.availableStrategies ?? []}
+            bounds={defaults?.bounds ?? null}
+            config={sessionConfig}
             error={error}
             loadingDefaults={loadingDefaults}
+            onFieldChange={handleSessionTermChange}
+            onReset={handleResetSessionConfig}
+            onSessionSettingChange={handleSessionSettingChange}
             onStartSimulation={handleStartSimulation}
             onStartSession={handleStartSession}
             runningSimulation={runningSimulation}
@@ -514,52 +573,6 @@ async function resolveDraftTerms({
   }
 }
 
-function ConnectScreen({
-  error,
-  loadingDefaults,
-  onStartSimulation,
-  onStartSession,
-  runningSimulation,
-  startingSession,
-}) {
-  return (
-    <section className='flex min-h-screen items-center justify-center px-4'>
-      <div className='w-full max-w-sm space-y-3'>
-        {error && (
-          <div className='rounded-2xl border border-[var(--danger-ink)]/15 bg-[var(--danger-soft)] px-4 py-3 text-sm leading-6 text-[var(--danger-ink)]'>
-            {error}
-          </div>
-        )}
-
-        <Button
-          className='h-11 w-full'
-          disabled={loadingDefaults || startingSession}
-          onClick={onStartSession}
-          type='button'
-        >
-          {loadingDefaults || startingSession ? (
-            <LoaderCircle className='h-4 w-4 animate-spin' />
-          ) : null}
-          Connect to buyer
-        </Button>
-
-        <Button
-          className='h-11 w-full'
-          disabled={loadingDefaults || runningSimulation}
-          onClick={onStartSimulation}
-          type='button'
-          variant='secondary'
-        >
-          {loadingDefaults || runningSimulation ? (
-            <LoaderCircle className='h-4 w-4 animate-spin' />
-          ) : null}
-          Start Simulation Demo
-        </Button>
-      </div>
-    </section>
-  );
-}
-
 function buildStreamingSimulationSession(options) {
   return {
     id: null,
@@ -747,10 +760,6 @@ function resultStatusForDecision(decision, finalStatus) {
   }
 
   return finalStatus === "PENDING" ? "PENDING" : "COUNTERED";
-}
-
-function offsetTime(startedAt, minutes) {
-  return new Date(startedAt.getTime() + minutes * 60_000).toISOString();
 }
 
 function formatDurationLabel(startedAt, finishedAt) {

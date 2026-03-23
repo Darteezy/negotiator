@@ -19,6 +19,9 @@ import org.springframework.stereotype.Component;
 public class NegotiationEngineImpl implements NegotiationEngine {
 
     private static final int SCALE = 4;
+    private static final BigDecimal COUNTER_TARGET_PROGRESS_FLOOR = new BigDecimal("0.15");
+    private static final BigDecimal SUPPLIER_CONCESSION_RECIPROCITY = new BigDecimal("0.75");
+    private static final BigDecimal ZERO = BigDecimal.ZERO;
 
     private final BuyerUtilityCalculator utilityCalculator;
     private final DecisionMaker decisionMaker;
@@ -78,7 +81,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             NegotiationIssue focusIssue;
 
             if (context.strategy() == NegotiationStrategy.MESO) {
-            counterOffers = mesoCounterOffers(buyerProfile, context, request.bounds(), supplierOffer);
+            counterOffers = mesoCounterOffers(request, buyerUtility, targetUtility);
             focusIssue = counterOfferGenerator.issueToImprove(buyerProfile, context, request.bounds(), supplierOffer);
             } else {
             CounterProposal proposal = counterOfferGenerator.counterProposal(
@@ -86,22 +89,33 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                 context,
                 request.bounds(),
                 supplierOffer);
-            counterOffers = List.of(proposal.offer());
+            counterOffers = List.of(tuneCounterOffer(
+                proposal.offer(),
+                supplierOffer,
+                request,
+                buyerUtility,
+                targetUtility));
             focusIssue = proposal.issue();
             }
 
             counterOffers = counterOffers.stream()
-                .filter(offer -> isBuyerFriendlyCounter(offer, supplierOffer))
+                .filter(offer -> isViableCounterOffer(offer, supplierOffer, buyerProfile, request.bounds(), buyerUtility))
                 .filter(offer -> !offer.matches(supplierOffer))
                 .toList();
 
             if (counterOffers.isEmpty()) {
-                OfferVector safeFallback = counterOfferGenerator.counterOffer(
+                OfferVector safeFallback = tuneCounterOffer(
+                    counterOfferGenerator.counterOffer(
                     buyerProfile,
                     context,
                     request.bounds(),
-                    supplierOffer);
-                if (isBuyerFriendlyCounter(safeFallback, supplierOffer) && !safeFallback.matches(supplierOffer)) {
+                    supplierOffer),
+                    supplierOffer,
+                    request,
+                    buyerUtility,
+                    targetUtility);
+                if (isViableCounterOffer(safeFallback, supplierOffer, buyerProfile, request.bounds(), buyerUtility)
+                    && !safeFallback.matches(supplierOffer)) {
                     counterOffers = List.of(safeFallback);
                 }
             }
@@ -130,11 +144,20 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                 : rejectionExplanation(buyerUtility, buyerProfile.reservationUtility(), decisionOutcome.reasonCode()));
     }
 
-    private boolean isBuyerFriendlyCounter(OfferVector counterOffer, OfferVector supplierOffer) {
-        return counterOffer.price().compareTo(supplierOffer.price()) <= 0
-            && counterOffer.paymentDays() >= supplierOffer.paymentDays()
-            && counterOffer.deliveryDays() <= supplierOffer.deliveryDays()
-            && counterOffer.contractMonths() <= supplierOffer.contractMonths();
+    private boolean isViableCounterOffer(
+            OfferVector counterOffer,
+            OfferVector supplierOffer,
+            BuyerProfile buyerProfile,
+            NegotiationBounds bounds,
+            BigDecimal supplierUtility
+    ) {
+        if (violatesBuyerReservation(counterOffer, buyerProfile.reservationOffer())) {
+            return false;
+        }
+
+        BigDecimal counterUtility = utilityCalculator.calculate(counterOffer, buyerProfile, bounds);
+        return counterUtility.compareTo(buyerProfile.reservationUtility()) >= 0
+            && counterUtility.compareTo(supplierUtility) > 0;
     }
 
     private boolean violatesBuyerReservation(OfferVector offer, OfferVector reservationOffer) {
@@ -243,17 +266,25 @@ public class NegotiationEngineImpl implements NegotiationEngine {
     }
 
     private List<OfferVector> mesoCounterOffers(
-            BuyerProfile buyerProfile,
-            NegotiationContext context,
-            NegotiationBounds bounds,
-            OfferVector supplierOffer
+            NegotiationRequest request,
+            BigDecimal supplierUtility,
+            BigDecimal targetUtility
     ) {
+        BuyerProfile buyerProfile = request.buyerProfile();
+        NegotiationContext context = request.context();
+        NegotiationBounds bounds = request.bounds();
+        OfferVector supplierOffer = request.supplierOffer();
         List<NegotiationIssue> rankedIssues = counterOfferGenerator.rankedIssues(buyerProfile, context, bounds, supplierOffer);
         List<OfferVector> offers = new ArrayList<>();
         BigDecimal reservationUtility = buyerProfile.reservationUtility();
 
         for (NegotiationIssue issue : rankedIssues) {
-            OfferVector offer = counterOfferGenerator.counterOfferForIssue(buyerProfile, bounds, supplierOffer, issue);
+            OfferVector offer = tuneCounterOffer(
+                counterOfferGenerator.counterOfferForIssue(buyerProfile, bounds, supplierOffer, issue),
+                supplierOffer,
+                request,
+                supplierUtility,
+                targetUtility);
 
             BigDecimal utility = utilityCalculator.calculate(offer, buyerProfile, bounds);
             if (utility.compareTo(reservationUtility) < 0) {
@@ -270,10 +301,174 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         if (offers.isEmpty()) {
-            offers.add(counterOfferGenerator.counterOffer(buyerProfile, context, bounds, supplierOffer));
+            offers.add(tuneCounterOffer(
+                counterOfferGenerator.counterOffer(buyerProfile, context, bounds, supplierOffer),
+                supplierOffer,
+                request,
+                supplierUtility,
+                targetUtility));
         }
 
         return offers;
+    }
+
+    private OfferVector tuneCounterOffer(
+            OfferVector counterOffer,
+            OfferVector supplierOffer,
+            NegotiationRequest request,
+            BigDecimal supplierUtility,
+            BigDecimal targetUtility
+    ) {
+        OfferVector rebalanced = rebalancePriceForTradeoffs(
+            counterOffer,
+            supplierOffer,
+            request,
+            supplierUtility,
+            targetUtility);
+
+        BigDecimal reservationPrice = request.buyerProfile().reservationOffer().price();
+        if (rebalanced.price().compareTo(reservationPrice) > 0) {
+            return new OfferVector(
+                reservationPrice,
+                rebalanced.paymentDays(),
+                rebalanced.deliveryDays(),
+                rebalanced.contractMonths());
+        }
+
+        return rebalanced;
+    }
+
+    private OfferVector rebalancePriceForTradeoffs(
+            OfferVector counterOffer,
+            OfferVector supplierOffer,
+            NegotiationRequest request,
+            BigDecimal supplierUtility,
+            BigDecimal targetUtility
+    ) {
+        BuyerProfile buyerProfile = request.buyerProfile();
+        NegotiationBounds bounds = request.bounds();
+        BigDecimal utilityGivebackBudget = nonPriceUtilityGain(supplierOffer, counterOffer, buyerProfile)
+            .add(recentSupplierConcessionUtility(request.context(), supplierOffer, buyerProfile)
+                .multiply(SUPPLIER_CONCESSION_RECIPROCITY))
+            .setScale(SCALE, RoundingMode.HALF_UP);
+
+        if (utilityGivebackBudget.compareTo(ZERO) <= 0) {
+            return counterOffer;
+        }
+
+        BigDecimal counterUtility = utilityCalculator.calculate(counterOffer, buyerProfile, bounds);
+        BigDecimal counterFloor = counterUtilityFloor(supplierUtility, targetUtility, buyerProfile.reservationUtility());
+        BigDecimal maxUtilityGiveback = counterUtility.subtract(counterFloor);
+
+        if (maxUtilityGiveback.compareTo(ZERO) <= 0) {
+            return counterOffer;
+        }
+
+        BigDecimal allowedUtilityGiveback = utilityGivebackBudget.min(maxUtilityGiveback);
+        BigDecimal priceIncrease = priceIncreaseForUtilityDrop(allowedUtilityGiveback, buyerProfile);
+        if (priceIncrease.compareTo(ZERO) <= 0) {
+            return counterOffer;
+        }
+
+        BigDecimal maxPrice = bounds.maxPrice().min(buyerProfile.reservationOffer().price());
+        BigDecimal nextPrice = counterOffer.price().add(priceIncrease).min(maxPrice).setScale(2, RoundingMode.HALF_UP);
+
+        if (nextPrice.compareTo(counterOffer.price()) <= 0) {
+            return counterOffer;
+        }
+
+        return new OfferVector(
+            nextPrice,
+            counterOffer.paymentDays(),
+            counterOffer.deliveryDays(),
+            counterOffer.contractMonths());
+    }
+
+    private BigDecimal counterUtilityFloor(
+            BigDecimal supplierUtility,
+            BigDecimal targetUtility,
+            BigDecimal reservationUtility
+    ) {
+        BigDecimal targetGap = targetUtility.subtract(supplierUtility).max(ZERO);
+        BigDecimal progressFloor = supplierUtility.add(targetGap.multiply(COUNTER_TARGET_PROGRESS_FLOOR));
+        return progressFloor.max(reservationUtility).setScale(SCALE, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal nonPriceUtilityGain(
+            OfferVector fromOffer,
+            OfferVector toOffer,
+            BuyerProfile buyerProfile
+    ) {
+        BigDecimal paymentGain = positiveContributionDelta(
+            BuyerPreferenceScoring.paymentScore(fromOffer, buyerProfile),
+            BuyerPreferenceScoring.paymentScore(toOffer, buyerProfile),
+            buyerProfile.weights().normalized().paymentDays());
+        BigDecimal deliveryGain = positiveContributionDelta(
+            BuyerPreferenceScoring.deliveryScore(fromOffer, buyerProfile),
+            BuyerPreferenceScoring.deliveryScore(toOffer, buyerProfile),
+            buyerProfile.weights().normalized().deliveryDays());
+        BigDecimal contractGain = positiveContributionDelta(
+            BuyerPreferenceScoring.contractScore(fromOffer, buyerProfile),
+            BuyerPreferenceScoring.contractScore(toOffer, buyerProfile),
+            buyerProfile.weights().normalized().contractMonths());
+
+        return paymentGain.add(deliveryGain).add(contractGain).setScale(SCALE, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal recentSupplierConcessionUtility(
+            NegotiationContext context,
+            OfferVector currentSupplierOffer,
+            BuyerProfile buyerProfile
+    ) {
+        OfferVector previousSupplierOffer = previousSupplierOffer(context);
+        if (previousSupplierOffer == null) {
+            return ZERO;
+        }
+
+        return nonPriceUtilityGain(previousSupplierOffer, currentSupplierOffer, buyerProfile);
+    }
+
+    private OfferVector previousSupplierOffer(NegotiationContext context) {
+        List<OfferVector> history = context.history();
+        if (history.size() < 2) {
+            return null;
+        }
+
+        return history.get(history.size() - 2);
+    }
+
+    private BigDecimal positiveContributionDelta(
+            BigDecimal fromScore,
+            BigDecimal toScore,
+            BigDecimal weight
+    ) {
+        BigDecimal delta = toScore.subtract(fromScore);
+        if (delta.compareTo(ZERO) <= 0) {
+            return ZERO;
+        }
+
+        return delta.multiply(weight);
+    }
+
+    private BigDecimal priceIncreaseForUtilityDrop(
+            BigDecimal utilityDrop,
+            BuyerProfile buyerProfile
+    ) {
+        BigDecimal priceWeight = buyerProfile.weights().normalized().price();
+        BigDecimal priceSpan = BuyerPreferenceScoring.priceSpan(buyerProfile);
+        if (priceWeight.compareTo(ZERO) <= 0 || priceSpan.compareTo(ZERO) <= 0) {
+            return ZERO;
+        }
+
+        BigDecimal increase = utilityDrop.divide(priceWeight, SCALE + 4, RoundingMode.HALF_UP)
+            .multiply(priceSpan)
+            .setScale(2, RoundingMode.HALF_UP);
+
+        if (increase.compareTo(ZERO) == 0 && utilityDrop.compareTo(ZERO) > 0) {
+            return new BigDecimal("0.01");
+        }
+
+        return increase;
     }
 
     private String rejectionExplanation(

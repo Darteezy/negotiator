@@ -30,6 +30,7 @@ Important clarification:
 - the engine is not price-only
 - the engine can change price, payment days, delivery days, and contract months
 - most strategies still change one issue per counteroffer
+- price can now move upward when better payment, delivery, or contract terms justify that trade
 - the `MESO` strategy can send multiple buyer-equivalent options in the same round
 - with the default weights, price often wins first because it is the strongest buyer priority
 
@@ -129,33 +130,34 @@ In plain language:
 - very weak offer: reject now
 - borderline offer: keep negotiating
 
-## Why The Buyer Sometimes Seems To Change Only Price
+## Why Price Now Moves In Both Directions
 
 This was a valid concern from testing the frontend.
 
-What is actually happening:
+What was missing before:
 
-- the current engine changes only one issue per counteroffer
-- the default buyer weights still make price the most important issue
-- so price often becomes the first thing the engine moves
+- the engine often changed only one issue
+- price was filtered so that it could only stay flat or move down
+- that meant the buyer could ask for better payment, delivery, or contract terms without giving anything back on price
 
 What changed in the backend:
 
 - weights are normalized before use
 - the engine now exposes the exact reason code and focus issue in its response
-- the counteroffer generator is less repetitive across rounds when the supplier ignores the same previous buyer counterissue and another meaningful issue is available
+- counteroffers are validated by overall buyer utility, not only by issue-by-issue monotonic improvement
+- when the supplier improves payment, delivery, or contract terms, the buyer can now give back some price while staying above its reservation floor
 
-So the current engine is still simple, but it is now easier to inspect and less likely to get stuck repeating the same issue blindly.
+So the current engine is still deterministic and simple, but it now supports the main Pactum-style tradeoff that the challenge explicitly calls for.
 
 ## How Counteroffers Are Built
 
-Most strategies still follow a one-issue counteroffer rule.
+Most strategies still follow a one-issue focus rule.
 
-That means it does not try to change all four terms at once. Instead, it asks:
+That means it first asks:
 
 "Which single issue hurts the buyer most right now?"
 
-Then it moves only that issue toward the buyer ideal.
+Then it moves that issue toward the buyer ideal.
 
 Examples:
 
@@ -163,6 +165,17 @@ Examples:
 - if delivery is the biggest problem, the buyer changes delivery days
 - if payment is the biggest problem, the buyer changes payment days
 - if contract length is the biggest problem, the buyer changes contract months
+
+After that first move, the engine can now rebalance price in the supplier's favor when:
+
+- the counteroffer already gives the buyer better payment, delivery, or contract terms than the current supplier offer
+- or the supplier just conceded on one of those non-price terms compared with the previous round
+
+That price giveback is still bounded:
+
+- it cannot cross the buyer reservation price
+- it cannot make the counteroffer worse than the buyer reservation utility
+- it cannot make the counteroffer worse overall than the supplier's current offer
 
 Why this rule exists:
 
@@ -174,6 +187,7 @@ Why this rule exists:
 
 - instead of sending only one counteroffer, it can return up to three nearby options
 - each option moves a different high-impact issue
+- each option can now carry a different price if that is needed to keep the trade balanced
 - the buyer still keeps the decision explainable because each option is built from the same deterministic issue ranking logic
 
 ## New Response Metadata
@@ -313,20 +327,16 @@ If you want a stronger but heavier local option later, `llama3.1:8b-instruct` is
 
 ## How To Test The Current Engine
 
-Useful test coverage already exists in:
+Current checked-in backend tests include:
 
-- [BuyerUtilityCalculatorTest](../backend/src/test/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculatorTest.java)
-- [DecisionMakerTest](../backend/src/test/java/org/GLM/negoriator/negotiation/DecisionMakerTest.java)
-- [CounterOfferGeneratorTest](../backend/src/test/java/org/GLM/negoriator/negotiation/CounterOfferGeneratorTest.java)
-- [NegotiationEngineTest](../backend/src/test/java/org/GLM/negoriator/negotiation/NegotiationEngineTest.java)
-- [NegotiationApplicationServiceTest](../backend/src/test/java/org/GLM/negoriator/application/NegotiationApplicationServiceTest.java)
-- [NegotiationControllerTest](../backend/src/test/java/org/GLM/negoriator/controller/NegotiationControllerTest.java)
+- [NegotiationEngineImplTest](../backend/src/test/java/org/GLM/negoriator/negotiation/NegotiationEngineImplTest.java)
+- [SessionConfigurationValidatorTest](../backend/src/test/java/org/GLM/negoriator/application/SessionConfigurationValidatorTest.java)
 
 Run all backend tests with:
 
 ```bash
 cd backend
-sh mvnw test
+./mvnw test
 ```
 
 ## Current Limitations

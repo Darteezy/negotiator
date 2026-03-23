@@ -39,6 +39,7 @@ public class NegotiationApplicationService {
 	private final NegotiationEngine negotiationEngine;
 	private final StrategySwitchPolicy strategySwitchPolicy;
 	private final AiStrategyAdvisor aiStrategyAdvisor;
+	private final SessionConfigurationValidator sessionConfigurationValidator;
 
 	public NegotiationApplicationService(
 		NegotiationSessionRepository sessionRepository,
@@ -49,9 +50,12 @@ public class NegotiationApplicationService {
 		this.negotiationEngine = negotiationEngine;
 		this.strategySwitchPolicy = new StrategySwitchPolicy();
 		this.aiStrategyAdvisor = aiStrategyAdvisor;
+		this.sessionConfigurationValidator = new SessionConfigurationValidator();
 	}
 
 	public NegotiationSession startSession(StartSessionCommand command) {
+		sessionConfigurationValidator.validate(command);
+
 		NegotiationSession session = new NegotiationSession(
 			1,
 			command.maxRounds(),

@@ -1,27 +1,33 @@
+import { getSessionTermField } from "@/lib/session-config";
+
 const fieldDefinitions = {
   price: {
-    label: "price",
+    label: getSessionTermField("price")?.validationLabel ?? "price",
     patterns: [
       /(?:price|rate|cost)\D{0,12}(?:€|eur|euro|euros|\$|usd)?\s*(\d+(?:\.\d+)?)/i,
       /(?:€|eur|euro|euros|\$|usd)\s*(\d+(?:\.\d+)?)(?=[^.]*\b(?:price|rate|cost)\b)/i,
     ],
   },
   paymentDays: {
-    label: "payment days",
+    label:
+      getSessionTermField("paymentDays")?.validationLabel ?? "payment days",
     patterns: [
       /(?:payment|pay(?:ment)?\s+terms?)\D{0,12}(\d+)/i,
       /(\d+)\s*days?(?=[^.]*\bpayment\b)/i,
     ],
   },
   deliveryDays: {
-    label: "delivery days",
+    label:
+      getSessionTermField("deliveryDays")?.validationLabel ?? "delivery time",
     patterns: [
       /(?:delivery|deliver(?:y)?)\D{0,12}(\d+)/i,
       /(\d+)\s*days?(?=[^.]*\bdeliver(?:y)?\b)/i,
     ],
   },
   contractMonths: {
-    label: "contract months",
+    label:
+      getSessionTermField("contractMonths")?.validationLabel ??
+      "contract length",
     patterns: [
       /(?:contract|term|commitment)\D{0,12}(\d+)/i,
       /(\d+)\s*months?(?=[^.]*\b(?:contract|term|commitment)\b)/i,
@@ -191,7 +197,7 @@ export function parseSupplierMessage(
             Number(terms[key]) > Number(maximum)
           );
         })
-        .map(([key]) => fieldDefinitions[key].label)
+        .map(([key]) => key)
     : [];
 
   return {

@@ -13,9 +13,10 @@ Build a buyer-side autonomous negotiation agent for the Pactum challenge, expose
 - Negotiation REST controller for session lifecycle and supplier offer submission.
 - Persistence model for negotiation sessions, offers, and decisions.
 - Rule-based buyer engine for accept, counter, and reject decisions.
+- Configurable buyer goals and limits exposed in the main session setup flow.
 - Utility scoring over price, payment terms, delivery time, and contract length.
 - Round-aware concession logic.
-- Single-issue counteroffer generation.
+- Tradeoff-aware counteroffer generation, including price giveback for stronger non-price terms.
 - Automated tests for core engine and persistence flow.
 
 ### In progress conceptually

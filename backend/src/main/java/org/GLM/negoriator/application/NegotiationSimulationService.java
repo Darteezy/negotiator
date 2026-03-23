@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.GLM.negoriator.ai.AiGatewayService;
 import org.GLM.negoriator.domain.NegotiationSession;
+import org.GLM.negoriator.negotiation.BuyerUtilityCalculator;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.slf4j.Logger;
@@ -48,6 +49,7 @@ public class NegotiationSimulationService {
 	private final NegotiationApplicationService negotiationService;
 	private final AiGatewayService aiGateway;
 	private final ObjectMapper objectMapper;
+	private final BuyerUtilityCalculator utilityCalculator;
 
 	public NegotiationSimulationService(
 		NegotiationApplicationService negotiationService,
@@ -57,6 +59,7 @@ public class NegotiationSimulationService {
 		this.negotiationService = negotiationService;
 		this.aiGateway = aiGateway;
 		this.objectMapper = objectMapper;
+		this.utilityCalculator = new BuyerUtilityCalculator();
 	}
 
 	@Transactional
@@ -535,12 +538,18 @@ public class NegotiationSimulationService {
 
 			if (round.supplierOffer() != null && round.buyer().counterOffers() != null) {
 				for (OfferVector counterOffer : round.buyer().counterOffers()) {
-					if (counterOffer.price().compareTo(round.supplierOffer().price()) > 0
-						|| counterOffer.paymentDays() < round.supplierOffer().paymentDays()
-						|| counterOffer.deliveryDays() > round.supplierOffer().deliveryDays()
-						|| counterOffer.contractMonths() > round.supplierOffer().contractMonths()) {
+					BigDecimal supplierUtility = utilityCalculator.calculate(
+						round.supplierOffer(),
+						NegotiationDefaults.buyerProfile(),
+						NegotiationDefaults.bounds());
+					BigDecimal counterUtility = utilityCalculator.calculate(
+						counterOffer,
+						NegotiationDefaults.buyerProfile(),
+						NegotiationDefaults.bounds());
+
+					if (counterUtility.compareTo(supplierUtility) <= 0) {
 						anomalies.add(String.format(
-							"Round %d: Buyer counteroffer is worse for the buyer than the supplier offer (%s vs %s)",
+							"Round %d: Buyer counteroffer does not improve buyer utility over the supplier offer (%s vs %s)",
 							round.round(), counterOffer, round.supplierOffer()));
 					}
 				}
