@@ -30,6 +30,9 @@ export function ConfigurationPage({ onStart }: Props) {
   const [weightContract, setWeightContract] = useState("0.15");
   const [maxRounds, setMaxRounds] = useState("");
   const [riskOfWalkaway, setRiskOfWalkaway] = useState("");
+  const selectedStrategy = defaults?.strategyDetails.find(
+    (option) => option.name === strategy,
+  );
 
   useEffect(() => {
     let active = true;
@@ -251,11 +254,30 @@ export function ConfigurationPage({ onStart }: Props) {
             >
               {defaults?.availableStrategies.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {defaults.strategyDetails.find(
+                    (detail) => detail.name === option,
+                  )?.label ?? option}
                 </option>
               ))}
             </select>
           </label>
+
+          {selectedStrategy ? (
+            <div className='mt-4 max-w-2xl rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3'>
+              <p className='text-sm font-semibold text-[var(--ink-strong)]'>
+                {selectedStrategy.label}
+              </p>
+              <p className='mt-1 text-sm text-[var(--ink-soft)]'>
+                {selectedStrategy.summary}
+              </p>
+              <p className='mt-2 text-xs text-[var(--ink-muted)]'>
+                Concessions: {selectedStrategy.concessionStyle}
+              </p>
+              <p className='mt-1 text-xs text-[var(--ink-muted)]'>
+                Boundary posture: {selectedStrategy.boundaryStyle}
+              </p>
+            </div>
+          ) : null}
 
           <div className='mt-6 border-t border-[var(--line)]/70 pt-6'>
             <p className='text-xs font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]'>

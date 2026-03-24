@@ -8,6 +8,7 @@ import {
 } from "@/lib/negotiationApi";
 import type {
   ApiConversationEvent,
+  ApiStrategyDetails,
   ApiNegotiationSession,
   IssueWeights,
   OfferTerms,
@@ -179,11 +180,24 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
     return `${Math.round(utility * 100)}%`;
   }, [lastBuyerEvent]);
 
+  const strategyDetails = useMemo(() => {
+    const detailsByName = new Map<string, ApiStrategyDetails>();
+    for (const detail of session.strategyDetails) {
+      detailsByName.set(detail.name, detail);
+    }
+    return detailsByName;
+  }, [session.strategyDetails]);
+
+  const activeStrategy = strategyDetails.get(session.strategy);
+
   return (
     <div className='grid h-screen overflow-hidden grid-cols-1 bg-[var(--page-bg)] lg:grid-cols-[minmax(0,1fr)_360px]'>
       <div className='flex min-h-0 flex-col overflow-hidden border-r border-[var(--line)] bg-[rgba(9,24,32,0.72)] px-5 py-5'>
         <header className='flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 shadow-sm shadow-black/10'>
-          <StatusChip label='Strategy' value={session.strategy} />
+          <StatusChip
+            label='Strategy'
+            value={activeStrategy?.label ?? session.strategy}
+          />
           <StatusChip
             label='Round'
             value={`${session.currentRound}/${session.maxRounds}`}
@@ -195,6 +209,20 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
             accent={utilityLabel !== null}
           />
         </header>
+
+        {activeStrategy ? (
+          <div className='mt-3 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-sm text-[var(--ink-soft)] shadow-sm shadow-black/10'>
+            <p className='font-semibold text-[var(--ink-strong)]'>
+              {activeStrategy.summary}
+            </p>
+            <p className='mt-1'>
+              Concessions: {activeStrategy.concessionStyle}
+            </p>
+            <p className='mt-1'>
+              Boundary posture: {activeStrategy.boundaryStyle}
+            </p>
+          </div>
+        ) : null}
 
         <div
           ref={scrollRef}
@@ -302,9 +330,14 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                 <CompactSelect
                   label='Strategy'
                   value={settingsDraft.strategy}
-                  options={STRATEGIES}
+                  options={session.strategyDetails.map((detail) => detail.name)}
                   onChange={(value) => handleDraftChange("strategy", value)}
                 />
+                {strategyDetails.get(settingsDraft.strategy) ? (
+                  <p className='text-xs leading-5 text-[var(--ink-muted)]'>
+                    {strategyDetails.get(settingsDraft.strategy)?.summary}
+                  </p>
+                ) : null}
                 <CompactField
                   label='Max rounds'
                   value={settingsDraft.maxRounds}
@@ -501,8 +534,6 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
     </div>
   );
 }
-
-const STRATEGIES = ["BASELINE", "MESO", "BOULWARE", "CONCEDER", "TIT_FOR_TAT"];
 
 type SettingsDraft = {
   strategy: string;

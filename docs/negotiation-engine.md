@@ -4,7 +4,7 @@
 
 This document explains how the current buyer-side negotiation engine works in simple language.
 
-The backend is still rule-based, but it now supports named strategies per session. The current default is `MESO`. The future plan is to keep the final deal decision rule-based, then add AI strategy advice and AI-generated formal messaging on top of that stable base.
+The backend is still rule-based, but it now supports named strategies per session. The current default is `BASELINE`. The final deal decision should stay rule-based, while AI is used only for message generation and supplier-message parsing.
 
 The main implementation lives in:
 
@@ -92,15 +92,15 @@ Later rounds:
 - the buyer becomes more flexible
 - the target utility moves closer to the reservation utility
 
-So the current engine already has time-based concession behavior, and some strategies now change that concession curve.
+So the current engine already has time-based concession behavior, and strategies are expected to shape that concession curve and counteroffer style.
 
 Current strategy summary:
 
-- `MESO`: default strategy, returns multiple equivalent counteroffers when possible
-- `BOULWARE`: stays tougher for longer
-- `CONCEDER`: relaxes faster
-- `BASELINE`: uses the original linear target curve
-- `TIT_FOR_TAT`: currently shares the baseline target curve until richer reciprocal history is added
+- `BASELINE`: balanced linear concession path and default fallback
+- `MESO`: explores a deal through several buyer-safe options when possible
+- `BOULWARE`: stays tougher for longer and concedes more slowly
+- `CONCEDER`: relaxes faster to increase close probability
+- `TIT_FOR_TAT`: responds more directly to supplier concessions
 
 ## Hard Limits That Cause Immediate Rejection
 
@@ -185,7 +185,7 @@ Why this rule exists:
 
 `MESO` adds one important difference:
 
-- instead of sending only one counteroffer, it can return up to three nearby options
+- instead of sending only one counteroffer, it should return up to three nearby options
 - each option moves a different high-impact issue
 - each option can now carry a different price if that is needed to keep the trade balanced
 - the buyer still keeps the decision explainable because each option is built from the same deterministic issue ranking logic
@@ -213,7 +213,7 @@ Current focus issues are:
 - `DELIVERY_DAYS`
 - `CONTRACT_MONTHS`
 
-This metadata is important because the frontend and future AI messaging should not guess why the engine made a decision.
+This metadata is important because the frontend and AI messaging should not guess why the engine made a decision.
 
 ## Evaluation Metrics Stored For Analysis
 

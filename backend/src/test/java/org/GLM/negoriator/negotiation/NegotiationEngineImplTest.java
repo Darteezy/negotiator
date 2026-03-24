@@ -129,4 +129,81 @@ class NegotiationEngineImplTest {
 		assertEquals(NegotiationEngine.Decision.REJECT, response.decision());
 		assertEquals(NegotiationEngine.DecisionReason.FINAL_ROUND_BELOW_RESERVATION, response.reasonCode());
 	}
+
+	@Test
+	void distinguishesStrategyTargetCurves() {
+		DecisionMaker decisionMaker = new DecisionMaker();
+		NegotiationContext baselineContext = new NegotiationContext(
+			2,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+		NegotiationContext boulwareContext = new NegotiationContext(
+			2,
+			8,
+			NegotiationStrategy.BOULWARE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+		NegotiationContext concederContext = new NegotiationContext(
+			2,
+			8,
+			NegotiationStrategy.CONCEDER,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+
+		assertTrue(decisionMaker.targetUtility(buyerProfile, boulwareContext)
+			.compareTo(decisionMaker.targetUtility(buyerProfile, baselineContext)) > 0);
+		assertTrue(decisionMaker.targetUtility(buyerProfile, baselineContext)
+			.compareTo(decisionMaker.targetUtility(buyerProfile, concederContext)) > 0);
+	}
+
+	@Test
+	void mesoReturnsMultipleCounterOffersWhenSeveralIssuesRemainOpen() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("118.00"), 35, 20, 18);
+		NegotiationContext context = new NegotiationContext(
+			2,
+			8,
+			NegotiationStrategy.MESO,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("120.00"), 30, 24, 18),
+				new OfferVector(new BigDecimal("104.00"), 30, 24, 18)));
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			context,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertTrue(response.counterOffers().size() > 1);
+	}
+
+	@Test
+	void countersReservationEdgeOffersBeforeRejectingThem() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("120.00"), 30, 30, 24);
+		NegotiationContext context = new NegotiationContext(
+			3,
+			8,
+			NegotiationStrategy.CONCEDER,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			context,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertEquals(NegotiationEngine.DecisionReason.COUNTER_TO_CLOSE_GAP, response.reasonCode());
+	}
 }

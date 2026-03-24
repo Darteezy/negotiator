@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import org.GLM.negoriator.application.NegotiationApplicationService;
 import org.GLM.negoriator.application.NegotiationDefaults;
+import org.GLM.negoriator.application.StrategyMetadata;
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationParty;
 import org.GLM.negoriator.domain.NegotiationSession;
@@ -115,6 +116,7 @@ public class NegotiationController {
 	public record SessionDefaultsResponse(
 		String defaultStrategy,
 		List<String> availableStrategies,
+		List<StrategyDetailsResponse> strategyDetails,
 		int maxRounds,
 		BigDecimal riskOfWalkaway,
 		BuyerProfileResponse buyerProfile,
@@ -132,6 +134,7 @@ public class NegotiationController {
 			return new SessionDefaultsResponse(
 				defaultStrategy.name(),
 				Arrays.stream(NegotiationStrategy.values()).map(Enum::name).toList(),
+				StrategyMetadata.all().stream().map(StrategyDetailsResponse::from).toList(),
 				maxRounds,
 				riskOfWalkaway,
 				BuyerProfileResponse.from(buyerProfile),
@@ -215,6 +218,7 @@ public class NegotiationController {
 		SupplierModelResponse supplierModel,
 		List<NegotiationRoundResponse> rounds,
 		List<StrategyHistoryResponse> strategyHistory,
+		List<StrategyDetailsResponse> strategyDetails,
 		List<ConversationEventResponse> conversation
 	) {
 			static NegotiationSessionResponse from(NegotiationSession session) {
@@ -243,9 +247,27 @@ public class NegotiationController {
 					SupplierModelResponse.from(session.initialSupplierModel()),
 					rounds,
 					strategyHistory,
+					StrategyMetadata.all().stream().map(StrategyDetailsResponse::from).toList(),
 					conversation);
 			}
 		}
+
+	public record StrategyDetailsResponse(
+		String name,
+		String label,
+		String summary,
+		String concessionStyle,
+		String boundaryStyle
+	) {
+		static StrategyDetailsResponse from(StrategyMetadata.StrategyDescriptor descriptor) {
+			return new StrategyDetailsResponse(
+				descriptor.name(),
+				descriptor.label(),
+				descriptor.summary(),
+				descriptor.concessionStyle(),
+				descriptor.boundaryStyle());
+		}
+	}
 
 	public record StrategyHistoryResponse(
 		int roundNumber,

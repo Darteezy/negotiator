@@ -159,9 +159,18 @@ export interface ApiStrategyHistory {
   at: string;
 }
 
+export interface ApiStrategyDetails {
+  name: string;
+  label: string;
+  summary: string;
+  concessionStyle: string;
+  boundaryStyle: string;
+}
+
 export interface ApiSessionDefaults {
   defaultStrategy: string;
   availableStrategies: string[];
+  strategyDetails: ApiStrategyDetails[];
   maxRounds: number;
   riskOfWalkaway: number;
   buyerProfile: ApiBuyerProfile;
@@ -180,5 +189,6 @@ export interface ApiNegotiationSession {
   buyerProfile: ApiBuyerProfile;
   bounds: ApiBounds;
   strategyHistory: ApiStrategyHistory[];
+  strategyDetails: ApiStrategyDetails[];
   conversation: ApiConversationEvent[];
 }

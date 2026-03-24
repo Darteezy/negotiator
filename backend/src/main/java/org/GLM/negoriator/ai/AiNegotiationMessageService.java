@@ -3,6 +3,7 @@ package org.GLM.negoriator.ai;
 import java.util.List;
 import java.util.Locale;
 
+import org.GLM.negoriator.application.StrategyMetadata;
 import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.negotiation.NegotiationEngine.DecisionReason;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationIssue;
@@ -27,13 +28,15 @@ public class AiNegotiationMessageService {
 	}
 
 	public String composeOpeningMessage(NegotiationSession session) {
+		StrategyMetadata.StrategyDescriptor descriptor = StrategyMetadata.describe(session.getStrategy());
 		String systemPrompt = "You write procurement negotiation chat messages for the buyer. "
 			+ "Use a professional, polite email/chat hybrid tone. "
 			+ "Write one short sentence. A brief greeting at the start is allowed. "
 			+ "No sign-off, no markdown. "
+			+ descriptor.openingPromptGuidance() + " "
 			+ "Ask the supplier for an opening offer covering price, payment days, delivery days, and contract length.";
 
-		String userPrompt = "Current buyer strategy: " + session.getStrategy().name()
+		String userPrompt = "Current buyer strategy: " + descriptor.label() + " (" + session.getStrategy().name() + ")"
 			+ ". Negotiation round: " + session.getCurrentRound()
 			+ " of " + session.getMaxRounds()
 			+ ". Write the buyer's opening request.";
@@ -42,21 +45,36 @@ public class AiNegotiationMessageService {
 	}
 
 	public String composeBuyerReply(BuyerReplyMessageRequest request) {
+		StrategyMetadata.StrategyDescriptor descriptor = StrategyMetadata.describe(request.strategy());
+		boolean allowMesoOptionList = request.strategy() == NegotiationStrategy.MESO
+			&& request.counterOffers() != null
+			&& request.counterOffers().size() > 1
+			&& "COUNTER".equalsIgnoreCase(request.decision());
 		String systemPrompt = "You write buyer-side negotiation messages for a live procurement discussion. "
 			+ "Use a professional, polite email/chat hybrid tone. "
-			+ "Write 2 to 4 short sentences in a single paragraph. "
+			+ (allowMesoOptionList
+				? "Write a short intro followed by a dotted list with one concise option per bullet. "
+				: "Write 2 to 4 short sentences in a single paragraph. ")
 			+ "A brief greeting at the start is allowed when it feels natural. "
-			+ "No sign-off, no markdown, no bullet points. "
+			+ (allowMesoOptionList
+				? "No sign-off. Markdown bullet points are allowed only for the option list. "
+				: "No sign-off, no markdown, no bullet points. ")
 			+ "Do not mention internal strategy names, utilities, reason codes, algorithms, or reservation logic. "
+			+ descriptor.replyPromptGuidance() + " "
+			+ "If the supplier offer is close but still outside the buyer range, keep the message constructive and steer the supplier back inside workable terms. "
 			+ "If countering, clearly state the buyer position and invite the supplier to respond. "
+			+ (allowMesoOptionList
+				? "For MESO multi-option counters, keep the intro short and present each option as its own bullet. "
+				: "")
 			+ "If accepting, clearly confirm the agreement. "
 			+ "If rejecting, close respectfully and state that the offer is outside the buyer's workable range.";
 
 		String userPrompt = "Buyer decision: " + request.decision() + "\n"
 			+ "Negotiation status after reply: " + request.resultingStatus() + "\n"
 			+ "Round: " + request.roundNumber() + " of " + request.maxRounds() + "\n"
-			+ "Internal buyer strategy context: " + request.strategy().name() + "\n"
+			+ "Internal buyer strategy context: " + descriptor.label() + " (" + request.strategy().name() + ")\n"
 			+ "Internal strategy rationale: " + blankIfMissing(request.strategyRationale()) + "\n"
+			+ "Strategy boundary posture: " + descriptor.boundaryStyle() + "\n"
 			+ "Fallback message intent: " + request.fallbackMessage() + "\n"
 			+ "Supplier message: " + blankIfMissing(request.supplierMessage()) + "\n"
 			+ "Supplier terms: " + formatTerms(request.supplierTerms()) + "\n"
@@ -91,7 +109,20 @@ public class AiNegotiationMessageService {
 			normalized = normalized.substring(1, normalized.length() - 1).trim();
 		}
 
-		return normalized.replaceAll("\\s+", " ");
+		String[] lines = normalized.split("\\R", -1);
+		StringBuilder sb = new StringBuilder();
+		for (String line : lines) {
+			String cleanedLine = line.replaceAll("[\\t ]+", " ").trim();
+			if (cleanedLine.isEmpty()) {
+				continue;
+			}
+			if (!sb.isEmpty()) {
+				sb.append('\n');
+			}
+			sb.append(cleanedLine);
+		}
+
+		return sb.toString();
 	}
 
 	private String formatTerms(OfferVector terms) {

@@ -7,7 +7,6 @@ import jakarta.persistence.EntityNotFoundException;
 
 import org.GLM.negoriator.ai.AiNegotiationMessageService;
 import org.GLM.negoriator.ai.AiNegotiationMessageService.BuyerReplyMessageRequest;
-import org.GLM.negoriator.ai.AiStrategyAdvisor;
 import org.GLM.negoriator.domain.BuyerProfileSnapshot;
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationDecisionType;
@@ -45,7 +44,6 @@ public class NegotiationApplicationService {
 	public NegotiationApplicationService(
 		NegotiationSessionRepository sessionRepository,
 		NegotiationEngine negotiationEngine,
-		AiStrategyAdvisor aiStrategyAdvisor,
 		AiNegotiationMessageService aiNegotiationMessageService
 	) {
 		this.sessionRepository = sessionRepository;
@@ -71,7 +69,7 @@ public class NegotiationApplicationService {
 			null,
 			command.strategy(),
 			NegotiationStrategyChangeTrigger.INITIAL_SELECTION,
-			"Session started with " + command.strategy().name() + " as the configured opening strategy."));
+			StrategyMetadata.initialSelectionRationale(command.strategy())));
 		session.updateOpeningMessage(aiNegotiationMessageService.composeOpeningMessage(session));
 
 		return sessionRepository.saveAndFlush(session);
@@ -124,9 +122,7 @@ public class NegotiationApplicationService {
 				command.strategy(),
 				session.getCurrentRound(),
 				NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION,
-				"Session settings updated manually. Upcoming rounds will use "
-					+ command.strategy().name()
-					+ ".");
+				StrategyMetadata.manualChangeRationale(command.strategy()));
 		}
 
 		return sessionRepository.saveAndFlush(session);
@@ -232,7 +228,7 @@ public class NegotiationApplicationService {
 			response.reasonCode(),
 			response.focusIssue(),
 			session.getStrategy(),
-			"Baseline policy remained active for this round.",
+			StrategyMetadata.rationaleFor(session.getStrategy()),
 			response.evaluation(),
 			response.explanation()));
 
@@ -247,7 +243,7 @@ public class NegotiationApplicationService {
 			response.reasonCode(),
 			response.focusIssue(),
 			session.getStrategy(),
-			"Baseline policy remained active for this round.",
+			StrategyMetadata.rationaleFor(session.getStrategy()),
 			buyerMessage));
 		session.moveTo(NegotiationSessionStatus.from(response.nextState()));
 
