@@ -187,7 +187,7 @@ function App() {
       const nextSession = await submitSupplierOffer(session.id, {
         ...parsedDraft.terms,
         supplierMessage: messageDraft.trim(),
-      });
+      }, session.sessionToken);
       setSubmittedSupplierMessages((currentMessages) => [
         ...currentMessages,
         messageDraft.trim(),

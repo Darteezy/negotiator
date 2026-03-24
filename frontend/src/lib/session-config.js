@@ -149,7 +149,9 @@ export function buildStartSessionPayload(config, defaults) {
   const reservationOffer = parseOffer(config.reservationOffer);
 
   return {
+    strategy: defaults.defaultStrategy,
     maxRounds: Number.parseInt(config.maxRounds, 10),
+    riskOfWalkaway: Number(defaults.riskOfWalkaway),
     buyerProfile: {
       idealOffer,
       reservationOffer,
@@ -160,6 +162,33 @@ export function buildStartSessionPayload(config, defaults) {
         contractMonths: Number(defaults.buyerProfile.weights.contractMonths),
       },
       reservationUtility: Number(defaults.buyerProfile.reservationUtility),
+    },
+    bounds: {
+      minPrice: Number(defaults.bounds.minPrice),
+      maxPrice: Number(defaults.bounds.maxPrice),
+      minPaymentDays: Number(defaults.bounds.minPaymentDays),
+      maxPaymentDays: Number(defaults.bounds.maxPaymentDays),
+      minDeliveryDays: Number(defaults.bounds.minDeliveryDays),
+      maxDeliveryDays: Number(defaults.bounds.maxDeliveryDays),
+      minContractMonths: Number(defaults.bounds.minContractMonths),
+      maxContractMonths: Number(defaults.bounds.maxContractMonths),
+    },
+    supplierModel: {
+      archetypeBeliefs: {
+        MARGIN_FOCUSED: Number(
+          defaults.supplierModel.archetypeBeliefs.MARGIN_FOCUSED,
+        ),
+        CASHFLOW_FOCUSED: Number(
+          defaults.supplierModel.archetypeBeliefs.CASHFLOW_FOCUSED,
+        ),
+        OPERATIONS_FOCUSED: Number(
+          defaults.supplierModel.archetypeBeliefs.OPERATIONS_FOCUSED,
+        ),
+        STABILITY_FOCUSED: Number(
+          defaults.supplierModel.archetypeBeliefs.STABILITY_FOCUSED,
+        ),
+      },
+      reservationUtility: Number(defaults.supplierModel.reservationUtility),
     },
   };
 }

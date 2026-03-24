@@ -1,0 +1,126 @@
+package org.GLM.negoriator.controller;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.UUID;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.GLM.negoriator.domain.NegotiationSessionRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+@SpringBootTest(properties = {
+	"spring.datasource.url=jdbc:h2:mem:negotiator-controller-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+	"spring.datasource.driverClassName=org.h2.Driver",
+	"spring.datasource.username=sa",
+	"spring.datasource.password=",
+	"spring.jpa.hibernate.ddl-auto=create-drop",
+	"spring.jpa.open-in-view=false"
+})
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class NegotiationControllerTest {
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private ObjectMapper objectMapper;
+
+	@Autowired
+	private NegotiationSessionRepository sessionRepository;
+
+	@AfterEach
+	void cleanUp() {
+		sessionRepository.deleteAll();
+	}
+
+	@Test
+	void startSessionHonorsCustomConfigurationAndRequiresSessionTokenForReads() throws Exception {
+		String requestBody = """
+			{
+			  "strategy": "BOULWARE",
+			  "maxRounds": 9,
+			  "riskOfWalkaway": 0.35,
+			  "buyerProfile": {
+			    "idealOffer": {
+			      "price": 91.00,
+			      "paymentDays": 75,
+			      "deliveryDays": 8,
+			      "contractMonths": 4
+			    },
+			    "reservationOffer": {
+			      "price": 125.00,
+			      "paymentDays": 35,
+			      "deliveryDays": 25,
+			      "contractMonths": 20
+			    },
+			    "weights": {
+			      "price": 0.45,
+			      "paymentDays": 0.20,
+			      "deliveryDays": 0.20,
+			      "contractMonths": 0.15
+			    },
+			    "reservationUtility": 0.30
+			  },
+			  "bounds": {
+			    "minPrice": 80.00,
+			    "maxPrice": 130.00,
+			    "minPaymentDays": 30,
+			    "maxPaymentDays": 90,
+			    "minDeliveryDays": 7,
+			    "maxDeliveryDays": 30,
+			    "minContractMonths": 3,
+			    "maxContractMonths": 24
+			  },
+			  "supplierModel": {
+			    "archetypeBeliefs": {
+			      "MARGIN_FOCUSED": 0.40,
+			      "CASHFLOW_FOCUSED": 0.20,
+			      "OPERATIONS_FOCUSED": 0.25,
+			      "STABILITY_FOCUSED": 0.15
+			    },
+			    "reservationUtility": 0.55
+			  }
+			}
+			""";
+
+		MvcResult createResult = mockMvc.perform(post("/api/negotiations/sessions")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(requestBody))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.strategy").value("BOULWARE"))
+			.andExpect(jsonPath("$.maxRounds").value(9))
+			.andExpect(jsonPath("$.riskOfWalkaway").value(0.35))
+			.andExpect(jsonPath("$.bounds.maxPrice").value(130.00))
+			.andExpect(jsonPath("$.supplierModel.reservationUtility").value(0.55))
+			.andReturn();
+
+		JsonNode responseJson = objectMapper.readTree(createResult.getResponse().getContentAsString());
+		UUID sessionId = UUID.fromString(responseJson.get("id").asText());
+		String sessionToken = responseJson.get("sessionToken").asText();
+
+		assertFalse(sessionToken.isBlank());
+
+		mockMvc.perform(get("/api/negotiations/sessions/{sessionId}", sessionId))
+			.andExpect(status().isForbidden());
+
+		mockMvc.perform(get("/api/negotiations/sessions/{sessionId}", sessionId)
+				.header(SessionAccessGuard.SESSION_TOKEN_HEADER, sessionToken))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.id").value(sessionId.toString()))
+			.andExpect(jsonPath("$.sessionToken").value(sessionToken));
+	}
+}

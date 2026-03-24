@@ -223,35 +223,41 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         return acceptanceExplanation(buyerUtility, targetUtility, DecisionReason.TARGET_UTILITY_MET);
     }
 
-    private String acceptanceExplanation(
-            BigDecimal buyerUtility,
-            BigDecimal targetUtility,
+	    private String acceptanceExplanation(
+	            BigDecimal buyerUtility,
+	            BigDecimal targetUtility,
             DecisionReason reasonCode
     ) {
         if (reasonCode == DecisionReason.FINAL_ROUND_WITHIN_LIMITS) {
             return "Accepted because the final round was reached and the supplier offer stays within the buyer's configured limits.";
         }
 
-        return "Accepted because the offer reached buyer utility "
-                + buyerUtility
-                + ", which meets the current round target of "
-                + targetUtility
-                + ".";
-    }
+	        return "Accepted because the offer reached buyer utility "
+	                + buyerUtility
+	                + ", which meets the current round target of "
+	                + targetUtility
+	                + ".";
+	    }
 
     private String counterExplanation(
             BigDecimal buyerUtility,
             BigDecimal targetUtility,
             NegotiationIssue issue
     ) {
-        return "Countered because the offer is still below the current target. Buyer utility is "
-                + buyerUtility
-                + " versus a target of "
-                + targetUtility
-                + ". The counteroffer changes "
-                + humanIssueName(issue)
-                + " because it is the most important remaining gap for the buyer.";
-    }
+	        return "Countered because the offer is still below the current target. Buyer utility is "
+	                + buyerUtility
+	                + " versus a target of "
+	                + targetUtility
+	                + ". The counteroffer changes "
+	                + humanIssueName(issue)
+	                + " because it is the most important remaining gap for the buyer.";
+	    }
+
+	    private String rejectionExplanation(BigDecimal buyerUtility) {
+	        return "Rejected because the offer only reached buyer utility "
+	                + buyerUtility
+	                + ", which remains below the buyer's reservation floor.";
+	    }
 
     private OfferVector tuneCounterOffer(
             OfferVector counterOffer,
@@ -458,12 +464,6 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         return increase;
-    }
-
-    private String rejectionExplanation(BigDecimal buyerUtility) {
-        return "Rejected because buyer utility "
-                + buyerUtility
-                + " is outside the buyer's configured term limits.";
     }
 
     private String reservationLimitExplanation(OfferVector offer, OfferVector reservationOffer) {

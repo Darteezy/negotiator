@@ -4,6 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import jakarta.annotation.PreDestroy;
 
 import org.GLM.negoriator.application.NegotiationSimulationService;
 import org.GLM.negoriator.application.NegotiationSimulationService.SimulationConfig;
@@ -13,14 +17,18 @@ import org.GLM.negoriator.application.NegotiationSimulationService.SimulationRou
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
@@ -28,7 +36,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class SimulationController {
 
 	private static final Logger log = LoggerFactory.getLogger(SimulationController.class);
-	private static final ExecutorService STREAM_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
 	private static final List<String> STRESS_PERSONALITIES = List.of(
 		"Professional but firm. You make reasonable concessions but push back on aggressive buyer positions.",
@@ -40,13 +47,40 @@ public class SimulationController {
 	);
 
 	private final NegotiationSimulationService simulationService;
+	private final AdminApiGuard adminApiGuard;
+	private final ExecutorService streamExecutor;
+	private final Semaphore activeStreams;
+	private final long streamTimeoutMs;
+	private final int maxBatchSize;
 
-	public SimulationController(NegotiationSimulationService simulationService) {
+	public SimulationController(
+		NegotiationSimulationService simulationService,
+		AdminApiGuard adminApiGuard,
+		@Value("${negotiator.simulations.max-concurrent-streams:4}") int maxConcurrentStreams,
+		@Value("${negotiator.simulations.stream-timeout-ms:60000}") long streamTimeoutMs,
+		@Value("${negotiator.simulations.max-batch-size:6}") int maxBatchSize
+	) {
 		this.simulationService = simulationService;
+		this.adminApiGuard = adminApiGuard;
+		int boundedConcurrency = Math.max(1, maxConcurrentStreams);
+		this.streamExecutor = Executors.newFixedThreadPool(boundedConcurrency);
+		this.activeStreams = new Semaphore(boundedConcurrency);
+		this.streamTimeoutMs = Math.max(1_000L, streamTimeoutMs);
+		this.maxBatchSize = Math.max(1, maxBatchSize);
+	}
+
+	@PreDestroy
+	void shutdownExecutor() {
+		streamExecutor.shutdown();
 	}
 
 	@PostMapping
-	public ResponseEntity<SimulationResult> runSimulation(@RequestBody(required = false) SimulationRequest request) {
+	public ResponseEntity<SimulationResult> runSimulation(
+		@RequestHeader(name = AdminApiGuard.ADMIN_TOKEN_HEADER, required = false) String adminToken,
+		@RequestBody(required = false) SimulationRequest request
+	) {
+		adminApiGuard.assertAuthorized(adminToken);
+
 		NegotiationStrategy strategy = null;
 		String personality = null;
 
@@ -60,7 +94,7 @@ public class SimulationController {
 		SimulationConfig config = SimulationConfig.of(
 			strategy,
 			personality,
-			request != null ? request.maxRounds() : null);
+			validateMaxRounds(request != null ? request.maxRounds() : null));
 
 		log.info("Starting simulation: strategy={}, personality='{}'", config.strategy(), config.supplierPersonality());
 
@@ -71,20 +105,41 @@ public class SimulationController {
 
 	@GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	public SseEmitter streamSimulation(
+		@RequestParam(name = "token", required = false) String adminToken,
 		@RequestParam(required = false) String strategy,
 		@RequestParam(required = false) String supplierPersonality,
 		@RequestParam(required = false) Integer maxRounds
 	) {
+		adminApiGuard.assertAuthorized(adminToken);
+
+		if (!activeStreams.tryAcquire()) {
+			throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many simulation streams are already active.");
+		}
+
 		SimulationConfig config = SimulationConfig.of(
 			strategy != null && !strategy.isBlank() ? NegotiationStrategy.valueOf(strategy.toUpperCase()) : null,
 			supplierPersonality,
-			maxRounds);
+			validateMaxRounds(maxRounds));
 
-		SseEmitter emitter = new SseEmitter(0L);
-		emitter.onTimeout(emitter::complete);
-		emitter.onCompletion(() -> log.info("Simulation stream completed"));
+		SseEmitter emitter = new SseEmitter(streamTimeoutMs);
+		AtomicBoolean streamReleased = new AtomicBoolean(false);
+		Runnable releaseStream = () -> {
+			if (streamReleased.compareAndSet(false, true)) {
+				activeStreams.release();
+			}
+		};
+		emitter.onTimeout(() -> {
+			log.warn("Simulation stream timed out");
+			releaseStream.run();
+			emitter.complete();
+		});
+		emitter.onCompletion(() -> {
+			releaseStream.run();
+			log.info("Simulation stream completed");
+		});
+		emitter.onError(error -> releaseStream.run());
 
-		STREAM_EXECUTOR.submit(() -> {
+		streamExecutor.submit(() -> {
 			try {
 				simulationService.runSimulation(config, new StreamingSimulationListener(emitter));
 				emitter.complete();
@@ -92,6 +147,8 @@ public class SimulationController {
 				log.error("Simulation stream failed: {}", e.getMessage(), e);
 				sendEvent(emitter, "failed", new FailedEvent(e.getMessage()));
 				emitter.completeWithError(e);
+			} finally {
+				releaseStream.run();
 			}
 		});
 
@@ -99,7 +156,12 @@ public class SimulationController {
 	}
 
 	@PostMapping("/batch")
-	public ResponseEntity<BatchResult> runBatch(@RequestBody(required = false) BatchRequest request) {
+	public ResponseEntity<BatchResult> runBatch(
+		@RequestHeader(name = AdminApiGuard.ADMIN_TOKEN_HEADER, required = false) String adminToken,
+		@RequestBody(required = false) BatchRequest request
+	) {
+		adminApiGuard.assertAuthorized(adminToken);
+
 		NegotiationStrategy strategy = request != null && request.strategy() != null && !request.strategy().isBlank()
 			? NegotiationStrategy.valueOf(request.strategy().toUpperCase())
 			: null;
@@ -107,6 +169,10 @@ public class SimulationController {
 		List<String> personalities = request != null && request.personalities() != null && !request.personalities().isEmpty()
 			? request.personalities()
 			: STRESS_PERSONALITIES;
+
+		if (personalities.size() > maxBatchSize) {
+			throw new IllegalArgumentException("Batch simulations are limited to " + maxBatchSize + " personalities per request.");
+		}
 
 		List<SimulationResult> results = new ArrayList<>();
 		List<String> allAnomalies = new ArrayList<>();
@@ -207,5 +273,17 @@ public class SimulationController {
 	}
 
 	record FailedEvent(String message) {
+	}
+
+	private Integer validateMaxRounds(Integer maxRounds) {
+		if (maxRounds == null) {
+			return null;
+		}
+
+		if (maxRounds <= 0 || maxRounds > 20) {
+			throw new IllegalArgumentException("maxRounds must be between 1 and 20.");
+		}
+
+		return maxRounds;
 	}
 }

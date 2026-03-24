@@ -1,6 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/negotiations";
 const AI_BASE = "/api/ai";
 const SIMULATION_BASE = "/api/simulations";
+const ADMIN_TOKEN = import.meta.env.VITE_NEGOTIATOR_ADMIN_TOKEN ?? "";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -36,13 +37,16 @@ export function startSession(payload) {
   });
 }
 
-export function fetchSession(sessionId) {
-  return request(`/sessions/${sessionId}`);
+export function fetchSession(sessionId, sessionToken) {
+  return request(`/sessions/${sessionId}`, {
+    headers: buildSessionHeaders(sessionToken),
+  });
 }
 
-export function submitSupplierOffer(sessionId, offer) {
+export function submitSupplierOffer(sessionId, offer, sessionToken) {
   return request(`/sessions/${sessionId}/offers`, {
     method: "POST",
+    headers: buildSessionHeaders(sessionToken),
     body: JSON.stringify(offer),
   });
 }
@@ -50,6 +54,7 @@ export function submitSupplierOffer(sessionId, offer) {
 export function parseSupplierOfferWithAi(payload) {
   return requestAbsolute(`${AI_BASE}/parse-offer`, {
     method: "POST",
+    headers: buildAdminHeaders(),
     body: JSON.stringify(payload),
   });
 }
@@ -57,6 +62,7 @@ export function parseSupplierOfferWithAi(payload) {
 export function runSimulation(payload) {
   return requestAbsolute(SIMULATION_BASE, {
     method: "POST",
+    headers: buildAdminHeaders(),
     body: JSON.stringify(payload),
   });
 }
@@ -74,6 +80,10 @@ export function openSimulationStream(payload = {}) {
 
   if (payload.maxRounds) {
     params.set("maxRounds", String(payload.maxRounds));
+  }
+
+  if (ADMIN_TOKEN) {
+    params.set("token", ADMIN_TOKEN);
   }
 
   const query = params.toString();
@@ -103,4 +113,20 @@ async function requestAbsolute(path, options = {}) {
   }
 
   return payload;
+}
+
+function buildSessionHeaders(sessionToken) {
+  return sessionToken
+    ? {
+        "X-Session-Token": sessionToken,
+      }
+    : {};
+}
+
+function buildAdminHeaders() {
+  return ADMIN_TOKEN
+    ? {
+        "X-Admin-Token": ADMIN_TOKEN,
+      }
+    : {};
 }

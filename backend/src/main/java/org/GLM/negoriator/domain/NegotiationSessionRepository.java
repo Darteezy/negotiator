@@ -3,15 +3,19 @@ package org.GLM.negoriator.domain;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.data.jpa.repository.EntityGraph;
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface NegotiationSessionRepository extends JpaRepository<NegotiationSession, UUID> {
 
-	@EntityGraph(attributePaths = {
-		"decisions",
-		"decisions.supplierOffer",
-		"decisions.counterOffer"
-	})
-	Optional<NegotiationSession> findDetailedById(UUID id);
+	@Query("select session from NegotiationSession session where session.id = :id")
+	Optional<NegotiationSession> findDetailedById(@Param("id") UUID id);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select session from NegotiationSession session where session.id = :id")
+	Optional<NegotiationSession> findDetailedByIdForUpdate(@Param("id") UUID id);
 }

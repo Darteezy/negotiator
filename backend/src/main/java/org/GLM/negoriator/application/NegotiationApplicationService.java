@@ -76,6 +76,7 @@ public class NegotiationApplicationService {
 		NegotiationSession session = sessionRepository.findDetailedById(sessionId)
 			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));
 		session.getOffers().size();
+		session.getDecisions().size();
 		session.getStrategyChanges().size();
 		return session;
 	}
@@ -90,8 +91,11 @@ public class NegotiationApplicationService {
 		SupplierConstraintsSnapshot supplierConstraints,
 		String supplierMessage
 	) {
-		NegotiationSession session = sessionRepository.findById(sessionId)
+		NegotiationSession session = sessionRepository.findDetailedByIdForUpdate(sessionId)
 			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));
+		session.getOffers().size();
+		session.getDecisions().size();
+		session.getStrategyChanges().size();
 
 		if (session.isClosed()) {
 			throw new IllegalStateException("Negotiation session is closed: " + sessionId);
