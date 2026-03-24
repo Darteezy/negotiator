@@ -64,7 +64,7 @@ export function OfferCard({
             <summary
               className={`flex cursor-pointer list-none items-center gap-2 font-semibold text-[var(--ink-muted)] ${detailsSummaryAlignment}`}
             >
-              <span>Details</span>
+              <span>Details▼</span>
             </summary>
             <div className='mt-3 grid grid-cols-1 gap-2 md:grid-cols-2'>
               {detailRows.map((row) => (
