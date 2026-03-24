@@ -10,6 +10,7 @@ import { computeUtility, describeUtilityLevel } from "@/lib/utilityFunction";
 import type { BuyerPreferences, NegotiationState, OfferTerms, SupplierOfferInput } from "@/lib/types";
 import { ChatBubble, DetectedTerms } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
+import { RobotAvatar } from "@/components/RobotAvatar";
 import { OfferCard } from "@/components/OfferCard";
 
 interface Props {
@@ -256,9 +257,9 @@ export function ChatPage({ onStart }: Props) {
   // Render configuration phase
   if (!configComplete || !negotiationState) {
     return (
-      <div className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(14,124,102,0.12),_transparent_38%),linear-gradient(180deg,_rgba(255,252,245,0.94),_rgba(244,239,231,1))]">
+      <div className="flex h-screen flex-col overflow-hidden bg-[var(--page-bg)]">
         {/* Header */}
-        <div className="shrink-0 border-b border-[var(--line)] bg-white/80 px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--panel)] px-4 py-4 sm:px-6">
           <div className="mx-auto max-w-2xl flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-[var(--ink-strong)]">Negotiation Setup</h1>
@@ -268,7 +269,7 @@ export function ChatPage({ onStart }: Props) {
               <button
                 type="button"
                 onClick={() => window.location.href = "?mode=form"}
-                className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)] transition hover:bg-[var(--page-bg)]"
+                className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--accent)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--page-bg)] transition hover:bg-[var(--accent)]/90"
                 title="Switch to traditional form-based setup"
               >
                 Use forms
@@ -276,7 +277,7 @@ export function ChatPage({ onStart }: Props) {
               <button
                 type="button"
                 onClick={() => window.location.href = "?admin=true"}
-                className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--ink-soft)] transition hover:bg-[var(--page-bg)]"
+                className="flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--accent)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--page-bg)] transition hover:bg-[var(--accent)]/90"
                 title="Developer/Admin panel"
               >
                 ⚙
@@ -288,7 +289,7 @@ export function ChatPage({ onStart }: Props) {
         {/* Chat area */}
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto space-y-4 bg-gradient-to-b from-white/50 to-transparent px-4 py-4 sm:px-6"
+          className="min-h-0 flex-1 overflow-y-auto space-y-4 bg-[var(--page-bg)] px-4 py-4 sm:px-6"
         >
           <div className="mx-auto max-w-2xl space-y-4">
             {configMessages.map((msg) => (
@@ -300,7 +301,7 @@ export function ChatPage({ onStart }: Props) {
         </div>
 
         {/* Input area */}
-        <div className="shrink-0 border-t border-[var(--line)] bg-white px-4 py-4 sm:px-6">
+        <div className="shrink-0 border-t border-[var(--line)] bg-[var(--panel)] px-4 py-4 sm:px-6">
           <div className="mx-auto max-w-2xl space-y-3">
             {!configComplete ? (
               <ChatInput
@@ -317,7 +318,7 @@ export function ChatPage({ onStart }: Props) {
                 <button
                   type="button"
                   onClick={handleStartNegotiation}
-                  className="w-full rounded-full bg-[var(--accent)] px-4 py-3 font-bold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:-translate-y-0.5 uppercase tracking-wide"
+                  className="w-full rounded-full bg-[var(--accent)] px-4 py-3 font-bold text-[var(--page-bg)] shadow-lg shadow-[var(--accent)]/30 transition hover:-translate-y-0.5 uppercase tracking-wide"
                 >
                   <SendHorizontal className="mr-2 inline h-4 w-4" />
                   Start Negotiation

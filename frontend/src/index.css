@@ -3,22 +3,23 @@
 @import "tw-animate-css";
 
 :root {
-  --page-bg: #f4efe7;
-  --panel: rgba(255, 252, 245, 0.92);
-  --line: #ddcfbc;
-  --ink-strong: #1d2a2f;
-  --ink-muted: #5f6f77;
-  --ink-soft: #7f8f95;
-  --accent: #0e7c66;
-  --accent-soft: #e0f4ee;
-  --buyer-soft: #e6f4ef;
-  --buyer-ink: #116a58;
-  --supplier-soft: #fff1dc;
-  --supplier-ink: #9a5e1b;
-  --system-soft: #f1ebe2;
-  --system-ink: #5e5140;
-  --danger-soft: #fdeaea;
-  --danger-ink: #b44343;
+  /* New Design System */
+  --page-bg: #092330;
+  --panel: rgba(41, 59, 77, 0.95);
+  --line: #3a5066;
+  --ink-strong: #ebebe9;
+  --ink-muted: #b8b8b5;
+  --ink-soft: #98989a;
+  --accent: #a59080;
+  --accent-soft: rgba(165, 144, 128, 0.15);
+  --buyer-soft: rgba(165, 144, 128, 0.1);
+  --buyer-ink: #a59080;
+  --supplier-soft: rgba(165, 144, 128, 0.08);
+  --supplier-ink: #c9a89a;
+  --system-soft: rgba(165, 144, 128, 0.12);
+  --system-ink: #d4c4b8;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --danger-ink: #ff6b6b;
 }
 
 * {
@@ -36,10 +37,11 @@ body {
   margin: 0;
   min-width: 320px;
   font-family: "Manrope", sans-serif;
-  background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.9), transparent 42%),
-    radial-gradient(circle at 80% 10%, rgba(232, 247, 241, 0.7), transparent 36%),
-    radial-gradient(circle at 50% 80%, rgba(248, 234, 214, 0.7), transparent 40%),
+  background: radial-gradient(circle at 20% 20%, rgba(50, 70, 90, 0.3), transparent 42%),
+    radial-gradient(circle at 80% 10%, rgba(41, 59, 77, 0.3), transparent 36%),
+    radial-gradient(circle at 50% 80%, rgba(165, 144, 128, 0.1), transparent 40%),
     var(--page-bg);
+  color: var(--ink-strong);
 }
 
 button,

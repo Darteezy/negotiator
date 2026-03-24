@@ -65,7 +65,7 @@ export function ChatInput({
           disabled={disabled}
           placeholder={placeholder}
           rows={3}
-          className="w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm leading-6 text-[var(--ink-strong)] outline-none transition disabled:opacity-50 disabled:cursor-not-allowed focus:border-[var(--accent)]"
+          className="w-full rounded-2xl border border-[var(--line)] bg-[var(--page-bg)]/70 px-4 py-3 text-sm leading-6 text-[var(--ink-strong)] outline-none transition disabled:opacity-50 disabled:cursor-not-allowed focus:border-[var(--accent)]"
         />
       </div>
 
@@ -75,7 +75,7 @@ export function ChatInput({
         <button
           type="submit"
           disabled={disabled || !value.trim()}
-          className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-[var(--accent)]/20 transition disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-[var(--accent)]/30"
+          className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-[var(--page-bg)] shadow-md shadow-[var(--accent)]/20 transition disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-[var(--accent)]/30"
         >
           <SendHorizontal className="h-4 w-4" />
           Send

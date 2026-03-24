@@ -1,4 +1,5 @@
 import React from "react";
+import { RobotAvatar } from "./RobotAvatar";
 
 export interface ChatMessage {
   id: string;
@@ -64,11 +65,12 @@ export function ChatBubble({
 
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"} ${className}`}>
+      {!isUser && <RobotAvatar size="sm" />}
       <div
         className={`max-w-[70%] rounded-2xl px-4 py-3 ${
           isUser
             ? "bg-[var(--accent)] text-white"
-            : "border border-[var(--line)] bg-white text-[var(--ink-strong)]"
+            : "border border-[var(--line)] bg-[var(--panel)] text-[var(--ink-strong)]"
         }`}
       >
         <div className="text-sm leading-6">{children}</div>
@@ -79,7 +81,7 @@ export function ChatBubble({
             className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wide transition ${
               isUser
                 ? "bg-white/20 hover:bg-white/30"
-                : "bg-[var(--accent-soft)] text-[var(--accent)] hover:bg-[var(--accent-soft)]/80"
+                : "bg-[var(--accent)]/20 text-[var(--accent)] hover:bg-[var(--accent)]/30"
             }`}
           >
             {action.label}

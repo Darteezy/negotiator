@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, RotateCcw, Settings } from "lucide-react";
 import type { BuyerPreferences, NegotiationState, OfferTerms } from "@/lib/types";
 import { computeUtility } from "@/lib/utilityFunction";
 import { startNegotiation, processSupplierOffer } from "@/lib/negotiationEngine";
+import { RobotAvatar } from "@/components/RobotAvatar";
 
 /**
  * Admin/Developer Page for Negotiation System
@@ -97,10 +98,10 @@ export function AdminPage() {
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--ink-strong)]">
       {/* Header */}
-      <div className="border-b border-[var(--line)] bg-white px-6 py-4 shadow-sm">
+      <div className="border-b border-[var(--line)] bg-[var(--panel)] px-6 py-4 shadow-sm">
         <div className="mx-auto max-w-7xl">
-          <div className="flex items-center gap-3">
-            <Settings className="h-6 w-6 text-[var(--accent)]" />
+          <div className="flex items-center gap-4">
+            <RobotAvatar size="md" />
             <div>
               <h1 className="text-2xl font-bold">Admin Panel</h1>
               <p className="text-sm text-[var(--ink-muted)]">
@@ -140,7 +141,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("price.preferred", parseFloat(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] bg-[var(--page-bg)]/70 px-3 py-2 text-sm text-[var(--ink-strong)]"
                       />
                     </div>
                     <div>
@@ -153,7 +154,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("price.max", parseFloat(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] bg-[var(--page-bg)]/70 px-3 py-2 text-sm text-[var(--ink-strong)]"
                       />
                     </div>
                   </div>
@@ -175,7 +176,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("paymentDays.preferred", parseInt(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                       />
                     </div>
                     <div>
@@ -188,7 +189,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("paymentDays.max", parseInt(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                       />
                     </div>
                   </div>
@@ -210,7 +211,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("deliveryDays.preferred", parseInt(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                       />
                     </div>
                     <div>
@@ -223,7 +224,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("deliveryDays.max", parseInt(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                       />
                     </div>
                   </div>
@@ -245,7 +246,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("contractMonths.min", parseInt(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                       />
                     </div>
                     <div>
@@ -261,7 +262,7 @@ export function AdminPage() {
                             parseInt(e.target.value)
                           )
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                       />
                     </div>
                     <div>
@@ -274,7 +275,7 @@ export function AdminPage() {
                         onChange={(e) =>
                           updateProfileField("contractMonths.max", parseInt(e.target.value))
                         }
-                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                        className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                       />
                     </div>
                   </div>
@@ -430,7 +431,7 @@ export function AdminPage() {
                     onChange={(e) =>
                       updateProfileField("maxRounds", parseInt(e.target.value))
                     }
-                    className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm"
+                    className="w-full rounded border border-[var(--line)] px-3 py-2 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                   />
                 </ConfigField>
               </div>
@@ -456,7 +457,7 @@ export function AdminPage() {
                           price: parseFloat(e.target.value),
                         }))
                       }
-                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm"
+                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                     />
                   </div>
                   <div>
@@ -470,7 +471,7 @@ export function AdminPage() {
                           paymentDays: parseInt(e.target.value),
                         }))
                       }
-                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm"
+                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                     />
                   </div>
                   <div>
@@ -484,7 +485,7 @@ export function AdminPage() {
                           deliveryDays: parseInt(e.target.value),
                         }))
                       }
-                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm"
+                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                     />
                   </div>
                   <div>
@@ -498,13 +499,13 @@ export function AdminPage() {
                           contractMonths: parseInt(e.target.value),
                         }))
                       }
-                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm"
+                      className="w-full rounded border border-[var(--line)] px-2 py-1 text-sm text-[var(--ink-strong)] bg-[var(--page-bg)]/70"
                     />
                   </div>
                 </div>
 
                 {/* Utility Breakdown */}
-                <div className="rounded-lg border border-[var(--line)] bg-white p-4">
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4">
                   <h4 className="text-sm font-bold mb-4">Utility Breakdown</h4>
                   <div className="space-y-3">
                     <UtilityBar
@@ -567,7 +568,7 @@ export function AdminPage() {
                 {!negotiationState && (
                   <button
                     onClick={handleStartNegotiation}
-                    className="w-full rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-white transition hover:bg-[var(--accent)]/90"
+                    className="w-full rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--page-bg)] transition hover:bg-[var(--accent)]/90"
                   >
                     Start Live Negotiation with This Config
                   </button>
@@ -690,7 +691,7 @@ export function AdminPage() {
         </div>
 
         {/* Footer */}
-        <div className="mt-12 rounded-lg border border-[var(--line)] bg-white p-6">
+        <div className="mt-12 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-6">
           <h3 className="font-bold text-sm mb-2">Negotiation Engine Architecture</h3>
           <div className="grid gap-4 text-xs text-[var(--ink-muted)] lg:grid-cols-2">
             <div>
@@ -743,10 +744,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden shadow-sm">
+    <div className="rounded-lg border border-[var(--line)] bg-[var(--panel)] overflow-hidden shadow-sm">
       <button
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[var(--page-bg)] transition"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[var(--page-bg)]/50 transition"
       >
         <div className="text-left">
           <h3 className="font-bold text-sm text-[var(--ink-strong)]">{title}</h3>
