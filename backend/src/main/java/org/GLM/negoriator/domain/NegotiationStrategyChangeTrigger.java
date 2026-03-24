@@ -2,6 +2,7 @@ package org.GLM.negoriator.domain;
 
 public enum NegotiationStrategyChangeTrigger {
 	INITIAL_SELECTION,
+	MANUAL_CONFIGURATION,
 	DEADLINE_PRESSURE,
 	STALLED_NEGOTIATION,
 	RECIPROCAL_PROGRESS,

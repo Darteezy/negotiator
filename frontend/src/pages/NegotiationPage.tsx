@@ -6,7 +6,11 @@ import {
   SendHorizontal,
 } from "lucide-react";
 import { OfferCard } from "@/components/OfferCard";
-import { parseSupplierOffer, submitSupplierOffer } from "@/lib/negotiationApi";
+import {
+  parseSupplierOffer,
+  submitSupplierOffer,
+  updateNegotiationSettings,
+} from "@/lib/negotiationApi";
 import type {
   ApiConversationEvent,
   ApiNegotiationSession,
@@ -26,12 +30,18 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
   const [chatError, setChatError] = useState("");
   const [settingsError, setSettingsError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [applyingSettings, setApplyingSettings] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState(() =>
     createSettingsDraft(initialSession),
   );
-  const [appliedSettings, setAppliedSettings] =
-    useState<AppliedSettings | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setSession(initialSession);
+    setSettingsDraft(createSettingsDraft(initialSession));
+    setChatError("");
+    setSettingsError("");
+  }, [initialSession]);
 
   useEffect(() => {
     if (!scrollRef.current) {
@@ -76,7 +86,7 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
         supplierMessage: message,
       });
 
-      setSession(mergeAppliedSettings(nextSession, appliedSettings));
+      setSession(nextSession);
       setSupplierMessage("");
     } catch (nextError) {
       setChatError(
@@ -107,7 +117,7 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
     }));
   }
 
-  function handleApplySettings() {
+  async function handleApplySettings() {
     const parsed = parseAppliedSettings(settingsDraft);
     if (!parsed) {
       setSettingsError(
@@ -117,13 +127,33 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
     }
 
     setSettingsError("");
-    setAppliedSettings(parsed);
-    setSession((current) =>
-      mergeAppliedSettings(current, parsed, {
-        message:
-          "Updated interface settings for upcoming rounds. Backend persistence will be connected in the next phase.",
-      }),
-    );
+
+    try {
+      setApplyingSettings(true);
+      const nextSession = await updateNegotiationSettings(session.id, {
+        strategy: parsed.strategy,
+        maxRounds: parsed.maxRounds,
+        riskOfWalkaway: parsed.riskOfWalkaway,
+        buyerProfile: {
+          idealOffer: parsed.idealOffer,
+          reservationOffer: parsed.reservationOffer,
+          weights: parsed.weights,
+          reservationUtility: session.buyerProfile.reservationUtility,
+        },
+        bounds: parsed.bounds,
+      });
+
+      setSession(nextSession);
+      setSettingsDraft(createSettingsDraft(nextSession));
+    } catch (nextError) {
+      setSettingsError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Could not apply session settings.",
+      );
+    } finally {
+      setApplyingSettings(false);
+    }
   }
 
   const lastBuyerEvent = [...session.conversation]
@@ -234,9 +264,10 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
           <button
             type='button'
             onClick={handleApplySettings}
+            disabled={applyingSettings || session.closed}
             className='rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/25 transition hover:-translate-y-0.5'
           >
-            Apply
+            {applyingSettings ? "Applying..." : "Apply"}
           </button>
           <button
             type='button'
@@ -595,54 +626,6 @@ function parseOfferTerms(terms: Record<keyof OfferTerms, string>): OfferTerms {
     paymentDays: Number(terms.paymentDays),
     deliveryDays: Number(terms.deliveryDays),
     contractMonths: Number(terms.contractMonths),
-  };
-}
-
-function mergeAppliedSettings(
-  session: ApiNegotiationSession,
-  appliedSettings: AppliedSettings | null,
-  systemMessage?: { message: string },
-): ApiNegotiationSession {
-  if (!appliedSettings) {
-    return systemMessage
-      ? {
-          ...session,
-          conversation: [
-            ...session.conversation,
-            createSystemEvent(systemMessage.message),
-          ],
-        }
-      : session;
-  }
-
-  return {
-    ...session,
-    strategy: appliedSettings.strategy,
-    maxRounds: appliedSettings.maxRounds,
-    riskOfWalkaway: appliedSettings.riskOfWalkaway,
-    buyerProfile: {
-      ...session.buyerProfile,
-      idealOffer: appliedSettings.idealOffer,
-      reservationOffer: appliedSettings.reservationOffer,
-      weights: appliedSettings.weights,
-    },
-    bounds: appliedSettings.bounds,
-    conversation: systemMessage
-      ? [...session.conversation, createSystemEvent(systemMessage.message)]
-      : session.conversation,
-  };
-}
-
-function createSystemEvent(message: string): ApiConversationEvent {
-  return {
-    eventType: "SETTINGS_UPDATE",
-    actor: "system",
-    title: "Settings updated",
-    message,
-    at: new Date().toISOString(),
-    terms: null,
-    counterOffers: [],
-    debug: null,
   };
 }
 

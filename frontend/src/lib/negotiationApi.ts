@@ -26,6 +26,19 @@ interface StartSessionPayload {
   };
 }
 
+interface UpdateSessionSettingsPayload extends StartSessionPayload {
+  bounds: {
+    minPrice: number;
+    maxPrice: number;
+    minPaymentDays: number;
+    maxPaymentDays: number;
+    minDeliveryDays: number;
+    maxDeliveryDays: number;
+    minContractMonths: number;
+    maxContractMonths: number;
+  };
+}
+
 interface SubmitSupplierOfferPayload extends OfferTerms {
   supplierMessage?: string;
 }
@@ -102,6 +115,19 @@ export function submitSupplierOffer(
     `/api/negotiations/sessions/${sessionId}/offers`,
     {
       method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function updateNegotiationSettings(
+  sessionId: string,
+  payload: UpdateSessionSettingsPayload,
+) {
+  return requestJson<ApiNegotiationSession>(
+    `/api/negotiations/sessions/${sessionId}/settings`,
+    {
+      method: "PUT",
       body: JSON.stringify(payload),
     },
   );

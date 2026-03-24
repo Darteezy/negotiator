@@ -221,6 +221,18 @@ public class NegotiationSession {
 		addStrategyChange(new NegotiationStrategyChange(roundNumber, previousStrategy, nextStrategy, trigger, rationale));
 	}
 
+	public void updateConfiguration(
+		Integer maxRounds,
+		BigDecimal riskOfWalkaway,
+		BuyerProfileSnapshot buyerProfileSnapshot,
+		NegotiationBoundsSnapshot boundsSnapshot
+	) {
+		this.maxRounds = maxRounds;
+		this.riskOfWalkaway = riskOfWalkaway;
+		this.buyerProfileSnapshot = buyerProfileSnapshot;
+		this.boundsSnapshot = boundsSnapshot;
+	}
+
 	public boolean isClosed() {
 		return status == NegotiationSessionStatus.ACCEPTED
 			|| status == NegotiationSessionStatus.REJECTED

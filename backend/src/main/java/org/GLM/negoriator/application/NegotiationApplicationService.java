@@ -81,6 +81,48 @@ public class NegotiationApplicationService {
 		return session;
 	}
 
+	public NegotiationSession updateSessionSettings(UUID sessionId, UpdateSessionSettingsCommand command) {
+		NegotiationSession session = sessionRepository.findDetailedByIdForUpdate(sessionId)
+			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));
+		session.getOffers().size();
+		session.getDecisions().size();
+		session.getStrategyChanges().size();
+
+		if (session.isClosed()) {
+			throw new IllegalStateException("Negotiation session is closed: " + sessionId);
+		}
+
+		if (command.maxRounds() < session.getCurrentRound()) {
+			throw new IllegalArgumentException("maxRounds must be greater than or equal to the current round.");
+		}
+
+		sessionConfigurationValidator.validate(new StartSessionCommand(
+			command.strategy(),
+			command.maxRounds(),
+			command.riskOfWalkaway(),
+			command.buyerProfile(),
+			command.bounds(),
+			session.initialSupplierModel()));
+
+		session.updateConfiguration(
+			command.maxRounds(),
+			command.riskOfWalkaway(),
+			BuyerProfileSnapshot.from(command.buyerProfile()),
+			NegotiationBoundsSnapshot.from(command.bounds()));
+
+		if (session.getStrategy() != command.strategy()) {
+			session.switchStrategy(
+				command.strategy(),
+				session.getCurrentRound(),
+				NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION,
+				"Session settings updated manually. Upcoming rounds will use "
+					+ command.strategy().name()
+					+ ".");
+		}
+
+		return sessionRepository.saveAndFlush(session);
+	}
+
 	public NegotiationSession submitSupplierOffer(UUID sessionId, OfferVector supplierOfferTerms) {
 		return submitSupplierOffer(sessionId, supplierOfferTerms, null, null);
 	}
@@ -268,6 +310,15 @@ public class NegotiationApplicationService {
 		BuyerProfile buyerProfile,
 		NegotiationBounds bounds,
 		SupplierModel supplierModel
+	) {
+	}
+
+	public record UpdateSessionSettingsCommand(
+		NegotiationStrategy strategy,
+		int maxRounds,
+		BigDecimal riskOfWalkaway,
+		BuyerProfile buyerProfile,
+		NegotiationBounds bounds
 	) {
 	}
 }

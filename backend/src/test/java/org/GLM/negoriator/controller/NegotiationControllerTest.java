@@ -3,6 +3,7 @@ package org.GLM.negoriator.controller;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -121,5 +122,69 @@ class NegotiationControllerTest {
 			.andExpect(jsonPath("$.conversation[0].actor").value("buyer"))
 			.andExpect(jsonPath("$.conversation[0].eventType").value("BUYER_OPENING"))
 			.andExpect(jsonPath("$.conversation[0].message").value("Please send your opening offer with price, payment days, delivery days, and contract length."));
+	}
+
+	@Test
+	void updatesSessionSettingsAndReturnsUpdatedStrategyHistory() throws Exception {
+		MvcResult createResult = mockMvc.perform(post("/api/negotiations/sessions")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{}"))
+			.andExpect(status().isCreated())
+			.andReturn();
+
+		UUID sessionId = UUID.fromString(
+			objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText());
+
+		String updateBody = """
+			{
+			  "strategy": "CONCEDER",
+			  "maxRounds": 10,
+			  "riskOfWalkaway": 0.22,
+			  "buyerProfile": {
+			    "idealOffer": {
+			      "price": 89.00,
+			      "paymentDays": 70,
+			      "deliveryDays": 8,
+			      "contractMonths": 6
+			    },
+			    "reservationOffer": {
+			      "price": 120.00,
+			      "paymentDays": 30,
+			      "deliveryDays": 30,
+			      "contractMonths": 24
+			    },
+			    "weights": {
+			      "price": 0.45,
+			      "paymentDays": 0.20,
+			      "deliveryDays": 0.20,
+			      "contractMonths": 0.15
+			    },
+			    "reservationUtility": 0.0
+			  },
+			  "bounds": {
+			    "minPrice": 80.00,
+			    "maxPrice": 125.00,
+			    "minPaymentDays": 30,
+			    "maxPaymentDays": 90,
+			    "minDeliveryDays": 7,
+			    "maxDeliveryDays": 30,
+			    "minContractMonths": 3,
+			    "maxContractMonths": 24
+			  }
+			}
+			""";
+
+		mockMvc.perform(put("/api/negotiations/sessions/{sessionId}/settings", sessionId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(updateBody))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.strategy").value("CONCEDER"))
+			.andExpect(jsonPath("$.maxRounds").value(10))
+			.andExpect(jsonPath("$.riskOfWalkaway").value(0.22))
+			.andExpect(jsonPath("$.buyerProfile.idealOffer.price").value(89.00))
+			.andExpect(jsonPath("$.bounds.maxPrice").value(125.00))
+			.andExpect(jsonPath("$.strategyHistory[1].trigger").value("MANUAL_CONFIGURATION"))
+			.andExpect(jsonPath("$.conversation[2].eventType").value("STRATEGY_CHANGE"))
+			.andExpect(jsonPath("$.conversation[2].debug.switchTrigger").value("MANUAL_CONFIGURATION"));
 	}
 }

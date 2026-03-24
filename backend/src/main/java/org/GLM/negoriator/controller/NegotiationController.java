@@ -29,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -75,6 +76,22 @@ public class NegotiationController {
 	) {
 		NegotiationSession session = negotiationApplicationService.getSession(sessionId);
 		return NegotiationSessionResponse.from(session);
+	}
+
+	@PutMapping("/sessions/{sessionId}/settings")
+	public NegotiationSessionResponse updateSessionSettings(
+		@PathVariable UUID sessionId,
+		@RequestBody UpdateSessionSettingsRequest request
+	) {
+		if (request == null) {
+			throw new IllegalArgumentException("Session settings payload is required.");
+		}
+
+		NegotiationSession updatedSession = negotiationApplicationService.updateSessionSettings(
+			sessionId,
+			request.toCommand());
+
+		return NegotiationSessionResponse.from(negotiationApplicationService.getSession(updatedSession.getId()));
 	}
 
 	@PostMapping("/sessions/{sessionId}/offers")
@@ -143,6 +160,23 @@ public class NegotiationController {
 				buyerProfile == null ? NegotiationDefaults.buyerProfile() : buyerProfile.toBuyerProfile(),
 				bounds == null ? NegotiationDefaults.bounds() : bounds.toBounds(),
 				supplierModel == null ? NegotiationDefaults.supplierModel() : supplierModel.toSupplierModel());
+		}
+	}
+
+	public record UpdateSessionSettingsRequest(
+		String strategy,
+		Integer maxRounds,
+		BigDecimal riskOfWalkaway,
+		BuyerProfileRequest buyerProfile,
+		BoundsResponse bounds
+	) {
+		NegotiationApplicationService.UpdateSessionSettingsCommand toCommand() {
+			return new NegotiationApplicationService.UpdateSessionSettingsCommand(
+				NegotiationStrategy.valueOf(require(strategy, "strategy").trim().toUpperCase(Locale.ROOT)),
+				require(maxRounds, "maxRounds"),
+				require(riskOfWalkaway, "riskOfWalkaway"),
+				require(buyerProfile, "buyerProfile").toBuyerProfile(),
+				require(bounds, "bounds").toBounds());
 		}
 	}
 
@@ -343,6 +377,25 @@ public class NegotiationController {
 				}
 			}
 
+			strategyHistory.stream()
+				.filter(change -> !"INITIAL_SELECTION".equals(change.trigger()))
+				.forEach(change -> events.add(new ConversationEventResponse(
+					"STRATEGY_CHANGE",
+					"system",
+					"Strategy switch",
+					change.rationale(),
+					change.at(),
+					null,
+					List.of(),
+					new ConversationDebugResponse(
+						change.nextStrategy(),
+						change.rationale(),
+						change.trigger(),
+						null,
+						null,
+						null,
+						List.of()))));
+
 			for (NegotiationRoundResponse round : rounds) {
 				events.add(new ConversationEventResponse(
 					"SUPPLIER_OFFER",
@@ -372,26 +425,6 @@ public class NegotiationController {
 						round.buyerReply().focusIssue(),
 						round.buyerReply().evaluation(),
 						counterOfferSummaries(round.buyerReply().counterOffers()))));
-
-				strategyHistory.stream()
-					.filter(change -> !"INITIAL_SELECTION".equals(change.trigger()))
-					.filter(change -> change.roundNumber() == round.roundNumber())
-					.forEach(change -> events.add(new ConversationEventResponse(
-						"STRATEGY_CHANGE",
-						"system",
-						"Strategy switch",
-						change.rationale(),
-						change.at(),
-						null,
-						List.of(),
-						new ConversationDebugResponse(
-							change.nextStrategy(),
-							change.rationale(),
-							change.trigger(),
-							null,
-							null,
-							null,
-							List.of()))));
 			}
 
 			return events.stream()
