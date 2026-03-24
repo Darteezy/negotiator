@@ -64,6 +64,9 @@ public class NegotiationSession {
 	@Column(name = "session_token", nullable = false, unique = true, length = 64)
 	private String sessionToken;
 
+	@Column(name = "opening_message", length = 1000)
+	private String openingMessage;
+
 	@Embedded
 	private BuyerProfileSnapshot buyerProfileSnapshot;
 
@@ -233,6 +236,10 @@ public class NegotiationSession {
 		this.boundsSnapshot = boundsSnapshot;
 	}
 
+	public void updateOpeningMessage(String openingMessage) {
+		this.openingMessage = openingMessage;
+	}
+
 	public boolean isClosed() {
 		return status == NegotiationSessionStatus.ACCEPTED
 			|| status == NegotiationSessionStatus.REJECTED
@@ -244,6 +251,9 @@ public class NegotiationSession {
 		Instant now = Instant.now();
 		if (sessionToken == null || sessionToken.isBlank()) {
 			sessionToken = UUID.randomUUID().toString();
+		}
+		if (openingMessage == null || openingMessage.isBlank()) {
+			openingMessage = "Please send your opening offer with price, payment days, delivery days, and contract length.";
 		}
 		createdAt = now;
 		updatedAt = now;
@@ -280,6 +290,12 @@ public class NegotiationSession {
 
 	public String getSessionToken() {
 		return sessionToken;
+	}
+
+	public String getOpeningMessage() {
+		return openingMessage == null || openingMessage.isBlank()
+			? "Please send your opening offer with price, payment days, delivery days, and contract length."
+			: openingMessage;
 	}
 
 	public BuyerProfileSnapshot getBuyerProfileSnapshot() {

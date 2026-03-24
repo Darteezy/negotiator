@@ -5,6 +5,8 @@ import java.util.UUID;
 
 import jakarta.persistence.EntityNotFoundException;
 
+import org.GLM.negoriator.ai.AiNegotiationMessageService;
+import org.GLM.negoriator.ai.AiNegotiationMessageService.BuyerReplyMessageRequest;
 import org.GLM.negoriator.ai.AiStrategyAdvisor;
 import org.GLM.negoriator.domain.BuyerProfileSnapshot;
 import org.GLM.negoriator.domain.NegotiationDecision;
@@ -38,15 +40,18 @@ public class NegotiationApplicationService {
 	private final NegotiationSessionRepository sessionRepository;
 	private final NegotiationEngine negotiationEngine;
 	private final SessionConfigurationValidator sessionConfigurationValidator;
+	private final AiNegotiationMessageService aiNegotiationMessageService;
 
 	public NegotiationApplicationService(
 		NegotiationSessionRepository sessionRepository,
 		NegotiationEngine negotiationEngine,
-		AiStrategyAdvisor aiStrategyAdvisor
+		AiStrategyAdvisor aiStrategyAdvisor,
+		AiNegotiationMessageService aiNegotiationMessageService
 	) {
 		this.sessionRepository = sessionRepository;
 		this.negotiationEngine = negotiationEngine;
 		this.sessionConfigurationValidator = new SessionConfigurationValidator();
+		this.aiNegotiationMessageService = aiNegotiationMessageService;
 	}
 
 	public NegotiationSession startSession(StartSessionCommand command) {
@@ -67,6 +72,7 @@ public class NegotiationApplicationService {
 			command.strategy(),
 			NegotiationStrategyChangeTrigger.INITIAL_SELECTION,
 			"Session started with " + command.strategy().name() + " as the configured opening strategy."));
+		session.updateOpeningMessage(aiNegotiationMessageService.composeOpeningMessage(session));
 
 		return sessionRepository.saveAndFlush(session);
 	}
@@ -109,6 +115,9 @@ public class NegotiationApplicationService {
 			command.riskOfWalkaway(),
 			BuyerProfileSnapshot.from(command.buyerProfile()),
 			NegotiationBoundsSnapshot.from(command.bounds()));
+		if (session.getOffers().isEmpty()) {
+			session.updateOpeningMessage(aiNegotiationMessageService.composeOpeningMessage(session));
+		}
 
 		if (session.getStrategy() != command.strategy()) {
 			session.switchStrategy(
@@ -211,6 +220,22 @@ public class NegotiationApplicationService {
 			session.addOffer(buyerCounterOffer);
 		}
 
+		String buyerMessage = aiNegotiationMessageService.composeBuyerReply(new BuyerReplyMessageRequest(
+			supplierOffer.getRoundNumber(),
+			session.getMaxRounds(),
+			NegotiationDecisionType.from(response.decision()).name(),
+			NegotiationSessionStatus.from(response.nextState()).name(),
+			supplierMessage,
+			supplierOfferTerms,
+			counterOffer == null ? null : counterOffer.toOfferVector(),
+			buyerCounterOffers.stream().map(NegotiationOffer::toOfferVector).toList(),
+			response.reasonCode(),
+			response.focusIssue(),
+			session.getStrategy(),
+			"Baseline policy remained active for this round.",
+			response.evaluation(),
+			response.explanation()));
+
 		session.addDecision(new NegotiationDecision(
 			supplierOffer.getRoundNumber(),
 			NegotiationDecisionType.from(response.decision()),
@@ -223,7 +248,7 @@ public class NegotiationApplicationService {
 			response.focusIssue(),
 			session.getStrategy(),
 			"Baseline policy remained active for this round.",
-			response.explanation()));
+			buyerMessage));
 		session.moveTo(NegotiationSessionStatus.from(response.nextState()));
 
 		return sessionRepository.saveAndFlush(session);

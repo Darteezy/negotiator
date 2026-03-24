@@ -63,9 +63,8 @@ class NegotiationApplicationServiceTest {
 		assertEquals(NegotiationSessionStatus.COUNTERED, pendingAcceptanceSession.getStatus());
 		assertEquals(NegotiationDecisionType.COUNTER, pendingAcceptanceDecision.getDecision());
 		assertNotNull(pendingAcceptanceDecision.getCounterOffer());
-		assertEquals(
-			"Buyer is ready to close on these terms. Reply with accept to finalize the deal.",
-			pendingAcceptanceDecision.getExplanation());
+		assertNotNull(pendingAcceptanceDecision.getExplanation());
+		assertTrue(!pendingAcceptanceDecision.getExplanation().isBlank());
 		assertEquals(0, new BigDecimal("120.00").compareTo(pendingAcceptanceDecision.getCounterOffer().toOfferVector().price()));
 		assertEquals(60, pendingAcceptanceDecision.getCounterOffer().toOfferVector().paymentDays());
 		assertEquals(7, pendingAcceptanceDecision.getCounterOffer().toOfferVector().deliveryDays());
@@ -79,9 +78,8 @@ class NegotiationApplicationServiceTest {
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
 		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
-		assertEquals(
-			"Accepted because the supplier agreed to the buyer's active offer from the previous round.",
-			acceptedDecision.getExplanation());
+		assertNotNull(acceptedDecision.getExplanation());
+		assertTrue(!acceptedDecision.getExplanation().isBlank());
 	}
 
 	@Test

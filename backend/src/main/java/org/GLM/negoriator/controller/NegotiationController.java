@@ -345,23 +345,20 @@ public class NegotiationController {
 			List<StrategyHistoryResponse> strategyHistory
 		) {
 			List<ConversationEventResponse> events = new java.util.ArrayList<>();
-
-			events.add(new ConversationEventResponse(
-				"BUYER_OPENING",
-				"buyer",
-				"Buyer opening request",
-				"Please send your opening offer with price, payment days, delivery days, and contract length.",
-				session.getCreatedAt(),
-				null,
-				List.of(),
-				null));
+			java.util.Map<Integer, List<StrategyHistoryResponse>> nonInitialChangesByRound = strategyHistory.stream()
+				.filter(change -> !"INITIAL_SELECTION".equals(change.trigger()))
+				.collect(java.util.stream.Collectors.groupingBy(
+					StrategyHistoryResponse::roundNumber,
+					java.util.LinkedHashMap::new,
+					java.util.stream.Collectors.toList()));
+			java.util.Set<Integer> renderedChangeRounds = new java.util.HashSet<>();
 
 			for (StrategyHistoryResponse change : strategyHistory) {
 				if ("INITIAL_SELECTION".equals(change.trigger())) {
 					events.add(new ConversationEventResponse(
 						"STRATEGY_CHANGE",
 						"system",
-						"Opening strategy selected",
+						"Session started",
 						change.rationale(),
 						change.at(),
 						null,
@@ -377,26 +374,22 @@ public class NegotiationController {
 				}
 			}
 
-			strategyHistory.stream()
-				.filter(change -> !"INITIAL_SELECTION".equals(change.trigger()))
-				.forEach(change -> events.add(new ConversationEventResponse(
-					"STRATEGY_CHANGE",
-					"system",
-					"Strategy switch",
-					change.rationale(),
-					change.at(),
-					null,
-					List.of(),
-					new ConversationDebugResponse(
-						change.nextStrategy(),
-						change.rationale(),
-						change.trigger(),
-						null,
-						null,
-						null,
-						List.of()))));
+			events.add(new ConversationEventResponse(
+				"BUYER_OPENING",
+				"buyer",
+				"Buyer opening request",
+				session.getOpeningMessage(),
+				session.getCreatedAt(),
+				null,
+				List.of(),
+				null));
 
 			for (NegotiationRoundResponse round : rounds) {
+				appendStrategyChanges(
+					events,
+					nonInitialChangesByRound.get(round.roundNumber()));
+				renderedChangeRounds.add(round.roundNumber());
+
 				events.add(new ConversationEventResponse(
 					"SUPPLIER_OFFER",
 					"supplier",
@@ -427,9 +420,39 @@ public class NegotiationController {
 						counterOfferSummaries(round.buyerReply().counterOffers()))));
 			}
 
-			return events.stream()
-				.sorted(Comparator.comparing(ConversationEventResponse::at))
-				.toList();
+			nonInitialChangesByRound.entrySet().stream()
+				.filter(entry -> !renderedChangeRounds.contains(entry.getKey()))
+				.forEach(entry -> appendStrategyChanges(events, entry.getValue()));
+
+			return events;
+		}
+
+		private static void appendStrategyChanges(
+			List<ConversationEventResponse> events,
+			List<StrategyHistoryResponse> changes
+		) {
+			if (changes == null || changes.isEmpty()) {
+				return;
+			}
+
+			for (StrategyHistoryResponse change : changes) {
+				events.add(new ConversationEventResponse(
+					"STRATEGY_CHANGE",
+					"system",
+					"Strategy switch",
+					change.rationale(),
+					change.at(),
+					null,
+					List.of(),
+					new ConversationDebugResponse(
+						change.nextStrategy(),
+						change.rationale(),
+						change.trigger(),
+						null,
+						null,
+						null,
+						List.of())));
+			}
 		}
 	}
 

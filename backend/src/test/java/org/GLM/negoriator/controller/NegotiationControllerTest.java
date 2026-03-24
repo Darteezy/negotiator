@@ -119,9 +119,12 @@ class NegotiationControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.id").value(sessionId.toString()))
 			.andExpect(jsonPath("$.sessionToken").value(sessionToken))
-			.andExpect(jsonPath("$.conversation[0].actor").value("buyer"))
-			.andExpect(jsonPath("$.conversation[0].eventType").value("BUYER_OPENING"))
-			.andExpect(jsonPath("$.conversation[0].message").value("Please send your opening offer with price, payment days, delivery days, and contract length."));
+			.andExpect(jsonPath("$.conversation[0].actor").value("system"))
+			.andExpect(jsonPath("$.conversation[0].eventType").value("STRATEGY_CHANGE"))
+			.andExpect(jsonPath("$.conversation[0].title").value("Session started"))
+			.andExpect(jsonPath("$.conversation[1].actor").value("buyer"))
+			.andExpect(jsonPath("$.conversation[1].eventType").value("BUYER_OPENING"))
+			.andExpect(jsonPath("$.conversation[1].message").isNotEmpty());
 	}
 
 	@Test
@@ -185,6 +188,7 @@ class NegotiationControllerTest {
 			.andExpect(jsonPath("$.bounds.maxPrice").value(125.00))
 			.andExpect(jsonPath("$.strategyHistory[1].trigger").value("MANUAL_CONFIGURATION"))
 			.andExpect(jsonPath("$.conversation[2].eventType").value("STRATEGY_CHANGE"))
+			.andExpect(jsonPath("$.conversation[2].title").value("Strategy switch"))
 			.andExpect(jsonPath("$.conversation[2].debug.switchTrigger").value("MANUAL_CONFIGURATION"));
 	}
 }

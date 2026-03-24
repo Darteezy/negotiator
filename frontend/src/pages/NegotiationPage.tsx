@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  CheckCircle2,
-  ChevronDown,
-  RotateCcw,
-  SendHorizontal,
-} from "lucide-react";
+import { CheckCircle2, RotateCcw, SendHorizontal } from "lucide-react";
 import { OfferCard } from "@/components/OfferCard";
 import {
   parseSupplierOffer,
@@ -97,6 +92,22 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleComposerKeyDown(
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+  ) {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (submitting || session.closed) {
+      return;
+    }
+
+    void handleSubmit();
   }
 
   function handleDraftChange(field: keyof SettingsDraft, value: string) {
@@ -205,16 +216,14 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                 <OfferCard
                   title={event.title}
                   actor={event.actor === "buyer" ? "buyer" : "supplier"}
-                  terms={event.terms ?? event.counterOffers[0]}
                   message={event.message}
-                  utility={event.debug?.evaluation?.buyerUtility}
                   align={event.actor === "supplier" ? "right" : "left"}
+                  detailRows={buildDetailRows(event)}
                   highlight={
                     event.eventType === "BUYER_REPLY" &&
                     event.debug?.reasonCode === "TARGET_UTILITY_MET"
                   }
                 />
-                <MessageDetails event={event} />
               </div>
             ),
           )}
@@ -244,6 +253,7 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
               rows={2}
               value={supplierMessage}
               onChange={(event) => setSupplierMessage(event.target.value)}
+              onKeyDown={handleComposerKeyDown}
               placeholder='Write the supplier message here.'
             />
             <button
@@ -735,42 +745,6 @@ function CompactSelect({
         ))}
       </select>
     </label>
-  );
-}
-
-function MessageDetails({ event }: { event: ApiConversationEvent }) {
-  const rows = buildDetailRows(event);
-
-  if (rows.length === 0) {
-    return null;
-  }
-
-  const alignment = event.actor === "supplier" ? "items-end" : "items-start";
-
-  return (
-    <div className={`flex ${alignment}`}>
-      <details className='w-full max-w-3xl rounded-2xl border border-[var(--line)] bg-black/10 px-3 py-2 text-[12px] text-[var(--ink-soft)]'>
-        <summary className='flex cursor-pointer list-none items-center gap-2 font-semibold text-[var(--ink-muted)]'>
-          <ChevronDown className='h-3.5 w-3.5' />
-          Details
-        </summary>
-        <div className='mt-3 grid grid-cols-1 gap-2 md:grid-cols-2'>
-          {rows.map((row) => (
-            <div
-              key={`${row.label}-${row.value}`}
-              className='rounded-xl border border-[var(--line)] bg-[var(--panel)]/80 px-3 py-2'
-            >
-              <p className='text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]'>
-                {row.label}
-              </p>
-              <p className='mt-1 whitespace-pre-wrap text-[12px] leading-5 text-[var(--ink-strong)]'>
-                {row.value}
-              </p>
-            </div>
-          ))}
-        </div>
-      </details>
-    </div>
   );
 }
 

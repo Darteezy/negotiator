@@ -560,13 +560,29 @@ public class NegotiationSimulationService {
 			var lastDecision = session.getDecisions().stream()
 				.max(java.util.Comparator.comparing(d -> d.getRoundNumber()))
 				.orElse(null);
-			if (lastDecision != null && lastDecision.getExplanation() != null
-				&& lastDecision.getExplanation().contains("agreed to the buyer's active offer")) {
+			if (lastDecision != null && acceptedActiveBuyerOffer(session, lastDecision)) {
 				anomalies.add("Acceptance via offer-match shortcut — verify this was intended");
 			}
 		}
 
 		return anomalies;
+	}
+
+	private boolean acceptedActiveBuyerOffer(NegotiationSession session, org.GLM.negoriator.domain.NegotiationDecision decision) {
+		if (decision.getDecision() != org.GLM.negoriator.domain.NegotiationDecisionType.ACCEPT
+			|| decision.getSupplierOffer() == null) {
+			return false;
+		}
+
+		int priorBuyerRound = decision.getSupplierOffer().getRoundNumber() - 1;
+		if (priorBuyerRound < 1) {
+			return false;
+		}
+
+		return session.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == priorBuyerRound)
+			.anyMatch(offer -> offer.toOfferVector().matches(decision.getSupplierOffer().toOfferVector()));
 	}
 
 	public record SimulationConfig(
