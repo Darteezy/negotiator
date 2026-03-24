@@ -15,6 +15,13 @@ export interface OfferTerms {
   contractMonths: number;
 }
 
+export interface SupplierConstraints {
+  priceFloor?: number | null;
+  paymentDaysCeiling?: number | null;
+  deliveryDaysFloor?: number | null;
+  contractMonthsFloor?: number | null;
+}
+
 export interface IssueWeights {
   price: number;
   paymentDays: number;

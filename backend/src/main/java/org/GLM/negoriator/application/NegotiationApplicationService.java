@@ -36,6 +36,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class NegotiationApplicationService {
 
+	private static final java.util.regex.Pattern OPTION_SELECTION_PATTERN = java.util.regex.Pattern.compile(
+		"\\b(option|offer)\\s*(\\d+|one|two|three|first|second|third)\\b",
+		java.util.regex.Pattern.CASE_INSENSITIVE);
+	private static final java.util.regex.Pattern BUYER_SELECTION_PATTERN = java.util.regex.Pattern.compile(
+		"\\b(original offer|same terms|your offer|your terms|that option|that offer)\\b",
+		java.util.regex.Pattern.CASE_INSENSITIVE);
+
 	private final NegotiationSessionRepository sessionRepository;
 	private final NegotiationEngine negotiationEngine;
 	private final SessionConfigurationValidator sessionConfigurationValidator;
@@ -164,7 +171,8 @@ public class NegotiationApplicationService {
 				session.toNegotiationContext(),
 				session.toBuyerProfile(),
 				session.currentSupplierModel(),
-				session.toNegotiationBounds()));
+				session.toNegotiationBounds(),
+				toEngineSupplierConstraints(activeConstraints)));
 
 		if (acceptedBuyerOffer != null
 			&& response.decision() != NegotiationEngine.Decision.REJECT
@@ -276,6 +284,20 @@ public class NegotiationApplicationService {
 		return feasibleOffers;
 	}
 
+	private NegotiationEngine.SupplierConstraints toEngineSupplierConstraints(
+		SupplierConstraintsSnapshot supplierConstraints
+	) {
+		if (supplierConstraints == null || supplierConstraints.isEmpty()) {
+			return null;
+		}
+
+		return new NegotiationEngine.SupplierConstraints(
+			supplierConstraints.getPriceFloor(),
+			supplierConstraints.getPaymentDaysCeiling(),
+			supplierConstraints.getDeliveryDaysFloor(),
+			supplierConstraints.getContractMonthsFloor());
+	}
+
 	private NegotiationOffer matchingActiveBuyerOffer(
 		NegotiationSession session,
 		OfferVector supplierOfferTerms,
@@ -285,7 +307,7 @@ public class NegotiationApplicationService {
 			return null;
 		}
 
-		if (!isExplicitAcceptanceMessage(supplierMessage)) {
+		if (!isExplicitAcceptanceMessage(supplierMessage) && !isBuyerOfferSelectionMessage(supplierMessage)) {
 			return null;
 		}
 
@@ -322,6 +344,27 @@ public class NegotiationApplicationService {
 			|| normalized.contains("works for us")
 			|| normalized.contains("we can proceed")
 			|| normalized.contains("we have a deal");
+	}
+
+	private boolean isBuyerOfferSelectionMessage(String supplierMessage) {
+		if (supplierMessage == null || supplierMessage.isBlank()) {
+			return false;
+		}
+
+		String normalized = supplierMessage.toLowerCase(java.util.Locale.ROOT);
+		if (normalized.contains("counter")
+			|| normalized.contains("i propose")
+			|| normalized.contains("i offer")
+			|| normalized.contains("final offer")
+			|| normalized.contains("if you accept")
+			|| normalized.contains("cannot")
+			|| normalized.contains("can't")
+			|| normalized.contains("not settling")) {
+			return false;
+		}
+
+		return OPTION_SELECTION_PATTERN.matcher(supplierMessage).find()
+			|| BUYER_SELECTION_PATTERN.matcher(supplierMessage).find();
 	}
 
 	public record StartSessionCommand(

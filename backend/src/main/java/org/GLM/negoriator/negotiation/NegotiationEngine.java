@@ -140,12 +140,21 @@ public interface NegotiationEngine {
 	) {
 	}
 
+	record SupplierConstraints(
+		BigDecimal priceFloor,
+		Integer paymentDaysCeiling,
+		Integer deliveryDaysFloor,
+		Integer contractMonthsFloor
+	) {
+	}
+
 	record NegotiationRequest(
 		OfferVector supplierOffer,
 		NegotiationContext context,
 		BuyerProfile buyerProfile,
 		SupplierModel supplierModel,
-		NegotiationBounds bounds
+		NegotiationBounds bounds,
+		SupplierConstraints supplierConstraints
 	) {
 	}
 

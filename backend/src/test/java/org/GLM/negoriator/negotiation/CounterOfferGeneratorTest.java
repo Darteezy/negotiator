@@ -49,7 +49,7 @@ class CounterOfferGeneratorTest {
 			List.of());
 		OfferVector supplierOffer = new OfferVector(new BigDecimal("138.00"), 50, 10, 18);
 
-		NegotiationIssue issue = generator.issueToImprove(buyerProfile, context, bounds, supplierOffer);
+		NegotiationIssue issue = generator.issueToImprove(buyerProfile, context, bounds, null, supplierOffer);
 
 		assertEquals(NegotiationIssue.PRICE, issue);
 	}
@@ -85,10 +85,49 @@ class CounterOfferGeneratorTest {
 				new OfferVector(new BigDecimal("104.00"), 30, 20, 18)));
 		OfferVector supplierOffer = new OfferVector(new BigDecimal("118.00"), 40, 20, 18);
 
-		List<NegotiationIssue> rankedIssues = generator.rankedIssues(buyerProfile, context, bounds, supplierOffer);
+		List<NegotiationIssue> rankedIssues = generator.rankedIssues(buyerProfile, context, bounds, null, supplierOffer);
 
 		assertEquals(NegotiationIssue.PRICE, rankedIssues.getFirst());
 		assertTrue(rankedIssues.size() > 1);
 		assertTrue(rankedIssues.contains(NegotiationIssue.PAYMENT_DAYS));
+	}
+
+	@Test
+	void deprioritizesPriceWhenSupplierFloorBlocksFurtherConcessions() {
+		BuyerProfile buyerProfile = new BuyerProfile(
+			new OfferVector(new BigDecimal("90.00"), 60, 7, 6),
+			new OfferVector(new BigDecimal("120.00"), 30, 30, 24),
+			new IssueWeights(
+				new BigDecimal("0.40"),
+				new BigDecimal("0.20"),
+				new BigDecimal("0.25"),
+				new BigDecimal("0.15")),
+			BigDecimal.ZERO);
+		NegotiationBounds bounds = new NegotiationBounds(
+			new BigDecimal("80.00"),
+			new BigDecimal("120.00"),
+			30,
+			90,
+			7,
+			30,
+			3,
+			24);
+		NegotiationContext context = new NegotiationContext(
+			3,
+			8,
+			NegotiationStrategy.BOULWARE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("110.00"), 40, 29, 20);
+
+		List<NegotiationIssue> rankedIssues = generator.rankedIssues(
+			buyerProfile,
+			context,
+			bounds,
+			new NegotiationEngine.SupplierConstraints(new BigDecimal("110.00"), null, null, null),
+			supplierOffer);
+
+		assertEquals(NegotiationIssue.DELIVERY_DAYS, rankedIssues.getFirst());
 	}
 }

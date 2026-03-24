@@ -2,6 +2,7 @@ import type {
   ApiNegotiationSession,
   ApiSessionDefaults,
   OfferTerms,
+  SupplierConstraints,
 } from "@/lib/types";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(
@@ -41,6 +42,7 @@ interface UpdateSessionSettingsPayload extends StartSessionPayload {
 
 interface SubmitSupplierOfferPayload extends OfferTerms {
   supplierMessage?: string;
+  supplierConstraints?: SupplierConstraints;
 }
 
 interface ParseSupplierOfferPayload {
@@ -54,6 +56,7 @@ interface ParseSupplierOfferResponse {
   paymentDays?: number | null;
   deliveryDays?: number | null;
   contractMonths?: number | null;
+  supplierConstraints?: SupplierConstraints | null;
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationDecisionType;
@@ -120,6 +121,35 @@ class NegotiationApplicationServiceTest {
 		assertEquals(0, new BigDecimal("130.00").compareTo(reloadedSession.toNegotiationBounds().maxPrice()));
 		assertTrue(reloadedSession.getStrategyChanges().stream()
 			.anyMatch(change -> change.getTrigger() == NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION));
+	}
+
+	@Test
+	void acceptsSupplierSelectionOfPriorBuyerOptionWithoutExplicitAcceptKeyword() {
+		NegotiationSession startedSession = service.startSession(
+			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
+
+		NegotiationSession counteredSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("110.00"), 40, 29, 20),
+			"Price 110, payment 40, delivery 29, contract 20");
+
+		OfferVector selectedBuyerOption = counteredSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == 1)
+			.sorted(Comparator.comparing(org.GLM.negoriator.domain.NegotiationOffer::getCreatedAt))
+			.skip(1)
+			.findFirst()
+			.orElseThrow()
+			.toOfferVector();
+
+		NegotiationSession acceptedSession = submit(
+			counteredSession,
+			selectedBuyerOption,
+			"option 2");
+		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
+
+		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
+		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
 	}
 
 	private NegotiationSession submit(NegotiationSession session, OfferVector offer, String message) {

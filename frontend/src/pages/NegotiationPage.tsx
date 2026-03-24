@@ -80,6 +80,7 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
       const nextSession = await submitSupplierOffer(session.id, {
         ...normalizedOffer,
         supplierMessage: message,
+        supplierConstraints: parsedOffer.supplierConstraints ?? undefined,
       });
 
       setSession(nextSession);
