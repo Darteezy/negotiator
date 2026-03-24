@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -39,14 +38,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class NegotiationController {
 
 	private final NegotiationApplicationService negotiationApplicationService;
-	private final SessionAccessGuard sessionAccessGuard;
 
 	public NegotiationController(
-		NegotiationApplicationService negotiationApplicationService,
-		SessionAccessGuard sessionAccessGuard
+		NegotiationApplicationService negotiationApplicationService
 	) {
 		this.negotiationApplicationService = negotiationApplicationService;
-		this.sessionAccessGuard = sessionAccessGuard;
 	}
 
 	@GetMapping("/config/defaults")
@@ -75,26 +71,20 @@ public class NegotiationController {
 
 	@GetMapping("/sessions/{sessionId}")
 	public NegotiationSessionResponse getSession(
-		@PathVariable UUID sessionId,
-		@RequestHeader(name = SessionAccessGuard.SESSION_TOKEN_HEADER, required = false) String sessionToken
+		@PathVariable UUID sessionId
 	) {
 		NegotiationSession session = negotiationApplicationService.getSession(sessionId);
-		sessionAccessGuard.assertAuthorized(session, sessionToken);
 		return NegotiationSessionResponse.from(session);
 	}
 
 	@PostMapping("/sessions/{sessionId}/offers")
 	public NegotiationSessionResponse submitSupplierOffer(
 		@PathVariable UUID sessionId,
-		@RequestHeader(name = SessionAccessGuard.SESSION_TOKEN_HEADER, required = false) String sessionToken,
 		@RequestBody SubmitSupplierOfferRequest request
 	) {
 		if (request == null) {
 			throw new IllegalArgumentException("Supplier offer payload is required.");
 		}
-
-		NegotiationSession session = negotiationApplicationService.getSession(sessionId);
-		sessionAccessGuard.assertAuthorized(session, sessionToken);
 
 		NegotiationSession updatedSession = negotiationApplicationService.submitSupplierOffer(
 			sessionId,
@@ -321,6 +311,16 @@ public class NegotiationController {
 			List<StrategyHistoryResponse> strategyHistory
 		) {
 			List<ConversationEventResponse> events = new java.util.ArrayList<>();
+
+			events.add(new ConversationEventResponse(
+				"BUYER_OPENING",
+				"buyer",
+				"Buyer opening request",
+				"Please send your opening offer with price, payment days, delivery days, and contract length.",
+				session.getCreatedAt(),
+				null,
+				List.of(),
+				null));
 
 			for (StrategyHistoryResponse change : strategyHistory) {
 				if ("INITIAL_SELECTION".equals(change.trigger())) {

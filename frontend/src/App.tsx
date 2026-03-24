@@ -1,87 +1,26 @@
-import { useState, useEffect } from "react";
-import { ChatPage } from "@/pages/ChatPage";
+import { useState } from "react";
 import { ConfigurationPage } from "@/pages/ConfigurationPage";
 import { NegotiationPage } from "@/pages/NegotiationPage";
-import { AdminPage } from "@/pages/AdminPage";
-import type { BuyerPreferences } from "@/lib/types";
+import type { ApiNegotiationSession } from "@/lib/types";
 
 export default function App() {
-  const [profile, setProfile] = useState<BuyerPreferences | null>(null);
-  const [sessionKey, setSessionKey] = useState(0);
-  const [useFormMode, setUseFormMode] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [session, setSession] = useState<ApiNegotiationSession | null>(null);
 
-  // Check URL for mode parameter
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("admin") === "true") {
-      setShowAdmin(true);
-    }
-    if (params.get("mode") === "form") {
-      setUseFormMode(true);
-    }
-  }, []);
-
-  function handleStart(nextProfile: BuyerPreferences) {
-    setProfile(nextProfile);
-    setSessionKey((key) => key + 1);
-    // Reset URL to remove mode parameter
-    window.history.replaceState({}, "", window.location.pathname);
+  function handleStart(nextSession: ApiNegotiationSession) {
+    setSession(nextSession);
   }
 
   function handleReset() {
-    setProfile(null);
+    setSession(null);
   }
 
-  // Admin page (accessible via ?admin=true parameter)
-  if (showAdmin) {
-    return (
-      <div className="relative">
-        <button
-          onClick={() => {
-            setShowAdmin(false);
-            window.history.replaceState({}, "", window.location.pathname);
-          }}
-          className="absolute top-4 right-4 z-10 flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--accent)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--page-bg)] transition hover:bg-[var(--accent)]/90"
-        >
-          Exit Admin
-        </button>
-        <AdminPage />
-      </div>
-    );
-  }
-
-  if (!profile) {
-    if (useFormMode) {
-      return (
-        <div className="relative">
-          <button
-            onClick={() => {
-              setUseFormMode(false);
-              window.history.replaceState({}, "", window.location.pathname);
-            }}
-            className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/90 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--ink-strong)] shadow-sm transition hover:bg-white"
-          >
-            ← Back to Chat Mode
-          </button>
-          <ConfigurationPage onStart={handleStart} />
-        </div>
-      );
-    }
-
-    return (
-      <ChatPage
-        onStart={(profile) => {
-          handleStart(profile);
-        }}
-      />
-    );
+  if (!session) {
+    return <ConfigurationPage onStart={handleStart} />;
   }
 
   return (
     <NegotiationPage
-      key={sessionKey}
-      profile={profile}
+      initialSession={session}
       onReset={handleReset}
       onRestart={handleReset}
     />

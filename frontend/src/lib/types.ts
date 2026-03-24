@@ -1,10 +1,21 @@
-export type NegotiationStatus = "pending" | "countered" | "accepted" | "rejected";
+export type NegotiationStatus =
+  | "pending"
+  | "countered"
+  | "accepted"
+  | "rejected";
 
 export type BuyerDecision = "ACCEPT" | "COUNTER" | "REJECT";
 
 export type Actor = "buyer" | "supplier" | "system";
 
 export interface OfferTerms {
+  price: number;
+  paymentDays: number;
+  deliveryDays: number;
+  contractMonths: number;
+}
+
+export interface IssueWeights {
   price: number;
   paymentDays: number;
   deliveryDays: number;
@@ -29,12 +40,7 @@ export interface BuyerPreferences {
     min: number;
     max: number;
   };
-  weights: {
-    price: number;
-    paymentDays: number;
-    deliveryDays: number;
-    contractMonths: number;
-  };
+  weights: IssueWeights;
   thresholds: {
     acceptStart: number;
     acceptFloor: number;
@@ -95,4 +101,84 @@ export interface DecisionOutcome {
   rationale: string;
   utility: number;
   breakdown: UtilityBreakdown;
+}
+
+export interface ApiBuyerProfile {
+  idealOffer: OfferTerms;
+  reservationOffer: OfferTerms;
+  weights: IssueWeights;
+  reservationUtility: number;
+}
+
+export interface ApiBounds {
+  minPrice: number;
+  maxPrice: number;
+  minPaymentDays: number;
+  maxPaymentDays: number;
+  minDeliveryDays: number;
+  maxDeliveryDays: number;
+  minContractMonths: number;
+  maxContractMonths: number;
+}
+
+export interface ApiEvaluation {
+  buyerUtility: number;
+  estimatedSupplierUtility: number;
+  targetUtility: number;
+  continuationValue: number;
+  nashProduct: number;
+}
+
+export interface ApiConversationDebug {
+  strategy?: string | null;
+  strategyRationale?: string | null;
+  switchTrigger?: string | null;
+  reasonCode?: string | null;
+  focusIssue?: string | null;
+  evaluation?: ApiEvaluation | null;
+  counterOfferSummary: string[];
+}
+
+export interface ApiConversationEvent {
+  eventType: string;
+  actor: Actor;
+  title: string;
+  message: string;
+  at: string;
+  terms?: OfferTerms | null;
+  counterOffers: OfferTerms[];
+  debug?: ApiConversationDebug | null;
+}
+
+export interface ApiStrategyHistory {
+  roundNumber: number;
+  previousStrategy?: string | null;
+  nextStrategy: string;
+  trigger: string;
+  rationale: string;
+  at: string;
+}
+
+export interface ApiSessionDefaults {
+  defaultStrategy: string;
+  availableStrategies: string[];
+  maxRounds: number;
+  riskOfWalkaway: number;
+  buyerProfile: ApiBuyerProfile;
+  bounds: ApiBounds;
+}
+
+export interface ApiNegotiationSession {
+  id: string;
+  sessionToken: string;
+  strategy: string;
+  currentRound: number;
+  maxRounds: number;
+  riskOfWalkaway: number;
+  status: string;
+  closed: boolean;
+  buyerProfile: ApiBuyerProfile;
+  bounds: ApiBounds;
+  strategyHistory: ApiStrategyHistory[];
+  conversation: ApiConversationEvent[];
 }

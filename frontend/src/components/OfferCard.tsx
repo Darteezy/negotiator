@@ -26,10 +26,11 @@ export function OfferCard({
   mesoLabel,
 }: Props) {
   const isBuyer = actor === "buyer";
-  const alignment = align === "right" ? "items-end text-right" : "items-start text-left";
+  const alignment =
+    align === "right" ? "items-end text-right" : "items-start text-left";
   const bubble = isBuyer
-    ? "bg-[var(--buyer-soft)] text-[var(--buyer-ink)]"
-    : "bg-[var(--supplier-soft)] text-[var(--supplier-ink)]";
+    ? "bg-[rgba(33,60,72,0.92)] text-[var(--ink-strong)]"
+    : "bg-[rgba(18,39,49,0.92)] text-[var(--ink-strong)]";
 
   return (
     <div className={`flex flex-col gap-2 ${alignment}`}>
@@ -38,15 +39,17 @@ export function OfferCard({
           <img
             src={botAvatar}
             alt='Buyer bot'
-            className='h-8 w-8 rounded-full border border-[var(--line)] bg-white shadow-sm shadow-black/10'
+            className='h-8 w-8 rounded-full border border-[var(--line)] bg-[rgba(18,39,49,0.92)] shadow-sm shadow-black/20'
           />
         ) : (
-          <span className='h-8 w-8 rounded-full bg-white shadow-sm shadow-black/5 ring-1 ring-[var(--line)] flex items-center justify-center font-semibold text-[var(--ink-strong)]'>
+          <span className='flex h-8 w-8 items-center justify-center rounded-full bg-[rgba(18,39,49,0.92)] text-[11px] font-semibold text-[var(--ink-strong)] shadow-sm shadow-black/10 ring-1 ring-[var(--line)]'>
             S
           </span>
         )}
         <div className='flex flex-col'>
-          <span className='font-semibold text-[var(--ink-strong)]'>{title}</span>
+          <span className='font-semibold text-[var(--ink-strong)]'>
+            {title}
+          </span>
           {mesoLabel ? (
             <span className='text-[11px] font-semibold text-[var(--ink-soft)]'>
               {mesoLabel}
@@ -55,29 +58,34 @@ export function OfferCard({
         </div>
       </div>
       <div
-        className={`w-full max-w-2xl rounded-2xl border border-[var(--line)] px-4 py-3 shadow-sm shadow-black/5 ${bubble} ${highlight ? "ring-2 ring-[var(--accent)]" : ""}`}
+        className={`w-full max-w-3xl rounded-2xl border border-[var(--line)] px-4 py-3 shadow-sm shadow-black/10 ${bubble} ${highlight ? "ring-2 ring-[var(--accent)]" : ""}`}
       >
         {message ? (
-          <p className='mb-2 text-sm leading-relaxed whitespace-pre-wrap'>{message}</p>
+          <p className='mb-2 text-[13px] leading-6 whitespace-pre-wrap'>
+            {message}
+          </p>
         ) : null}
         {terms ? (
-          <div className='grid grid-cols-2 gap-3 text-sm font-semibold'>
+          <div className='grid grid-cols-2 gap-2 text-xs font-semibold'>
             <TermPill label='Price' value={`€${terms.price.toFixed(2)}`} />
             <TermPill label='Payment' value={`${terms.paymentDays} days`} />
             <TermPill label='Delivery' value={`${terms.deliveryDays} days`} />
-            <TermPill label='Contract' value={`${terms.contractMonths} months`} />
+            <TermPill
+              label='Contract'
+              value={`${terms.contractMonths} months`}
+            />
           </div>
         ) : null}
         {utility !== undefined ? (
           <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--ink-soft)]'>
-            <span className='rounded-full bg-white/70 px-3 py-1 font-semibold text-[var(--ink-strong)] shadow-sm shadow-black/5'>
+            <span className='rounded-full bg-black/20 px-3 py-1 font-semibold text-[var(--ink-strong)] shadow-sm shadow-black/10'>
               Utility {Math.round(utility * 100)}%
             </span>
             {breakdown
               ? Object.entries(breakdown).map(([key, part]) => (
                   <span
                     key={key}
-                    className='rounded-full bg-black/5 px-2.5 py-1 font-semibold text-[11px] uppercase text-[var(--ink-soft)]'
+                    className='rounded-full bg-black/20 px-2.5 py-1 font-semibold text-[11px] uppercase text-[var(--ink-soft)]'
                   >
                     {key} {Math.round(part.score * 100)}%
                   </span>
@@ -92,11 +100,11 @@ export function OfferCard({
 
 function TermPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className='flex flex-col rounded-xl bg-white/70 px-3 py-2 text-left shadow-inner shadow-black/5 ring-1 ring-[var(--line)]'>
+    <div className='flex flex-col rounded-xl bg-black/20 px-3 py-2 text-left shadow-inner shadow-black/10 ring-1 ring-[var(--line)]'>
       <span className='text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]'>
         {label}
       </span>
-      <span className='text-base text-[var(--ink-strong)]'>{value}</span>
+      <span className='text-sm text-[var(--ink-strong)]'>{value}</span>
     </div>
   );
 }

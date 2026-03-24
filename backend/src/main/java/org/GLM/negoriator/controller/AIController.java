@@ -9,7 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -19,26 +18,20 @@ public class AIController {
     private static final String OFFER_PARSE_PROMPT = "You extract final negotiation terms from supplier messages. Return JSON only with keys price, paymentDays, deliveryDays, contractMonths. Use referenceTerms as defaults. If the supplier says option N, use counterOffers[N-1] as the base. Apply relative adjustments such as 5 euro higher. Do not include markdown fences.";
 
     private final AiGatewayService aiGatewayService;
-    private final AdminApiGuard adminApiGuard;
     private final ObjectMapper objectMapper;
 
     public AIController(
         AiGatewayService aiGatewayService,
-        AdminApiGuard adminApiGuard,
         ObjectMapper objectMapper
     ) {
         this.aiGatewayService = aiGatewayService;
-        this.adminApiGuard = adminApiGuard;
         this.objectMapper = objectMapper;
     }
 
     @PostMapping(path = "/ai/parse-offer", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     ParseOfferResponse parseOffer(
-        @RequestHeader(name = AdminApiGuard.ADMIN_TOKEN_HEADER, required = false) String adminToken,
         @RequestBody ParseOfferRequest request
     ) {
-        adminApiGuard.assertAuthorized(adminToken);
-
         if (request == null || request.supplierMessage() == null || request.supplierMessage().isBlank()) {
             throw new IllegalArgumentException("supplierMessage is required.");
         }

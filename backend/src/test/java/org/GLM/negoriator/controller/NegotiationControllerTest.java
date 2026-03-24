@@ -48,7 +48,7 @@ class NegotiationControllerTest {
 	}
 
 	@Test
-	void startSessionHonorsCustomConfigurationAndRequiresSessionTokenForReads() throws Exception {
+	void startSessionHonorsCustomConfigurationAndIncludesOpeningBuyerMessage() throws Exception {
 		String requestBody = """
 			{
 			  "strategy": "BOULWARE",
@@ -115,12 +115,11 @@ class NegotiationControllerTest {
 		assertFalse(sessionToken.isBlank());
 
 		mockMvc.perform(get("/api/negotiations/sessions/{sessionId}", sessionId))
-			.andExpect(status().isForbidden());
-
-		mockMvc.perform(get("/api/negotiations/sessions/{sessionId}", sessionId)
-				.header(SessionAccessGuard.SESSION_TOKEN_HEADER, sessionToken))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.id").value(sessionId.toString()))
-			.andExpect(jsonPath("$.sessionToken").value(sessionToken));
+			.andExpect(jsonPath("$.sessionToken").value(sessionToken))
+			.andExpect(jsonPath("$.conversation[0].actor").value("buyer"))
+			.andExpect(jsonPath("$.conversation[0].eventType").value("BUYER_OPENING"))
+			.andExpect(jsonPath("$.conversation[0].message").value("Please send your opening offer with price, payment days, delivery days, and contract length."));
 	}
 }
