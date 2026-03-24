@@ -103,4 +103,30 @@ class NegotiationEngineImplTest {
 		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
 		assertEquals(new BigDecimal("107.63"), response.counterOffers().getFirst().price());
 	}
+
+	@Test
+	void rejectsFinalRoundOffersBelowConfiguredReservationUtility() {
+		BuyerProfile strictBuyerProfile = new BuyerProfile(
+			buyerProfile.idealOffer(),
+			buyerProfile.reservationOffer(),
+			buyerProfile.weights(),
+			new BigDecimal("0.2500"));
+		NegotiationContext finalRoundContext = new NegotiationContext(
+			8,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			buyerProfile.reservationOffer(),
+			finalRoundContext,
+			strictBuyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds));
+
+		assertEquals(NegotiationEngine.Decision.REJECT, response.decision());
+		assertEquals(NegotiationEngine.DecisionReason.FINAL_ROUND_BELOW_RESERVATION, response.reasonCode());
+	}
 }

@@ -26,24 +26,29 @@ public class DecisionMaker {
         return evaluate(utility, profile, context).decision();
     }
 
-    DecisionOutcome evaluate(
-            BigDecimal utility,
-            NegotiationEngine.BuyerProfile profile,
-            NegotiationEngine.NegotiationContext context
-    ) {
-        BigDecimal targetUtility = targetUtility(profile, context);
-        BigDecimal hardRejectThreshold = ZERO.setScale(SCALE, RoundingMode.HALF_UP);
+	DecisionOutcome evaluate(
+			BigDecimal utility,
+			NegotiationEngine.BuyerProfile profile,
+			NegotiationEngine.NegotiationContext context
+	) {
+	        BigDecimal reservationUtility = normalizedReservationUtility(profile);
+	        BigDecimal targetUtility = targetUtility(profile, context).max(reservationUtility);
+	        BigDecimal hardRejectThreshold = ZERO.setScale(SCALE, RoundingMode.HALF_UP);
 
-        if (utility.compareTo(targetUtility) >= 0) {
-            return new DecisionOutcome(Decision.ACCEPT, targetUtility, hardRejectThreshold, DecisionReason.TARGET_UTILITY_MET);
-        }
+	        if (utility.compareTo(hardRejectThreshold) < 0) {
+	            return new DecisionOutcome(Decision.REJECT, targetUtility, hardRejectThreshold, DecisionReason.BELOW_HARD_REJECT_THRESHOLD);
+	        }
 
-        if (context.round() >= context.maxRounds()) {
-            return new DecisionOutcome(Decision.ACCEPT, targetUtility, hardRejectThreshold, DecisionReason.FINAL_ROUND_WITHIN_LIMITS);
-        }
+	        if (utility.compareTo(targetUtility) >= 0) {
+	            return new DecisionOutcome(Decision.ACCEPT, targetUtility, hardRejectThreshold, DecisionReason.TARGET_UTILITY_MET);
+	        }
 
-        return new DecisionOutcome(Decision.COUNTER, targetUtility, hardRejectThreshold, DecisionReason.COUNTER_TO_CLOSE_GAP);
-    }
+	        if (context.round() >= context.maxRounds()) {
+	            return new DecisionOutcome(Decision.REJECT, targetUtility, hardRejectThreshold, DecisionReason.FINAL_ROUND_BELOW_RESERVATION);
+	        }
+
+	        return new DecisionOutcome(Decision.COUNTER, targetUtility, hardRejectThreshold, DecisionReason.COUNTER_TO_CLOSE_GAP);
+	    }
 
     BigDecimal targetUtility(
             NegotiationEngine.BuyerProfile profile,
@@ -55,8 +60,17 @@ public class DecisionMaker {
 
         BigDecimal progress = BigDecimal.valueOf(Math.max(1, Math.min(context.round(), context.maxRounds())))
                 .divide(BigDecimal.valueOf(context.maxRounds()), SCALE, RoundingMode.HALF_UP);
-        return ONE.subtract(progress).max(ZERO).setScale(SCALE, RoundingMode.HALF_UP);
-    }
+	        return ONE.subtract(progress).max(ZERO).setScale(SCALE, RoundingMode.HALF_UP);
+	    }
+
+	    private BigDecimal normalizedReservationUtility(NegotiationEngine.BuyerProfile profile) {
+	        BigDecimal reservationUtility = profile.reservationUtility();
+	        if (reservationUtility == null) {
+	            return ZERO.setScale(SCALE, RoundingMode.HALF_UP);
+	        }
+
+	        return reservationUtility.max(ZERO).min(ONE).setScale(SCALE, RoundingMode.HALF_UP);
+	    }
 
     record DecisionOutcome(
             Decision decision,

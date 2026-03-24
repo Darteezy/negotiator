@@ -23,6 +23,7 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
@@ -38,6 +39,10 @@ public class NegotiationSession {
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
 	private UUID id;
+
+	@Version
+	@Column(name = "version", nullable = false)
+	private Long version;
 
 	@Column(name = "current_round", nullable = false)
 	private Integer currentRound;
@@ -55,6 +60,9 @@ public class NegotiationSession {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "status", nullable = false, length = 16)
 	private NegotiationSessionStatus status;
+
+	@Column(name = "session_token", nullable = false, unique = true, length = 64)
+	private String sessionToken;
 
 	@Embedded
 	private BuyerProfileSnapshot buyerProfileSnapshot;
@@ -104,6 +112,7 @@ public class NegotiationSession {
 		this.strategy = strategy;
 		this.riskOfWalkaway = riskOfWalkaway;
 		this.status = status;
+		this.sessionToken = UUID.randomUUID().toString();
 		this.buyerProfileSnapshot = buyerProfileSnapshot;
 		this.boundsSnapshot = boundsSnapshot;
 		this.supplierModelSnapshot = supplierModelSnapshot;
@@ -221,6 +230,9 @@ public class NegotiationSession {
 	@PrePersist
 	void onCreate() {
 		Instant now = Instant.now();
+		if (sessionToken == null || sessionToken.isBlank()) {
+			sessionToken = UUID.randomUUID().toString();
+		}
 		createdAt = now;
 		updatedAt = now;
 	}
@@ -252,6 +264,10 @@ public class NegotiationSession {
 
 	public NegotiationSessionStatus getStatus() {
 		return status;
+	}
+
+	public String getSessionToken() {
+		return sessionToken;
 	}
 
 	public BuyerProfileSnapshot getBuyerProfileSnapshot() {

@@ -2,8 +2,10 @@ package org.GLM.negoriator.controller;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,9 +39,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class NegotiationController {
 
 	private final NegotiationApplicationService negotiationApplicationService;
+	private final SessionAccessGuard sessionAccessGuard;
 
-	public NegotiationController(NegotiationApplicationService negotiationApplicationService) {
+	public NegotiationController(
+		NegotiationApplicationService negotiationApplicationService,
+		SessionAccessGuard sessionAccessGuard
+	) {
 		this.negotiationApplicationService = negotiationApplicationService;
+		this.sessionAccessGuard = sessionAccessGuard;
 	}
 
 	@GetMapping("/config/defaults")
@@ -48,7 +56,8 @@ public class NegotiationController {
 			NegotiationDefaults.maxRounds(),
 			NegotiationDefaults.riskOfWalkaway(),
 			NegotiationDefaults.buyerProfile(),
-			NegotiationDefaults.bounds());
+			NegotiationDefaults.bounds(),
+			NegotiationDefaults.supplierModel());
 	}
 
 	@PostMapping("/sessions")
@@ -65,24 +74,33 @@ public class NegotiationController {
 	}
 
 	@GetMapping("/sessions/{sessionId}")
-	public NegotiationSessionResponse getSession(@PathVariable UUID sessionId) {
-		return NegotiationSessionResponse.from(negotiationApplicationService.getSession(sessionId));
+	public NegotiationSessionResponse getSession(
+		@PathVariable UUID sessionId,
+		@RequestHeader(name = SessionAccessGuard.SESSION_TOKEN_HEADER, required = false) String sessionToken
+	) {
+		NegotiationSession session = negotiationApplicationService.getSession(sessionId);
+		sessionAccessGuard.assertAuthorized(session, sessionToken);
+		return NegotiationSessionResponse.from(session);
 	}
 
 	@PostMapping("/sessions/{sessionId}/offers")
 	public NegotiationSessionResponse submitSupplierOffer(
 		@PathVariable UUID sessionId,
+		@RequestHeader(name = SessionAccessGuard.SESSION_TOKEN_HEADER, required = false) String sessionToken,
 		@RequestBody SubmitSupplierOfferRequest request
 	) {
 		if (request == null) {
 			throw new IllegalArgumentException("Supplier offer payload is required.");
 		}
 
+		NegotiationSession session = negotiationApplicationService.getSession(sessionId);
+		sessionAccessGuard.assertAuthorized(session, sessionToken);
+
 		NegotiationSession updatedSession = negotiationApplicationService.submitSupplierOffer(
 			sessionId,
-			request.toOfferVector(),
-			request.toSupplierConstraints(),
-			request.supplierMessage());
+				request.toOfferVector(),
+				request.toSupplierConstraints(),
+				request.supplierMessage());
 
 		return NegotiationSessionResponse.from(negotiationApplicationService.getSession(updatedSession.getId()));
 	}
@@ -93,22 +111,25 @@ public class NegotiationController {
 		int maxRounds,
 		BigDecimal riskOfWalkaway,
 		BuyerProfileResponse buyerProfile,
-		BoundsResponse bounds
+		BoundsResponse bounds,
+		SupplierModelResponse supplierModel
 	) {
 		static SessionDefaultsResponse from(
 			NegotiationStrategy defaultStrategy,
 			int maxRounds,
 			BigDecimal riskOfWalkaway,
 			BuyerProfile buyerProfile,
-			NegotiationBounds bounds
+			NegotiationBounds bounds,
+			SupplierModel supplierModel
 		) {
 			return new SessionDefaultsResponse(
 				defaultStrategy.name(),
-				List.of(defaultStrategy.name()),
+				Arrays.stream(NegotiationStrategy.values()).map(Enum::name).toList(),
 				maxRounds,
 				riskOfWalkaway,
 				BuyerProfileResponse.from(buyerProfile),
-				BoundsResponse.from(bounds));
+				BoundsResponse.from(bounds),
+				SupplierModelResponse.from(supplierModel));
 		}
 	}
 
@@ -121,15 +142,17 @@ public class NegotiationController {
 		SupplierModelRequest supplierModel
 	) {
 		NegotiationApplicationService.StartSessionCommand toCommand() {
-			NegotiationStrategy strategyValue = NegotiationDefaults.defaultStrategy();
+			NegotiationStrategy strategyValue = strategy == null || strategy.isBlank()
+				? NegotiationDefaults.defaultStrategy()
+				: NegotiationStrategy.valueOf(strategy.trim().toUpperCase(Locale.ROOT));
 
 			return new NegotiationApplicationService.StartSessionCommand(
 				strategyValue,
 				maxRounds == null ? NegotiationDefaults.maxRounds(strategyValue) : maxRounds,
-				NegotiationDefaults.riskOfWalkaway(),
+				riskOfWalkaway == null ? NegotiationDefaults.riskOfWalkaway() : riskOfWalkaway,
 				buyerProfile == null ? NegotiationDefaults.buyerProfile() : buyerProfile.toBuyerProfile(),
-				NegotiationDefaults.bounds(),
-				NegotiationDefaults.supplierModel());
+				bounds == null ? NegotiationDefaults.bounds() : bounds.toBounds(),
+				supplierModel == null ? NegotiationDefaults.supplierModel() : supplierModel.toSupplierModel());
 		}
 	}
 
@@ -156,6 +179,7 @@ public class NegotiationController {
 
 	public record NegotiationSessionResponse(
 		UUID id,
+		String sessionToken,
 		String strategy,
 		int currentRound,
 		int maxRounds,
@@ -164,11 +188,12 @@ public class NegotiationController {
 		boolean closed,
 		BuyerProfileResponse buyerProfile,
 		BoundsResponse bounds,
+		SupplierModelResponse supplierModel,
 		List<NegotiationRoundResponse> rounds,
 		List<StrategyHistoryResponse> strategyHistory,
 		List<ConversationEventResponse> conversation
 	) {
-		static NegotiationSessionResponse from(NegotiationSession session) {
+			static NegotiationSessionResponse from(NegotiationSession session) {
 			List<NegotiationRoundResponse> rounds = session.getDecisions().stream()
 				.sorted(Comparator.comparing(NegotiationDecision::getRoundNumber)
 					.thenComparing(NegotiationDecision::getDecidedAt))
@@ -180,21 +205,23 @@ public class NegotiationController {
 				.toList();
 			List<ConversationEventResponse> conversation = ConversationEventResponse.from(session, rounds, strategyHistory);
 
-			return new NegotiationSessionResponse(
-				session.getId(),
-				session.getStrategy().name(),
-				session.getCurrentRound(),
-				session.getMaxRounds(),
-				session.getRiskOfWalkaway(),
-				session.getStatus().name(),
-				session.isClosed(),
-				BuyerProfileResponse.from(session.toBuyerProfile()),
-				BoundsResponse.from(session.toNegotiationBounds()),
-				rounds,
-				strategyHistory,
-				conversation);
+				return new NegotiationSessionResponse(
+					session.getId(),
+					session.getSessionToken(),
+					session.getStrategy().name(),
+					session.getCurrentRound(),
+					session.getMaxRounds(),
+					session.getRiskOfWalkaway(),
+					session.getStatus().name(),
+					session.isClosed(),
+					BuyerProfileResponse.from(session.toBuyerProfile()),
+					BoundsResponse.from(session.toNegotiationBounds()),
+					SupplierModelResponse.from(session.initialSupplierModel()),
+					rounds,
+					strategyHistory,
+					conversation);
+			}
 		}
-	}
 
 	public record StrategyHistoryResponse(
 		int roundNumber,
@@ -541,6 +568,17 @@ public class NegotiationController {
 			return new SupplierModel(
 				require(archetypeBeliefs, "supplierModel.archetypeBeliefs"),
 				require(reservationUtility, "supplierModel.reservationUtility"));
+		}
+	}
+
+	public record SupplierModelResponse(
+		Map<SupplierArchetype, BigDecimal> archetypeBeliefs,
+		BigDecimal reservationUtility
+	) {
+		static SupplierModelResponse from(SupplierModel supplierModel) {
+			return new SupplierModelResponse(
+				supplierModel.archetypeBeliefs(),
+				supplierModel.reservationUtility());
 		}
 	}
 
