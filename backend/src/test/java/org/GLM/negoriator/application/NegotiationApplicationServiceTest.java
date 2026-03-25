@@ -192,7 +192,38 @@ class NegotiationApplicationServiceTest {
 	}
 
 	@Test
-	void acceptsSupplierSelectionOfPriorBuyerOptionWithoutExplicitAcceptKeyword() {
+	void mesoOptionSelectionKeepsNegotiationOpenWithoutExplicitAcceptKeyword() {
+		NegotiationSession startedSession = service.startSession(
+			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
+
+		NegotiationSession counteredSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("110.00"), 40, 29, 20),
+			"Price 110, payment 40, delivery 29, contract 20");
+
+		OfferVector selectedBuyerOption = counteredSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == 1)
+			.sorted(Comparator.comparing(org.GLM.negoriator.domain.NegotiationOffer::getCreatedAt))
+			.skip(1)
+			.findFirst()
+			.orElseThrow()
+			.toOfferVector();
+
+		NegotiationSession selectedSession = submit(
+			counteredSession,
+			selectedBuyerOption,
+			"option 2");
+		NegotiationDecision selectedDecision = latestDecision(selectedSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, selectedSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, selectedDecision.getDecision());
+		assertTrue(selectedDecision.getSupplierOffer().toOfferVector().matches(selectedBuyerOption));
+		assertNotNull(selectedDecision.getCounterOffer());
+	}
+
+	@Test
+	void mesoOptionSelectionWithExplicitAcceptKeywordClosesDeal() {
 		NegotiationSession startedSession = service.startSession(
 			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
 
@@ -213,11 +244,13 @@ class NegotiationApplicationServiceTest {
 		NegotiationSession acceptedSession = submit(
 			counteredSession,
 			selectedBuyerOption,
-			"option 2");
+			"accept option 2");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
 		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
+		assertNotNull(acceptedDecision.getCounterOffer());
+		assertTrue(acceptedDecision.getCounterOffer().toOfferVector().matches(selectedBuyerOption));
 	}
 
 	@Test

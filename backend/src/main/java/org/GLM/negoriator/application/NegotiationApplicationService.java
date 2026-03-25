@@ -352,7 +352,14 @@ public class NegotiationApplicationService {
 			return null;
 		}
 
-		if (!isExplicitAcceptanceMessage(supplierMessage) && !isBuyerOfferSelectionMessage(supplierMessage)) {
+		boolean explicitAcceptance = isExplicitAcceptanceMessage(supplierMessage);
+		boolean buyerOfferSelection = isBuyerOfferSelectionMessage(supplierMessage);
+
+		if (!explicitAcceptance && !buyerOfferSelection) {
+			return null;
+		}
+
+		if (session.getStrategy() == NegotiationStrategy.MESO && buyerOfferSelection && !explicitAcceptance) {
 			return null;
 		}
 
@@ -378,7 +385,7 @@ public class NegotiationApplicationService {
 			return activeBuyerOffers.get(selectedOfferIndex - 1);
 		}
 
-		if (isExplicitAcceptanceMessage(supplierMessage) && !activeBuyerOffers.isEmpty()) {
+		if (explicitAcceptance && !activeBuyerOffers.isEmpty()) {
 			return activeBuyerOffers.getFirst();
 		}
 
