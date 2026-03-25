@@ -19,7 +19,7 @@ In each round, the backend does three things:
 2. Compare that score with the buyer's current target for this round.
 3. Decide whether to accept, counter, or reject.
 
-That sounds simple, but the current engine also adds:
+That sounds simple, but the engine also adds:
 
 - hard reservation checks
 - strategy-specific concession curves
@@ -146,11 +146,11 @@ Each issue is normalized into a common scale, multiplied by its normalized weigh
 
 The buyer does not expect the same quality level in every round.
 
-The `DecisionMaker` calculates a target utility for the current round. That target changes by strategy.
+The `DecisionMaker` calculates a target utility for the round. That target changes by strategy.
 
-### Current target curves
+### Target curves
 
-| Strategy      | Current target pattern                              |
+| Strategy      | Target pattern                                      |
 | ------------- | --------------------------------------------------- |
 | `BASELINE`    | `1.0 - progress`                                    |
 | `MESO`        | `1.0 - progress^1.35`                               |
@@ -172,15 +172,17 @@ The target utility is never allowed to drop below the buyer's configured reserva
 
 The engine also calculates a hard reject threshold by strategy.
 
-Current thresholds:
+Thresholds:
 
-- `BASELINE`: `-0.0500`
-- `MESO`: `-0.0600`
-- `BOULWARE`: `-0.0350`
-- `CONCEDER`: `-0.0800`
-- `TIT_FOR_TAT`: `-0.0650` after a real supplier concession, otherwise `-0.0400`
+- `BASELINE`: `0.1200`
+- `MESO`: `0.1000`
+- `BOULWARE`: `0.1500`
+- `CONCEDER`: `0.0800`
+- `TIT_FOR_TAT`: `0.1000` after a real supplier concession, otherwise `0.1300`
 
-This threshold is separate from the reservation checks. It controls when an offer is simply too weak to keep discussing.
+This threshold is separate from the reservation checks. It marks offers that are too weak to keep open indefinitely.
+
+Before the final round, the engine can still answer those offers with a warning-style counter if there is a buyer-safe path back into the negotiation. On the final round, the session stops instead of carrying the offer forward.
 
 ## Decision rules
 
@@ -189,10 +191,10 @@ After scoring the supplier offer, the engine follows this order:
 1. Check whether the offer breaks buyer reservation limits.
 2. Compute buyer utility.
 3. Compute target utility and hard reject threshold.
-4. Reject immediately if utility is below the hard reject threshold.
-5. Accept if utility meets the current target.
-6. Reject on the final round if utility is still below the target floor.
-7. Otherwise counter.
+4. Accept if utility meets the current target.
+5. Reject on the final round if there is no room left to keep negotiating.
+6. If utility is below the hard reject threshold and time remains, counter with a warning that material movement is still needed.
+7. Otherwise counter to close the remaining gap.
 
 There is one important adjustment:
 
@@ -236,6 +238,8 @@ Examples:
 - a delivery-days floor blocks asking for even faster delivery
 - a contract-months floor blocks asking for an even shorter contract
 
+This matters most in borderline scenarios. If the supplier cannot move on price, payment, delivery, or contract any further, the buyer can pivot onto the remaining open issues instead of repeating a dead counter.
+
 ### Step 3: avoid repeating a dead move
 
 If the buyer pushed one issue in the previous round and the supplier ignored it, the engine may promote another issue if it is still close enough in importance.
@@ -244,16 +248,16 @@ If the buyer pushed one issue in the previous round and the supplier ignored it,
 
 The selected issue moves toward the buyer ideal.
 
-Current movement rule:
+Movement rule:
 
 - decimal values move halfway toward the target and are rounded
 - integer values move halfway toward the target and are rounded
 
 ### Step 5: rebalance price for trade-offs
 
-If the supplier improved on non-price terms, the buyer can now give some price back while staying buyer-safe.
+If the supplier improved on non-price terms, the buyer can give some price back while staying buyer-safe.
 
-This is one of the most important current behaviors.
+This behavior matters because it allows practical trade-offs across issues.
 
 It means the buyer can do things like:
 
@@ -317,12 +321,12 @@ Important supplier debug fields:
 
 This metadata appears in round history and in supplier conversation events so the frontend can show how each supplier message was interpreted.
 
-Current `supplierIntentSource` values:
+Supported `supplierIntentSource` values:
 
 - `DETERMINISTIC`
 - `AI_FALLBACK`
 
-Current reason codes:
+Reason codes:
 
 - `TARGET_UTILITY_MET`
 - `OUTSIDE_RESERVATION_LIMITS`
@@ -331,7 +335,7 @@ Current reason codes:
 - `FINAL_ROUND_BELOW_RESERVATION`
 - `COUNTER_TO_CLOSE_GAP`
 
-Current focus issues:
+Focus issues:
 
 - `PRICE`
 - `PAYMENT_DAYS`
@@ -342,7 +346,7 @@ Current focus issues:
 
 The backend stores extra values for diagnostics and later analysis.
 
-Current metrics:
+Stored metrics:
 
 1. `buyerUtility`
 2. `estimatedSupplierUtility`
@@ -354,16 +358,16 @@ These metrics are useful for understanding the round, but they are not all direc
 
 ## Supplier model
 
-The supplier model is still lightweight.
+The supplier model is lightweight.
 
-It currently helps estimate supplier utility using four archetype beliefs:
+It helps estimate supplier utility using four archetype beliefs:
 
 - margin focused
 - cashflow focused
 - operations focused
 - stability focused
 
-Today this is mainly diagnostic. It does not yet drive automatic strategy switching.
+This is mainly diagnostic. It does not drive automatic strategy switching.
 
 ## AI role
 
@@ -470,11 +474,11 @@ That keeps the close explicit instead of assuming agreement from ambiguous suppl
 
 If the supplier references a numbered or descriptive buyer option clearly enough, the backend records that resolution in session history and frontend conversation debug.
 
-## Current limitations
+## Limitations
 
-The engine is stronger than the first version, but it is still intentionally narrow.
+The engine is intentionally narrow.
 
-Current limits:
+Limits:
 
 - strategy switching is manual, not automatic
 - supplier modeling is still shallow

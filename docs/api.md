@@ -88,7 +88,7 @@ Response highlights:
 
 ### `GET /api/negotiations/sessions/{sessionId}`
 
-Returns the full current session state.
+Returns the full session state.
 
 Use it for:
 
@@ -189,14 +189,16 @@ curl -X POST http://localhost:8080/api/negotiations/sessions/SESSION_ID/offers \
 
 Response highlights:
 
-- updated `status`
-- updated `currentRound`
+- `status`
+- `currentRound`
 - `rounds` with buyer reply details and `supplierParseDebug`
 - `conversation` with rendered supplier and buyer events
-- supplier conversation `debug` now includes `supplierIntentType`, `supplierIntentSource`, `supplierSelectedBuyerOfferIndex`, and `supplierIntentDetails`
+- supplier conversation `debug` includes `supplierIntentType`, `supplierIntentSource`, `supplierSelectedBuyerOfferIndex`, and `supplierIntentDetails`
 - buyer `reasonCode`, `focusIssue`, `evaluation`, and any `counterOffers`
 
-Current `supplierIntentSource` values:
+The supplier parse debug object uses the same field names in both `rounds[].supplierParseDebug` and `conversation[].debug`, including `supplierSelectedBuyerOfferIndex`.
+
+Supported `supplierIntentSource` values:
 
 - `DETERMINISTIC`
 - `AI_FALLBACK`

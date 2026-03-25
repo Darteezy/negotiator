@@ -4,7 +4,7 @@ This project is a small full-stack negotiation system.
 
 The frontend is supplier-facing. The backend acts as the buyer. PostgreSQL stores the session state. An external AI provider helps parse supplier messages and generate buyer wording, but it does not decide the negotiation outcome.
 
-The current web frontend is a demo surface used to demonstrate and test the buyer workflow. It is not the only possible product channel. The same buyer engine could later be used behind supplier email workflows, chat interfaces, or other communication layers.
+The web frontend is a supplier-facing interface for running and inspecting the buyer workflow. The same buyer engine can also support supplier email workflows, chat interfaces, or other communication layers.
 
 ## High-level view
 
@@ -27,7 +27,7 @@ External AI provider
 
 The frontend is a Vite and React app.
 
-Its role today is practical rather than product-final: it lets a human supplier exercise the negotiation flow end to end and inspect how the buyer agent responds.
+Its role is to let a human supplier exercise the negotiation flow end to end and inspect how the buyer responds.
 
 Main flow:
 
@@ -52,7 +52,7 @@ What the frontend is responsible for:
 - displaying supplier-side parsing context for each supplier message, including resolved intent, source, selected buyer option, and parsing notes
 - exposing strategy details through compact hint-tooltips in the session header and settings panel
 
-Why it exists in the current project:
+Why it exists:
 
 - demonstrate the negotiation engine in a usable way
 - test the round-by-round negotiation flow with a human supplier
@@ -188,7 +188,7 @@ The frontend does not reconstruct history on its own. It renders the conversatio
 
 ## Strategy changes
 
-Strategy switching is manual today.
+Strategy switching is manual.
 
 That means:
 
@@ -218,10 +218,10 @@ AI layer:
 Product channel implication:
 
 - the buyer engine should stay channel-agnostic
-- the current frontend is one demo channel
-- future work could wrap the same decision engine in supplier email or live chat communication without replacing the negotiation core
+- the frontend is one supplier-facing channel
+- the same decision engine can be used in supplier email or live chat communication without replacing the negotiation core
 
-## Current limitations
+## Limitations
 
 - AI provider availability affects normal supplier-message parsing
 - supplier preference modeling is still shallow

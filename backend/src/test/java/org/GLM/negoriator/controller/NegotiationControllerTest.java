@@ -329,7 +329,7 @@ class NegotiationControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierIntentType").value("SELECT_COUNTER_OPTION"))
 			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierIntentSource").value("DETERMINISTIC"))
-			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.selectedBuyerOfferIndex").value(2))
+			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierSelectedBuyerOfferIndex").value(2))
 			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierIntentDetails").value("Supplier message was interpreted as selecting buyer option 2 without final acceptance."))
 			.andExpect(jsonPath("$.conversation[4].actor").value("supplier"))
 			.andExpect(jsonPath("$.conversation[4].debug.supplierIntentType").value("SELECT_COUNTER_OPTION"))

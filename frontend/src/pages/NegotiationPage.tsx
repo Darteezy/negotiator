@@ -1007,7 +1007,7 @@ function buildDetailRows(event: ApiConversationEvent) {
   if (debug?.supplierIntentSource) {
     rows.push({ label: "Intent source", value: debug.supplierIntentSource });
   }
-  if (debug?.supplierSelectedBuyerOfferIndex) {
+  if (debug?.supplierSelectedBuyerOfferIndex != null) {
     rows.push({
       label: "Selected buyer option",
       value: String(debug.supplierSelectedBuyerOfferIndex),

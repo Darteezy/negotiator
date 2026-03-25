@@ -419,6 +419,10 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                     .append(" stays above the current strategy ceiling of ")
                     .append(settlementThresholds.maximumPrice())
                     .append(".");
+            } else if (reasonCode == DecisionReason.BELOW_HARD_REJECT_THRESHOLD) {
+                explanation.append("Countered because the current terms are too weak to keep open indefinitely. Buyer utility is ")
+                    .append(buyerUtility)
+                    .append(". Material movement will be needed to avoid rejection in later rounds.");
             } else {
                 explanation.append("Countered because the offer is still below the current target. Buyer utility is ")
                     .append(buyerUtility)
@@ -456,6 +460,12 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             StrategySettlementPolicy.SettlementThresholds settlementThresholds,
             DecisionReason reasonCode
     ) {
+            if (reasonCode == DecisionReason.BELOW_HARD_REJECT_THRESHOLD) {
+                return "Rejected because the offer remained too weak to keep negotiating. Buyer utility "
+                    + buyerUtility
+                    + " stayed below the warning floor required to continue on these terms.";
+            }
+
             if (reasonCode == DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY) {
                 return "Rejected because the offer remains outside the strategy settlement posture. Buyer utility "
                     + buyerUtility

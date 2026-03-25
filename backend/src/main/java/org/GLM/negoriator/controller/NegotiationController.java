@@ -309,7 +309,7 @@ public class NegotiationController {
 	public record SupplierParseDebugResponse(
 		String supplierIntentType,
 		String supplierIntentSource,
-		Integer selectedBuyerOfferIndex,
+		Integer supplierSelectedBuyerOfferIndex,
 		String supplierIntentDetails
 	) {
 		static SupplierParseDebugResponse from(NegotiationDecision decision) {
@@ -453,7 +453,7 @@ public class NegotiationController {
 						List.of(),
 						round.supplierParseDebug().supplierIntentType(),
 						round.supplierParseDebug().supplierIntentSource(),
-						round.supplierParseDebug().selectedBuyerOfferIndex(),
+						round.supplierParseDebug().supplierSelectedBuyerOfferIndex(),
 						round.supplierParseDebug().supplierIntentDetails())));
 
 				events.add(new ConversationEventResponse(

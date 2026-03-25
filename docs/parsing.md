@@ -11,7 +11,7 @@ That parsing layer matters because messages like these mean very different thing
 - `We can do 115 with 45-day payment.`
 - `Please clarify the delivery point.`
 
-Those messages can all mention the current negotiation context, but they should not all drive the same buyer behavior.
+Those messages can all mention the negotiation context, but they should not all drive the same buyer behavior.
 
 The parsing flow is layered.
 
@@ -38,7 +38,7 @@ Examples:
 - `We can do 115 with 45-day payment.` is a new supplier counterproposal
 - `Please clarify the delivery point.` is not a counter and not an acceptance
 
-The buyer engine still owns the final commercial decision.
+The buyer engine owns the final commercial decision.
 
 Parsing only answers the narrower question: what does the supplier appear to be doing in this message?
 
@@ -154,7 +154,7 @@ Examples:
 - `the first option`
 - `second package`
 
-These help resolve `selectedBuyerOfferIndex` when the supplier points at a numbered buyer offer.
+These help resolve `supplierSelectedBuyerOfferIndex` when the supplier points at a numbered buyer offer.
 
 ### 2. Descriptive buyer option references
 
@@ -209,9 +209,9 @@ Examples:
 
 ## Important behaviors
 
-### Exact-offer match can still close even if the wording is unclear
+### Exact-offer match can close even if the wording is unclear
 
-If the supplier submits terms that exactly match one of the buyer's active offers, the backend can still treat that as acceptance even when the text itself stayed unclear.
+If the supplier submits terms that exactly match one of the buyer's active offers, the backend can treat that as acceptance even when the text itself stayed unclear.
 
 Example context:
 
@@ -293,7 +293,7 @@ Possible `supplierIntentSource` values:
 
 If the supplier message remains unresolved after deterministic parsing and optional AI fallback, the backend asks for clarification instead of guessing.
 
-This only happens when there are active buyer offers and the message is still genuinely ambiguous.
+This only happens when there are active buyer offers and the message is genuinely ambiguous.
 
 Typical clarification situations:
 
@@ -322,6 +322,8 @@ These appear:
 
 - in round history via `supplierParseDebug`
 - in supplier conversation events via `conversation[].debug`
+
+Both response shapes use the same field names, including `supplierSelectedBuyerOfferIndex`.
 
 ## Worked examples
 

@@ -12,11 +12,11 @@ They all use the same rule-based engine, the same buyer limits, and the same fou
 What changes from one strategy to another is mostly:
 
 - how quickly the buyer relaxes over time
-- how close an offer can be before the buyer still keeps talking
+- how close an offer can be before the buyer keeps negotiating
 - how the buyer shapes counteroffers
 - how the buyer message is framed
 
-The strategy is chosen at session start and can be changed manually from session settings. The system does not switch strategies automatically today.
+The strategy is chosen at session start and can be changed manually from session settings. The system does not switch strategies automatically.
 
 ## Short comparison
 
@@ -151,7 +151,7 @@ Boulware is the firm strategy.
 
 Boulware still counters when there is a repair path, but the movement is tighter.
 
-In the current implementation, this strategy also uses the smallest reservation slack before an immediate rejection becomes necessary.
+This strategy also uses the smallest reservation slack before an immediate rejection becomes necessary.
 
 ### Example
 
@@ -223,7 +223,7 @@ Tit-for-Tat is the reciprocal strategy.
 - Then adjusts that posture based on recent supplier concessions
 - Rewards movement and stays cautious when the supplier does not move
 
-### How reciprocity works today
+### How reciprocity works
 
 The backend looks at the most recent supplier move compared with the previous supplier offer.
 
@@ -269,7 +269,7 @@ What this feels like in practice:
 - conditional
 - less predictable than Baseline, but still deterministic
 
-## What all strategies still share
+## What all strategies share
 
 No strategy can override these rules:
 
@@ -281,9 +281,9 @@ No strategy can override these rules:
 
 ## AI and strategy
 
-AI does not choose the strategy today.
+AI does not choose the strategy.
 
-Current AI use around strategy is narrower:
+AI use around strategy is limited:
 
 - the strategy label and rationale influence buyer-facing message tone
 - supplier messages are parsed with AI plus backend heuristics

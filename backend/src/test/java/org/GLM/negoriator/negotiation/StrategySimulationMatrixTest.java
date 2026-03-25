@@ -47,8 +47,9 @@ class StrategySimulationMatrixTest {
 	void printsStrategyMatrixAcrossDeterministicSupplierPersonas() {
 		List<SimulationScenario> scenarios = List.of(
 			marginHardlinerScenario(),
-			operationsFocusedScenario(),
-			cashflowFocusedScenario(),
+			priceFloorTradeoffScenario(),
+			paymentCeilingTradeoffScenario(),
+			deliveryFloorTradeoffScenario(),
 			lateCloserScenario(),
 			nearSettlementScenario(),
 			deadlineSettlementScenario());
@@ -97,7 +98,7 @@ class StrategySimulationMatrixTest {
 				scenario.buyerProfile(),
 				scenario.supplierModel(),
 				scenario.bounds(),
-				null);
+				scenario.supplierConstraints());
 			NegotiationResponse response = negotiationEngine.negotiate(request);
 			BigDecimal buyerUtility = utilityCalculator.calculate(supplierOffer, scenario.buyerProfile(), scenario.bounds());
 			BigDecimal supplierUtility = scenario.persona().utility(supplierOffer, scenario.bounds());
@@ -125,7 +126,13 @@ class StrategySimulationMatrixTest {
 			OfferVector selectedBuyerOffer = scenario.persona().selectPreferredCounterOffer(response.counterOffers(), scenario.bounds());
 			history.add(supplierOffer);
 			history.add(selectedBuyerOffer);
-			supplierOffer = scenario.persona().nextOffer(selectedBuyerOffer, supplierOffer, round, scenario.maxRounds(), scenario.bounds());
+			supplierOffer = scenario.persona().nextOffer(
+				selectedBuyerOffer,
+				supplierOffer,
+				round,
+				scenario.maxRounds(),
+				scenario.bounds(),
+				scenario.supplierConstraints());
 		}
 
 		BigDecimal buyerUtility = utilityCalculator.calculate(supplierOffer, scenario.buyerProfile(), scenario.bounds());
@@ -307,85 +314,128 @@ class StrategySimulationMatrixTest {
 			persona,
 			supplierModel(persona),
 			NegotiationDefaults.maxRounds(),
-			NegotiationDefaults.riskOfWalkaway());
+			NegotiationDefaults.riskOfWalkaway(),
+			null);
 	}
 
-	private SimulationScenario operationsFocusedScenario() {
+	private SimulationScenario priceFloorTradeoffScenario() {
 		NegotiationBounds bounds = NegotiationDefaults.bounds();
 		BuyerProfile buyerProfile = new BuyerProfile(
 			NegotiationDefaults.buyerProfile().idealOffer(),
 			NegotiationDefaults.buyerProfile().reservationOffer(),
 			new IssueWeights(
-				new BigDecimal("0.25"),
-				new BigDecimal("0.15"),
-				new BigDecimal("0.45"),
+				new BigDecimal("0.42"),
+				new BigDecimal("0.23"),
+				new BigDecimal("0.20"),
 				new BigDecimal("0.15")),
 			BigDecimal.ZERO);
 		SupplierPersona persona = new SupplierPersona(
-			"Operations flexible",
-			new BigDecimal("0.20"),
-			new BigDecimal("0.10"),
+			"Price floor trader",
 			new BigDecimal("0.55"),
 			new BigDecimal("0.15"),
-			new BigDecimal("0.66"),
-			new BigDecimal("0.54"),
-			0,
-			new BigDecimal("0.24"),
-			new BigDecimal("0.40"),
-			5,
-			10,
-			6,
-			10,
+			new BigDecimal("0.15"),
+			new BigDecimal("0.15"),
+			new BigDecimal("0.56"),
+			new BigDecimal("0.46"),
+			1,
+			new BigDecimal("0.06"),
+			new BigDecimal("0.10"),
+			8,
+			14,
+			4,
+			7,
 			3,
-			6);
+			5);
 		return new SimulationScenario(
-			"Operations focused",
-			new OfferVector(new BigDecimal("118.00"), 35, 30, 20),
+			"Price floor tradeoff",
+			new OfferVector(new BigDecimal("108.00"), 30, 22, 18),
 			buyerProfile,
 			bounds,
 			persona,
 			supplierModel(persona),
 			NegotiationDefaults.maxRounds(),
-			NegotiationDefaults.riskOfWalkaway());
+			NegotiationDefaults.riskOfWalkaway(),
+			new NegotiationEngine.SupplierConstraints(new BigDecimal("108.00"), null, null, null));
 	}
 
-	private SimulationScenario cashflowFocusedScenario() {
+	private SimulationScenario paymentCeilingTradeoffScenario() {
 		NegotiationBounds bounds = NegotiationDefaults.bounds();
 		BuyerProfile buyerProfile = new BuyerProfile(
 			NegotiationDefaults.buyerProfile().idealOffer(),
 			NegotiationDefaults.buyerProfile().reservationOffer(),
 			new IssueWeights(
-				new BigDecimal("0.25"),
-				new BigDecimal("0.45"),
+				new BigDecimal("0.34"),
+				new BigDecimal("0.36"),
 				new BigDecimal("0.20"),
 				new BigDecimal("0.10")),
 			BigDecimal.ZERO);
 		SupplierPersona persona = new SupplierPersona(
-			"Cashflow anchored",
-			new BigDecimal("0.20"),
-			new BigDecimal("0.55"),
+			"Payment ceiling trader",
+			new BigDecimal("0.25"),
+			new BigDecimal("0.50"),
 			new BigDecimal("0.15"),
 			new BigDecimal("0.10"),
-			new BigDecimal("0.72"),
-			new BigDecimal("0.58"),
+			new BigDecimal("0.54"),
+			new BigDecimal("0.44"),
 			1,
-			new BigDecimal("0.15"),
-			new BigDecimal("0.30"),
-			2,
-			5,
-			3,
+			new BigDecimal("0.18"),
+			new BigDecimal("0.32"),
+			6,
+			8,
+			4,
 			7,
 			2,
 			4);
 		return new SimulationScenario(
-			"Cashflow focused",
-			new OfferVector(new BigDecimal("117.00"), 30, 24, 18),
+			"Payment ceiling tradeoff",
+			new OfferVector(new BigDecimal("112.00"), 45, 21, 18),
 			buyerProfile,
 			bounds,
 			persona,
 			supplierModel(persona),
 			NegotiationDefaults.maxRounds(),
-			NegotiationDefaults.riskOfWalkaway());
+			NegotiationDefaults.riskOfWalkaway(),
+			new NegotiationEngine.SupplierConstraints(null, 45, null, null));
+	}
+
+	private SimulationScenario deliveryFloorTradeoffScenario() {
+		NegotiationBounds bounds = NegotiationDefaults.bounds();
+		BuyerProfile buyerProfile = new BuyerProfile(
+			NegotiationDefaults.buyerProfile().idealOffer(),
+			NegotiationDefaults.buyerProfile().reservationOffer(),
+			new IssueWeights(
+				new BigDecimal("0.30"),
+				new BigDecimal("0.20"),
+				new BigDecimal("0.35"),
+				new BigDecimal("0.15")),
+			BigDecimal.ZERO);
+		SupplierPersona persona = new SupplierPersona(
+			"Delivery floor trader",
+			new BigDecimal("0.20"),
+			new BigDecimal("0.15"),
+			new BigDecimal("0.50"),
+			new BigDecimal("0.15"),
+			new BigDecimal("0.53"),
+			new BigDecimal("0.42"),
+			1,
+			new BigDecimal("0.20"),
+			new BigDecimal("0.34"),
+			6,
+			10,
+			4,
+			6,
+			2,
+			4);
+		return new SimulationScenario(
+			"Delivery floor tradeoff",
+			new OfferVector(new BigDecimal("110.00"), 42, 16, 16),
+			buyerProfile,
+			bounds,
+			persona,
+			supplierModel(persona),
+			NegotiationDefaults.maxRounds(),
+			NegotiationDefaults.riskOfWalkaway(),
+			new NegotiationEngine.SupplierConstraints(null, null, 16, null));
 	}
 
 	private SimulationScenario lateCloserScenario() {
@@ -424,7 +474,8 @@ class StrategySimulationMatrixTest {
 			persona,
 			supplierModel(persona),
 			NegotiationDefaults.maxRounds(),
-			NegotiationDefaults.riskOfWalkaway());
+			NegotiationDefaults.riskOfWalkaway(),
+			null);
 	}
 
 	private SimulationScenario nearSettlementScenario() {
@@ -455,7 +506,8 @@ class StrategySimulationMatrixTest {
 			persona,
 			supplierModel(persona),
 			NegotiationDefaults.maxRounds(),
-			NegotiationDefaults.riskOfWalkaway());
+			NegotiationDefaults.riskOfWalkaway(),
+			null);
 	}
 
 	private SimulationScenario deadlineSettlementScenario() {
@@ -494,7 +546,8 @@ class StrategySimulationMatrixTest {
 			persona,
 			supplierModel(persona),
 			NegotiationDefaults.maxRounds(),
-			NegotiationDefaults.riskOfWalkaway());
+			NegotiationDefaults.riskOfWalkaway(),
+			null);
 	}
 
 	private SupplierModel supplierModel(SupplierPersona persona) {
@@ -519,7 +572,8 @@ class StrategySimulationMatrixTest {
 		SupplierPersona persona,
 		SupplierModel supplierModel,
 		int maxRounds,
-		BigDecimal riskOfWalkaway
+		BigDecimal riskOfWalkaway,
+		NegotiationEngine.SupplierConstraints supplierConstraints
 	) {
 	}
 
@@ -563,14 +617,15 @@ class StrategySimulationMatrixTest {
 			OfferVector currentSupplierOffer,
 			int round,
 			int maxRounds,
-			NegotiationBounds bounds
+			NegotiationBounds bounds,
+			NegotiationEngine.SupplierConstraints supplierConstraints
 		) {
 			if (utility(buyerOffer, bounds).compareTo(acceptanceThreshold(round, maxRounds)) >= 0) {
-				return buyerOffer;
+				return applyConstraints(buyerOffer, supplierConstraints);
 			}
 
 			if (round <= stallRounds) {
-				return currentSupplierOffer;
+				return applyConstraints(currentSupplierOffer, supplierConstraints);
 			}
 
 			boolean lateStage = round >= maxRounds - 2;
@@ -579,11 +634,11 @@ class StrategySimulationMatrixTest {
 			int deliveryStep = lateStage ? lateDeliveryStep : earlyDeliveryStep;
 			int contractStep = lateStage ? lateContractStep : earlyContractStep;
 
-			return new OfferVector(
+			return applyConstraints(new OfferVector(
 				movePrice(currentSupplierOffer.price(), buyerOffer.price(), priceRatio),
 				moveInteger(currentSupplierOffer.paymentDays(), buyerOffer.paymentDays(), paymentStep),
 				moveInteger(currentSupplierOffer.deliveryDays(), buyerOffer.deliveryDays(), deliveryStep),
-				moveInteger(currentSupplierOffer.contractMonths(), buyerOffer.contractMonths(), contractStep));
+				moveInteger(currentSupplierOffer.contractMonths(), buyerOffer.contractMonths(), contractStep)), supplierConstraints);
 		}
 
 		BigDecimal utility(OfferVector offer, NegotiationBounds bounds) {
@@ -643,6 +698,34 @@ class StrategySimulationMatrixTest {
 			}
 
 			return Math.max(current - step, target);
+		}
+
+		private OfferVector applyConstraints(
+			OfferVector offer,
+			NegotiationEngine.SupplierConstraints supplierConstraints
+		) {
+			if (supplierConstraints == null) {
+				return offer;
+			}
+
+			BigDecimal constrainedPrice = supplierConstraints.priceFloor() == null
+				? offer.price()
+				: offer.price().max(supplierConstraints.priceFloor());
+			int constrainedPayment = supplierConstraints.paymentDaysCeiling() == null
+				? offer.paymentDays()
+				: Math.min(offer.paymentDays(), supplierConstraints.paymentDaysCeiling());
+			int constrainedDelivery = supplierConstraints.deliveryDaysFloor() == null
+				? offer.deliveryDays()
+				: Math.max(offer.deliveryDays(), supplierConstraints.deliveryDaysFloor());
+			int constrainedContract = supplierConstraints.contractMonthsFloor() == null
+				? offer.contractMonths()
+				: Math.max(offer.contractMonths(), supplierConstraints.contractMonthsFloor());
+
+			return new OfferVector(
+				constrainedPrice.setScale(2, RoundingMode.HALF_UP),
+				constrainedPayment,
+				constrainedDelivery,
+				constrainedContract);
 		}
 	}
 }

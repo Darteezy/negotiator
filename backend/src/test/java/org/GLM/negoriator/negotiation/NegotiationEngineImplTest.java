@@ -225,6 +225,56 @@ class NegotiationEngineImplTest {
 	}
 
 	@Test
+	void warnsWithCounterBeforeRejectingVeryWeakOfferWhenRoundsRemain() {
+		OfferVector weakButInsideReservation = buyerProfile.reservationOffer();
+		NegotiationContext earlyContext = new NegotiationContext(
+			1,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.PENDING,
+			new BigDecimal("0.15"),
+			List.of());
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			weakButInsideReservation,
+			earlyContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertEquals(NegotiationEngine.DecisionReason.BELOW_HARD_REJECT_THRESHOLD, response.reasonCode());
+		assertTrue(response.explanation().contains("Material movement will be needed to avoid rejection"));
+		assertTrue(!response.counterOffers().isEmpty());
+	}
+
+	@Test
+	void rejectsVeryWeakOfferOnFinalRound() {
+		OfferVector weakButInsideReservation = buyerProfile.reservationOffer();
+		NegotiationContext finalContext = new NegotiationContext(
+			8,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			weakButInsideReservation,
+			finalContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.REJECT, response.decision());
+		assertTrue(response.reasonCode() == NegotiationEngine.DecisionReason.FINAL_ROUND_BELOW_RESERVATION
+			|| response.reasonCode() == NegotiationEngine.DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY);
+		assertTrue(response.explanation() != null && !response.explanation().isBlank());
+	}
+
+	@Test
 	void distinguishesStrategyTargetCurves() {
 		DecisionMaker decisionMaker = new DecisionMaker();
 		NegotiationContext baselineContext = new NegotiationContext(

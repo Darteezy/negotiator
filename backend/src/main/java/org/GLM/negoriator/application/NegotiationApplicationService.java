@@ -262,8 +262,7 @@ public class NegotiationApplicationService {
 			supplierMessage,
 			supplierIntent,
 			activeBuyerOffers,
-			acceptedBuyerOffer,
-			response);
+			acceptedBuyerOffer);
 
 		session.addOffer(supplierOffer);
 
@@ -411,8 +410,7 @@ public class NegotiationApplicationService {
 		String supplierMessage,
 		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent,
 		java.util.List<NegotiationOffer> activeBuyerOffers,
-		NegotiationOffer acceptedBuyerOffer,
-		NegotiationEngine.NegotiationResponse response
+		NegotiationOffer acceptedBuyerOffer
 	) {
 		if (supplierIntent.type() != SupplierMessageIntentParser.SupplierIntentType.UNCLEAR
 			|| acceptedBuyerOffer != null
