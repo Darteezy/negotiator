@@ -220,7 +220,7 @@ If you use Ollama:
 
 The backend also applies deterministic option-selection and fallback handling rules, so this is not just a raw model passthrough.
 
-Current supplier-message handling is layered:
+Supplier-message handling is layered:
 
 - this endpoint extracts structured terms and hard constraints
 - the negotiation submission flow then resolves supplier intent deterministically

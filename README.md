@@ -46,6 +46,7 @@ POSTGRES_PASSWORD=change-me
 
 AI_PROVIDER=ollama
 AI_BASE_URL=http://host.docker.internal:11434
+| [docs/testing.md](docs/testing.md)                       | Test strategy, suite structure, matrix interpretation, and current testing gaps |
 AI_API_KEY=
 AI_CHAT_MODEL=qwen3.5:9b
 ```

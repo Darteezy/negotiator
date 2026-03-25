@@ -369,14 +369,14 @@ Today this is mainly diagnostic. It does not yet drive automatic strategy switch
 
 AI supports the negotiation flow, but it does not control the decision.
 
-Current AI role:
+AI role in this flow:
 
 - parse supplier messages into structured terms
 - detect hard supplier constraints from free text
 - classify unresolved supplier intent through a narrow structured fallback
 - generate supplier-facing buyer wording in a professional procurement tone
 
-Current non-AI role:
+Non-AI role:
 
 - utility scoring
 - reservation checks
@@ -386,7 +386,7 @@ Current non-AI role:
 
 The supplier parsing flow is not pure model output.
 
-Current supplier parsing order:
+Supplier parsing order:
 
 1. parse structured terms and constraints from the supplier message
 2. classify supplier intent deterministically

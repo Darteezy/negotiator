@@ -1,8 +1,19 @@
 # Supplier Message Parsing
 
-This document explains how supplier messages are interpreted before the buyer engine decides whether to accept, counter, reject, or ask for clarification.
+Supplier messages do not go straight from raw text to a final deal decision.
 
-The important design choice is that parsing is layered.
+The backend first extracts terms, then works out what kind of move the supplier is making.
+
+That parsing layer matters because messages like these mean very different things:
+
+- `We agree with option 1.`
+- `Option 1 is closest for us.`
+- `We can do 115 with 45-day payment.`
+- `Please clarify the delivery point.`
+
+Those messages can all mention the current negotiation context, but they should not all drive the same buyer behavior.
+
+The parsing flow is layered.
 
 - structured terms are extracted first
 - supplier intent is classified next
@@ -10,7 +21,7 @@ The important design choice is that parsing is layered.
 - AI fallback is only used for unresolved intent cases
 - if ambiguity still remains, the backend asks for clarification instead of guessing
 
-The parsing flow lives mainly in these backend classes:
+The main classes involved are:
 
 - `SupplierMessageIntentParser`
 - `SupplierMessageIntentAiFallbackService`
@@ -27,11 +38,13 @@ Examples:
 - `We can do 115 with 45-day payment.` is a new supplier counterproposal
 - `Please clarify the delivery point.` is not a counter and not an acceptance
 
-The buyer engine still owns the final commercial decision. Parsing only determines what the supplier appears to be doing.
+The buyer engine still owns the final commercial decision.
+
+Parsing only answers the narrower question: what does the supplier appear to be doing in this message?
 
 ## End-to-end parsing flow
 
-When the supplier sends a message in the frontend, the system follows this order:
+When the supplier sends a message in the frontend, the flow is:
 
 1. The frontend calls `POST /api/ai/parse-offer`.
 2. The backend extracts structured terms and hard constraints from the message.
@@ -43,7 +56,7 @@ When the supplier sends a message in the frontend, the system follows this order
 
 ## Supported supplier intent types
 
-The backend classifies supplier intent into one of these types:
+The backend classifies supplier intent into one of these types.
 
 ### `ACCEPT_ACTIVE_OFFER`
 
@@ -58,7 +71,7 @@ Examples:
 - `The first option works for us.`
 - `Let's go with the faster delivery option.`
 
-Typical result:
+Typical effect:
 
 - if the referenced terms match an active buyer offer and the offer is still buyer-acceptable, the round can close as `ACCEPTED`
 
@@ -74,7 +87,7 @@ Examples:
 - `The faster delivery option is closest for us.`
 - `That package is the nearest one.`
 
-Typical result:
+Typical effect:
 
 - the backend keeps the negotiation open
 - for MESO, this lets the supplier steer toward one buyer option without forcing an immediate close
@@ -91,7 +104,7 @@ Examples:
 - `If you accept, we can do price 102 and delivery 18 days.`
 - `Price 102, payment 45, delivery 18, contract 12.`
 
-Typical result:
+Typical effect:
 
 - the backend treats the message as a new supplier counterproposal and evaluates the structured terms directly
 
@@ -107,7 +120,7 @@ Examples:
 - `This is not workable for us.`
 - `No deal.`
 
-Typical result:
+Typical effect:
 
 - the negotiation is treated as a decline signal rather than an acceptance or new package
 
@@ -123,14 +136,14 @@ Examples:
 - `What works for you on delivery?`
 - `Can you explain the payment logic?`
 
-Typical result:
+Typical effect:
 
 - AI fallback may be attempted if there are active buyer offers
 - if the message still remains ambiguous, the backend asks for clarification
 
 ## Deterministic parsing rules
 
-The deterministic parser checks for several families of signals.
+The deterministic parser looks for a few signal families.
 
 ### 1. Numbered buyer option references
 
@@ -141,7 +154,7 @@ Examples:
 - `the first option`
 - `second package`
 
-These help resolve `selectedBuyerOfferIndex`.
+These help resolve `selectedBuyerOfferIndex` when the supplier points at a numbered buyer offer.
 
 ### 2. Descriptive buyer option references
 
@@ -153,11 +166,11 @@ Examples:
 - `the lower price package`
 - `the longer payment offer`
 
-This is useful when the buyer offered MESO options and the supplier refers to one descriptively.
+This matters most for MESO rounds where the supplier may describe an option instead of naming it by number.
 
 ### 3. Acceptance signals
 
-The parser looks for direct acceptance wording.
+The parser looks for direct acceptance wording first.
 
 Examples:
 
@@ -176,7 +189,7 @@ Examples:
 
 ### 4. Counterproposal signals
 
-These signals prevent the backend from mistaking a fresh supplier package for a buyer-offer acceptance.
+These signals stop the backend from misreading a fresh supplier package as agreement with the buyer.
 
 Examples:
 
@@ -194,7 +207,7 @@ Examples:
 - `not acceptable`
 - `no deal`
 
-## Important product behaviors
+## Important behaviors
 
 ### Exact-offer match can still close even if the wording is unclear
 
@@ -206,7 +219,7 @@ Example context:
 - supplier message: `These terms work.`
 - supplier terms sent by the frontend exactly match buyer option 1
 
-Result:
+What happens:
 
 - the round can close as acceptance
 - debug details explain that the text was unclear but the terms matched an active buyer offer
@@ -220,7 +233,7 @@ Example:
 - supplier terms are acceptable to the buyer
 - supplier message is still a counterproposal or otherwise not an explicit acceptance
 
-Result:
+What happens:
 
 - the backend returns a counter with the same terms
 - the buyer message asks the supplier to confirm acceptance explicitly
@@ -239,7 +252,7 @@ Example:
 
 - supplier message: `option 2`
 
-Result:
+What happens:
 
 - classified as `SELECT_COUNTER_OPTION`
 - negotiation remains open
@@ -248,7 +261,7 @@ Example:
 
 - supplier message: `accept option 2`
 
-Result:
+What happens:
 
 - classified as `ACCEPT_ACTIVE_OFFER`
 - negotiation can close if the referenced option is valid and acceptable
@@ -288,7 +301,7 @@ Typical clarification situations:
 - the supplier asks for clarification without making a commercial move
 - the supplier seems to point at an offer family but not clearly enough to close
 
-Typical result:
+What happens:
 
 - session status remains open
 - buyer returns a clarification-style response
@@ -325,7 +338,7 @@ Supplier message:
 We agree with option 1.
 ```
 
-Likely debug:
+Debug fields typically look like:
 
 - `supplierIntentType = ACCEPT_ACTIVE_OFFER`
 - `supplierIntentSource = DETERMINISTIC`
@@ -340,7 +353,7 @@ Supplier message:
 Option 2 is closest for us.
 ```
 
-Likely debug:
+Debug fields typically look like:
 
 - `supplierIntentType = SELECT_COUNTER_OPTION`
 - `supplierIntentSource = DETERMINISTIC`
@@ -359,13 +372,13 @@ Supplier message:
 Let's go with the faster delivery option.
 ```
 
-Likely debug:
+Debug fields typically look like:
 
 - `supplierIntentType = ACCEPT_ACTIVE_OFFER`
 - `supplierIntentSource = DETERMINISTIC`
 - `supplierSelectedBuyerOfferIndex = null`
 
-Why index may stay `null`:
+Why the index may stay `null`:
 
 - the supplier clearly accepted a descriptive buyer option
 - the wording did not identify it by number
@@ -378,7 +391,7 @@ Supplier message:
 We can do 115 if payment stays at 30 days.
 ```
 
-Likely debug:
+Debug fields typically look like:
 
 - `supplierIntentType = PROPOSE_NEW_TERMS`
 - `supplierIntentSource = DETERMINISTIC`
@@ -392,7 +405,7 @@ Supplier message:
 Can you clarify the contract point?
 ```
 
-Likely debug if fallback still cannot resolve it:
+Debug fields typically look like if fallback still cannot resolve it:
 
 - `supplierIntentType = UNCLEAR`
 - `supplierIntentSource = DETERMINISTIC`
