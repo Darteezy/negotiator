@@ -1,0 +1,1 @@
+- [ ] Strategies currently are a timing policy for display and seems to work until the last round; 7th round targetUtility has a large impact for closing the deal on suppliers terms, effectively rendering strategies non-existent on final settlement

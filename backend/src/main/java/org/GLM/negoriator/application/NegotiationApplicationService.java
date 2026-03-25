@@ -264,7 +264,7 @@ public class NegotiationApplicationService {
 
 		NegotiationOffer counterOffer = buyerCounterOffers.stream()
 			.findFirst()
-			.orElse(null);
+			.orElse(acceptedBuyerOffer);
 
 		for (NegotiationOffer buyerCounterOffer : buyerCounterOffers) {
 			session.addOffer(buyerCounterOffer);
@@ -357,13 +357,55 @@ public class NegotiationApplicationService {
 		}
 
 		int activeBuyerRound = session.getCurrentRound() - 1;
-
-		return session.getOffers().stream()
+		java.util.List<NegotiationOffer> activeBuyerOffers = session.getOffers().stream()
 			.filter(offer -> offer.getParty() == NegotiationParty.BUYER)
 			.filter(offer -> offer.getRoundNumber() == activeBuyerRound)
+			.sorted(java.util.Comparator.comparing(NegotiationOffer::getCreatedAt))
+			.toList();
+
+		NegotiationOffer exactMatch = activeBuyerOffers.stream()
 			.filter(offer -> offer.toOfferVector().matches(supplierOfferTerms))
 			.findFirst()
 			.orElse(null);
+		if (exactMatch != null) {
+			return exactMatch;
+		}
+
+		Integer selectedOfferIndex = selectedBuyerOfferIndex(supplierMessage);
+		if (selectedOfferIndex != null
+			&& selectedOfferIndex >= 1
+			&& selectedOfferIndex <= activeBuyerOffers.size()) {
+			return activeBuyerOffers.get(selectedOfferIndex - 1);
+		}
+
+		if (isExplicitAcceptanceMessage(supplierMessage) && !activeBuyerOffers.isEmpty()) {
+			return activeBuyerOffers.getFirst();
+		}
+
+		if (activeBuyerOffers.size() == 1) {
+			return activeBuyerOffers.getFirst();
+		}
+
+		return null;
+	}
+
+	private Integer selectedBuyerOfferIndex(String supplierMessage) {
+		if (supplierMessage == null || supplierMessage.isBlank()) {
+			return null;
+		}
+
+		java.util.regex.Matcher matcher = OPTION_SELECTION_PATTERN.matcher(supplierMessage);
+		if (!matcher.find()) {
+			return null;
+		}
+
+		String value = matcher.group(2).toLowerCase(java.util.Locale.ROOT);
+		return switch (value) {
+			case "1", "one", "first" -> 1;
+			case "2", "two", "second" -> 2;
+			case "3", "three", "third" -> 3;
+			default -> null;
+		};
 	}
 
 	private boolean isExplicitAcceptanceMessage(String supplierMessage) {

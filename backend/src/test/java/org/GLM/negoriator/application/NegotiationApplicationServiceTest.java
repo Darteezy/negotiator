@@ -9,6 +9,7 @@ import java.util.Comparator;
 
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationDecisionType;
+import org.GLM.negoriator.domain.NegotiationOffer;
 import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.domain.NegotiationSessionRepository;
 import org.GLM.negoriator.domain.NegotiationSessionStatus;
@@ -66,7 +67,7 @@ class NegotiationApplicationServiceTest {
 		assertNotNull(pendingAcceptanceDecision.getCounterOffer());
 		assertNotNull(pendingAcceptanceDecision.getExplanation());
 		assertTrue(!pendingAcceptanceDecision.getExplanation().isBlank());
-		assertEquals(0, new BigDecimal("120.00").compareTo(pendingAcceptanceDecision.getCounterOffer().toOfferVector().price()));
+		assertTrue(pendingAcceptanceDecision.getCounterOffer().toOfferVector().price().compareTo(new BigDecimal("120.00")) <= 0);
 		assertEquals(60, pendingAcceptanceDecision.getCounterOffer().toOfferVector().paymentDays());
 		assertEquals(7, pendingAcceptanceDecision.getCounterOffer().toOfferVector().deliveryDays());
 		assertEquals(12, pendingAcceptanceDecision.getCounterOffer().toOfferVector().contractMonths());
@@ -89,7 +90,7 @@ class NegotiationApplicationServiceTest {
 
 		assertNotNull(startedSession.getOpeningMessage());
 		assertEquals(
-			"Please send your opening offer with price, payment days, delivery days, and contract length.",
+			"Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.",
 			startedSession.getOpeningMessage());
 	}
 
@@ -217,6 +218,43 @@ class NegotiationApplicationServiceTest {
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
 		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
+	}
+
+	@Test
+	void explicitAcceptCanCloseOnPriorBuyerOfferWithoutRepeatingBuyerTerms() {
+		NegotiationSession startedSession = service.startSession(
+			NegotiationDefaults.startSessionCommand(NegotiationStrategy.BOULWARE));
+
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 30, 24), "Price 120, payment 60, delivery 30, contract 24");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 21, 24), "Price 120, payment 60, delivery 21, contract 24");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 14, 24), "Price 120, payment 60, delivery 14, contract 24");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 14, 12), "Price 120, payment 60, delivery 14, contract 12");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 7, 12), "Price 120, payment 60, delivery 7, contract 12");
+		NegotiationSession pendingAcceptanceSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+			"Price 120, payment 60, delivery 7, contract 12");
+
+		NegotiationOffer lastBuyerOffer = pendingAcceptanceSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == 6)
+			.max(Comparator.comparing(org.GLM.negoriator.domain.NegotiationOffer::getCreatedAt))
+			.orElseThrow();
+		assertTrue(lastBuyerOffer.toOfferVector().price().compareTo(new BigDecimal("120.00")) < 0);
+
+		NegotiationSession acceptedSession = submit(
+			pendingAcceptanceSession,
+			new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+			"accept");
+		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
+
+		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
+		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
+		assertNotNull(acceptedDecision.getCounterOffer());
+		assertEquals(0, acceptedDecision.getCounterOffer().toOfferVector().price().compareTo(lastBuyerOffer.toOfferVector().price()));
+		assertEquals(60, acceptedDecision.getCounterOffer().toOfferVector().paymentDays());
+		assertEquals(7, acceptedDecision.getCounterOffer().toOfferVector().deliveryDays());
+		assertEquals(12, acceptedDecision.getCounterOffer().toOfferVector().contractMonths());
 	}
 
 	private NegotiationSession submit(NegotiationSession session, OfferVector offer, String message) {

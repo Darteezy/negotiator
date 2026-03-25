@@ -326,6 +326,69 @@ class NegotiationEngineImplTest {
 		assertEquals(NegotiationEngine.DecisionReason.COUNTER_TO_CLOSE_GAP, response.reasonCode());
 	}
 
+	@Test
+	void strategySettlementPolicyKeepsLateRoundBuyerOffersDistinct() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("120.00"), 60, 7, 12);
+		NegotiationContext lateRoundContext = new NegotiationContext(
+			6,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("120.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("105.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 21, 24),
+				new OfferVector(new BigDecimal("107.57"), 60, 21, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 24),
+				new OfferVector(new BigDecimal("107.57"), 60, 14, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 12),
+				new OfferVector(new BigDecimal("107.63"), 60, 14, 12),
+				new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+				new OfferVector(new BigDecimal("111.00"), 60, 7, 12)));
+		NegotiationContext boulwareContext = new NegotiationContext(
+			6,
+			8,
+			NegotiationStrategy.BOULWARE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("120.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("105.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 21, 24),
+				new OfferVector(new BigDecimal("106.50"), 60, 21, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 24),
+				new OfferVector(new BigDecimal("106.50"), 60, 14, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 12),
+				new OfferVector(new BigDecimal("106.50"), 60, 14, 12),
+				new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+				new OfferVector(new BigDecimal("106.50"), 60, 7, 12)));
+
+		var baselineResponse = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			lateRoundContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+		var boulwareResponse = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			boulwareContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, baselineResponse.decision());
+		assertEquals(NegotiationEngine.Decision.COUNTER, boulwareResponse.decision());
+		assertTrue(baselineResponse.counterOffers().getFirst().price().compareTo(new BigDecimal("111.00")) <= 0);
+		assertTrue(boulwareResponse.counterOffers().getFirst().price().compareTo(new BigDecimal("106.50")) <= 0);
+		assertTrue(boulwareResponse.counterOffers().getFirst().price()
+			.compareTo(baselineResponse.counterOffers().getFirst().price()) < 0);
+		assertEquals(NegotiationEngine.DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY, baselineResponse.reasonCode());
+		assertEquals(NegotiationEngine.DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY, boulwareResponse.reasonCode());
+	}
+
 	private OfferVector applyHistoricalConsistency(
 		OfferVector candidateCounter,
 		OfferVector supplierOffer,
