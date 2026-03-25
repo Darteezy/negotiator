@@ -47,12 +47,19 @@ public class AiGatewayService {
 
 	public String complete(String systemPrompt, String userPrompt) {
 		return switch (provider) {
-			case OLLAMA -> completeWithOllama(systemPrompt, userPrompt);
+			case OLLAMA -> completeWithOllama(systemPrompt, userPrompt, null);
 			case OPENAI -> completeWithOpenAi(systemPrompt, userPrompt);
 		};
 	}
 
-	private String completeWithOllama(String systemPrompt, String userPrompt) {
+	public String completeJson(String systemPrompt, String userPrompt) {
+		return switch (provider) {
+			case OLLAMA -> completeWithOllama(systemPrompt, userPrompt, "json");
+			case OPENAI -> completeWithOpenAi(systemPrompt, userPrompt);
+		};
+	}
+
+	private String completeWithOllama(String systemPrompt, String userPrompt, String format) {
 		byte[] responseBytes = restClient.post()
 			.uri("/api/chat")
 			.body(new OllamaChatRequest(
@@ -61,7 +68,8 @@ public class AiGatewayService {
 					new ChatMessage("system", systemPrompt),
 					new ChatMessage("user", userPrompt)
 				),
-				false))
+				false,
+				format))
 			.exchange((request, response) -> StreamUtils.copyToByteArray(response.getBody()));
 
 		String responseBody = responseBytes == null ? null : new String(responseBytes, StandardCharsets.UTF_8);
@@ -167,7 +175,12 @@ public class AiGatewayService {
 	record ChatMessage(String role, String content) {
 	}
 
-	record OllamaChatRequest(String model, List<ChatMessage> messages, boolean stream) {
+	record OllamaChatRequest(
+		String model,
+		List<ChatMessage> messages,
+		boolean stream,
+		String format
+	) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

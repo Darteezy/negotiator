@@ -77,7 +77,6 @@ public class NegotiationApplicationService {
 			command.strategy(),
 			NegotiationStrategyChangeTrigger.INITIAL_SELECTION,
 			StrategyMetadata.initialSelectionRationale(command.strategy())));
-		session.updateOpeningMessage(aiNegotiationMessageService.composeOpeningMessage(session));
 
 		return sessionRepository.saveAndFlush(session);
 	}
@@ -120,9 +119,6 @@ public class NegotiationApplicationService {
 			command.riskOfWalkaway(),
 			BuyerProfileSnapshot.from(command.buyerProfile()),
 			NegotiationBoundsSnapshot.from(command.bounds()));
-		if (session.getOffers().isEmpty()) {
-			session.updateOpeningMessage(aiNegotiationMessageService.composeOpeningMessage(session));
-		}
 
 		if (session.getStrategy() != command.strategy()) {
 			session.switchStrategy(

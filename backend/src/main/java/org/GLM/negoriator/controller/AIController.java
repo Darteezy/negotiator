@@ -54,7 +54,7 @@ public class AIController {
         }
 
         try {
-            String content = aiGatewayService.complete(
+            String content = aiGatewayService.completeJson(
                 OFFER_PARSE_PROMPT,
                 objectMapper.writeValueAsString(request));
 

@@ -84,6 +84,16 @@ class NegotiationApplicationServiceTest {
 	}
 
 	@Test
+	void startSessionProvidesImmediateDefaultOpeningMessage() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
+
+		assertNotNull(startedSession.getOpeningMessage());
+		assertEquals(
+			"Please send your opening offer with price, payment days, delivery days, and contract length.",
+			startedSession.getOpeningMessage());
+	}
+
+	@Test
 	void updatesSessionSettingsForFutureRoundsAndRecordsManualStrategyChange() {
 		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
 

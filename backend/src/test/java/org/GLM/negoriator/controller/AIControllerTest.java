@@ -89,7 +89,7 @@ class AIControllerTest {
 			""
 		) {
 			@Override
-			public String complete(String systemPrompt, String userPrompt) {
+			public String completeJson(String systemPrompt, String userPrompt) {
 				throw new IllegalArgumentException("AI provider returned an empty response.");
 			}
 		};
@@ -130,7 +130,7 @@ class AIControllerTest {
 		}
 
 		@Override
-		public String complete(String systemPrompt, String userPrompt) {
+		public String completeJson(String systemPrompt, String userPrompt) {
 			return response;
 		}
 	}
