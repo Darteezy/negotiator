@@ -18,11 +18,5 @@ export default function App() {
     return <ConfigurationPage onStart={handleStart} />;
   }
 
-  return (
-    <NegotiationPage
-      initialSession={session}
-      onReset={handleReset}
-      onRestart={handleReset}
-    />
-  );
+  return <NegotiationPage initialSession={session} onRestart={handleReset} />;
 }

@@ -20,6 +20,10 @@
   --system-ink: #d4c4b8;
   --danger-soft: rgba(220, 38, 38, 0.1);
   --danger-ink: #ff6b6b;
+  --scroll-track: rgba(18, 39, 49, 0.88);
+  --scroll-track-edge: rgba(58, 80, 102, 0.5);
+  --scroll-thumb: rgba(165, 144, 128, 0.72);
+  --scroll-thumb-hover: rgba(201, 168, 154, 0.9);
 }
 
 * {
@@ -31,15 +35,22 @@ html {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+  scrollbar-width: thin;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   font-family: "Manrope", sans-serif;
-  background: radial-gradient(circle at 20% 20%, rgba(50, 70, 90, 0.3), transparent 42%),
+  background:
+    radial-gradient(circle at 20% 20%, rgba(50, 70, 90, 0.3), transparent 42%),
     radial-gradient(circle at 80% 10%, rgba(41, 59, 77, 0.3), transparent 36%),
-    radial-gradient(circle at 50% 80%, rgba(165, 144, 128, 0.1), transparent 40%),
+    radial-gradient(
+      circle at 50% 80%,
+      rgba(165, 144, 128, 0.1),
+      transparent 40%
+    ),
     var(--page-bg);
   color: var(--ink-strong);
 }
@@ -56,4 +67,43 @@ textarea {
 
 .app-mono {
   font-family: "IBM Plex Mono", monospace;
+}
+
+.app-scrollbar {
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: linear-gradient(
+    180deg,
+    var(--scroll-track-edge),
+    var(--scroll-track)
+  );
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    var(--scroll-thumb-hover),
+    var(--scroll-thumb)
+  );
+  border: 2px solid var(--scroll-track);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(235, 235, 233, 0.06);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #d6baac, var(--scroll-thumb-hover));
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--scroll-track);
 }

@@ -201,8 +201,8 @@ export function ConfigurationPage({ onStart }: Props) {
 
   if (loadingDefaults) {
     return (
-      <div className='grid min-h-screen place-items-center bg-[var(--page-bg)] px-6'>
-        <div className='rounded-3xl border border-[var(--line)] bg-white/10 px-6 py-5 text-sm font-semibold text-[var(--ink-strong)] shadow-xl shadow-black/10'>
+      <div className="grid min-h-screen place-items-center bg-[var(--page-bg)] px-6">
+        <div className="rounded-3xl border border-[var(--line)] bg-white/10 px-6 py-5 text-sm font-semibold text-[var(--ink-strong)] shadow-xl shadow-black/10">
           Loading admin setup...
         </div>
       </div>
@@ -210,16 +210,16 @@ export function ConfigurationPage({ onStart }: Props) {
   }
 
   return (
-    <div className='min-h-screen bg-[var(--page-bg)] px-6 py-8 md:px-12 md:py-12'>
-      <div className='mx-auto flex max-w-5xl flex-col gap-6'>
-        <div className='space-y-2'>
-          <p className='text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]'>
+    <div className="min-h-screen bg-[var(--page-bg)] px-6 py-8 md:px-12 md:py-12">
+      <div className="mx-auto flex max-w-5xl flex-col gap-6">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
             Admin Setup
           </p>
-          <h1 className='text-3xl font-extrabold text-[var(--ink-strong)]'>
+          <h1 className="text-3xl font-extrabold text-[var(--ink-strong)]">
             Configure the buyer bot before session start
           </h1>
-          <p className='max-w-3xl text-[var(--ink-soft)]'>
+          <p className="max-w-3xl text-[var(--ink-soft)]">
             Start every negotiation from this control page. Select the opening
             strategy, set the buyer mandate, and create a real backend
             negotiation session.
@@ -227,30 +227,30 @@ export function ConfigurationPage({ onStart }: Props) {
         </div>
 
         {error ? (
-          <div className='rounded-2xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-4 py-3 text-sm font-semibold text-[var(--danger-ink)] shadow-sm shadow-black/5'>
+          <div className="rounded-2xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-4 py-3 text-sm font-semibold text-[var(--danger-ink)] shadow-sm shadow-black/5">
             {error}
           </div>
         ) : null}
 
-        <div className='rounded-3xl border border-[var(--line)] bg-white/10 p-6 shadow-xl shadow-black/10 backdrop-blur'>
-          <div className='space-y-2'>
-            <p className='text-sm font-semibold text-[var(--ink-strong)]'>
+        <div className="rounded-3xl border border-[var(--line)] bg-white/10 p-6 shadow-xl shadow-black/10 backdrop-blur">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-[var(--ink-strong)]">
               Opening strategy
             </p>
-            <p className='text-sm text-[var(--ink-soft)]'>
+            <p className="text-sm text-[var(--ink-soft)]">
               This form creates the opening backend session and sets the buyer
               mandate in one place.
             </p>
           </div>
 
-          <label className='mt-5 block max-w-md'>
-            <span className='mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]'>
+          <label className="mt-5 block max-w-md">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
               Strategy
             </span>
             <select
               value={strategy}
               onChange={(event) => setStrategy(event.target.value)}
-              className='w-full rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-4 py-2.5 text-sm font-semibold text-[var(--ink-strong)] outline-none'
+              className="w-full rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-4 py-2.5 text-sm font-semibold text-[var(--ink-strong)] outline-none"
             >
               {defaults?.availableStrategies.map((option) => (
                 <option key={option} value={option}>
@@ -263,150 +263,150 @@ export function ConfigurationPage({ onStart }: Props) {
           </label>
 
           {selectedStrategy ? (
-            <div className='mt-4 max-w-2xl rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3'>
-              <p className='text-sm font-semibold text-[var(--ink-strong)]'>
+            <div className="mt-4 max-w-2xl rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3">
+              <p className="text-sm font-semibold text-[var(--ink-strong)]">
                 {selectedStrategy.label}
               </p>
-              <p className='mt-1 text-sm text-[var(--ink-soft)]'>
+              <p className="mt-1 text-sm text-[var(--ink-soft)]">
                 {selectedStrategy.summary}
               </p>
-              <p className='mt-2 text-xs text-[var(--ink-muted)]'>
+              <p className="mt-2 text-xs text-[var(--ink-muted)]">
                 Concessions: {selectedStrategy.concessionStyle}
               </p>
-              <p className='mt-1 text-xs text-[var(--ink-muted)]'>
+              <p className="mt-1 text-xs text-[var(--ink-muted)]">
                 Boundary posture: {selectedStrategy.boundaryStyle}
               </p>
             </div>
           ) : null}
 
-          <div className='mt-6 border-t border-[var(--line)]/70 pt-6'>
-            <p className='text-xs font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]'>
+          <div className="mt-6 border-t border-[var(--line)]/70 pt-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">
               Buyer mandate
             </p>
-            <div className='mt-4 grid grid-cols-1 gap-4 md:grid-cols-2'>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField
-                label='Preferred price'
-                prefix='€'
+                label="Preferred price"
+                prefix="€"
                 value={preferredPrice}
                 onChange={setPreferredPrice}
-                helper='Best target for the buyer.'
-                step='0.01'
+                helper="Best target for the buyer."
+                step="0.01"
               />
               <FormField
-                label='Walk-away price ceiling'
-                prefix='€'
+                label="Walk-away price ceiling"
+                prefix="€"
                 value={maxPrice}
                 onChange={setMaxPrice}
-                helper='Upper bound the buyer will never cross.'
-                step='0.01'
+                helper="Upper bound the buyer will never cross."
+                step="0.01"
               />
               <FormField
-                label='Preferred payment days'
-                suffix='days'
+                label="Preferred payment days"
+                suffix="days"
                 value={paymentPreferred}
                 onChange={setPaymentPreferred}
-                helper='Higher is better for the buyer in the backend model.'
-                step='1'
+                helper="Higher is better for the buyer in the backend model."
+                step="1"
               />
               <FormField
-                label='Minimum acceptable payment days'
-                suffix='days'
+                label="Minimum acceptable payment days"
+                suffix="days"
                 value={paymentMinimum}
                 onChange={setPaymentMinimum}
-                helper='Anything below is rejected.'
-                step='1'
+                helper="Anything below is rejected."
+                step="1"
               />
               <FormField
-                label='Preferred delivery time'
-                suffix='days'
+                label="Preferred delivery time"
+                suffix="days"
                 value={deliveryPreferred}
                 onChange={setDeliveryPreferred}
-                helper='Buyer prefers faster delivery.'
-                step='1'
+                helper="Buyer prefers faster delivery."
+                step="1"
               />
               <FormField
-                label='Maximum acceptable delivery'
-                suffix='days'
+                label="Maximum acceptable delivery"
+                suffix="days"
                 value={deliveryMaximum}
                 onChange={setDeliveryMaximum}
-                helper='Upper delivery bound the buyer tolerates.'
-                step='1'
+                helper="Upper delivery bound the buyer tolerates."
+                step="1"
               />
               <FormField
-                label='Preferred contract length'
-                suffix='months'
+                label="Preferred contract length"
+                suffix="months"
                 value={contractPreferred}
                 onChange={setContractPreferred}
-                helper='Target commitment duration.'
-                step='1'
+                helper="Target commitment duration."
+                step="1"
               />
               <FormField
-                label='Maximum acceptable contract'
-                suffix='months'
+                label="Maximum acceptable contract"
+                suffix="months"
                 value={contractMaximum}
                 onChange={setContractMaximum}
-                helper='Longest contract the buyer will still accept.'
-                step='1'
+                helper="Longest contract the buyer will still accept."
+                step="1"
               />
               <FormField
-                label='Max rounds'
+                label="Max rounds"
                 value={maxRounds}
                 onChange={setMaxRounds}
-                helper='Agent concedes more as rounds progress.'
-                step='1'
+                helper="Agent concedes more as rounds progress."
+                step="1"
               />
               <FormField
-                label='Risk of walkaway'
+                label="Risk of walkaway"
                 value={riskOfWalkaway}
                 onChange={setRiskOfWalkaway}
-                helper='A backend input used when evaluating continuation risk.'
-                step='0.01'
+                helper="A backend input used when evaluating continuation risk."
+                step="0.01"
               />
             </div>
           </div>
 
-          <div className='mt-6 border-t border-[var(--line)]/70 pt-6'>
-            <p className='text-xs font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]'>
+          <div className="mt-6 border-t border-[var(--line)]/70 pt-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">
               Issue weights
             </p>
-            <div className='mt-4 grid grid-cols-1 gap-4 md:grid-cols-2'>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormField
-                label='Weight price'
+                label="Weight price"
                 value={weightPrice}
                 onChange={setWeightPrice}
-                helper='Higher weight = higher influence.'
-                step='0.01'
+                helper="Higher weight = higher influence."
+                step="0.01"
               />
               <FormField
-                label='Weight payment'
+                label="Weight payment"
                 value={weightPayment}
                 onChange={setWeightPayment}
-                helper='Payment term importance.'
-                step='0.01'
+                helper="Payment term importance."
+                step="0.01"
               />
               <FormField
-                label='Weight delivery'
+                label="Weight delivery"
                 value={weightDelivery}
                 onChange={setWeightDelivery}
-                helper='Delivery speed importance.'
-                step='0.01'
+                helper="Delivery speed importance."
+                step="0.01"
               />
               <FormField
-                label='Weight contract'
+                label="Weight contract"
                 value={weightContract}
                 onChange={setWeightContract}
-                helper='Contract term importance.'
-                step='0.01'
+                helper="Contract term importance."
+                step="0.01"
               />
             </div>
           </div>
 
-          <div className='mt-6 flex justify-end'>
+          <div className="mt-6 flex justify-end">
             <button
-              type='button'
+              type="button"
               onClick={handleStart}
               disabled={startingSession || !defaults}
-              className='rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-lg shadow-[var(--accent)]/30 transition hover:-translate-y-0.5 hover:shadow-xl'
+              className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-lg shadow-[var(--accent)]/30 transition hover:-translate-y-0.5 hover:shadow-xl"
             >
               {startingSession ? "Starting session..." : "Start negotiation"}
             </button>

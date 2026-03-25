@@ -16,11 +16,10 @@ import type {
 
 interface Props {
   initialSession: ApiNegotiationSession;
-  onReset: () => void;
   onRestart: () => void;
 }
 
-export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
+export function NegotiationPage({ initialSession, onRestart }: Props) {
   const [session, setSession] = useState(initialSession);
   const [supplierMessage, setSupplierMessage] = useState("");
   const [chatError, setChatError] = useState("");
@@ -197,34 +196,34 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
   const activeStrategy = strategyDetails.get(session.strategy);
 
   return (
-    <div className='grid h-screen overflow-hidden grid-cols-1 bg-[var(--page-bg)] lg:grid-cols-[minmax(0,1fr)_360px]'>
-      <div className='flex min-h-0 flex-col overflow-hidden border-r border-[var(--line)] bg-[rgba(9,24,32,0.72)] px-5 py-5'>
-        <header className='flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 shadow-sm shadow-black/10'>
+    <div className="grid h-screen overflow-hidden grid-cols-1 bg-[var(--page-bg)] lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="flex min-h-0 flex-col overflow-hidden border-r border-[var(--line)] bg-[rgba(9,24,32,0.72)] px-5 py-5">
+        <header className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 shadow-sm shadow-black/10">
           <StatusChip
-            label='Strategy'
+            label="Strategy"
             value={activeStrategy?.label ?? session.strategy}
           />
           <StatusChip
-            label='Round'
+            label="Round"
             value={`${session.currentRound}/${session.maxRounds}`}
           />
-          <StatusChip label='Status' value={session.status} />
+          <StatusChip label="Status" value={session.status} />
           <StatusChip
-            label='Utility'
+            label="Utility"
             value={utilityLabel ?? "n/a"}
             accent={utilityLabel !== null}
           />
         </header>
 
         {activeStrategy ? (
-          <div className='mt-3 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-sm text-[var(--ink-soft)] shadow-sm shadow-black/10'>
-            <p className='font-semibold text-[var(--ink-strong)]'>
+          <div className="mt-3 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-sm text-[var(--ink-soft)] shadow-sm shadow-black/10">
+            <p className="font-semibold text-[var(--ink-strong)]">
               {activeStrategy.summary}
             </p>
-            <p className='mt-1'>
+            <p className="mt-1">
               Concessions: {activeStrategy.concessionStyle}
             </p>
-            <p className='mt-1'>
+            <p className="mt-1">
               Boundary posture: {activeStrategy.boundaryStyle}
             </p>
           </div>
@@ -232,20 +231,20 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
 
         <div
           ref={scrollRef}
-          className='mt-4 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-3xl border border-[var(--line)] bg-black/10 px-4 py-4 shadow-inner shadow-black/10'
+          className="app-scrollbar mt-4 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-3xl border border-[var(--line)] bg-black/10 px-4 py-4 shadow-inner shadow-black/10"
         >
           {session.conversation.map((event, index) =>
             event.actor === "system" ? (
               <div
                 key={`${event.eventType}-${event.at}-${index}`}
-                className='self-center rounded-2xl border border-[var(--line)] bg-[var(--system-soft)] px-4 py-2 text-[12px] text-[var(--system-ink)] shadow-sm shadow-black/10'
+                className="self-center rounded-2xl border border-[var(--line)] bg-[var(--system-soft)] px-4 py-2 text-[12px] text-[var(--system-ink)] shadow-sm shadow-black/10"
               >
-                <p className='whitespace-pre-wrap'>{event.message}</p>
+                <p className="whitespace-pre-wrap">{event.message}</p>
               </div>
             ) : (
               <div
                 key={`${event.eventType}-${event.at}-${index}`}
-                className='flex flex-col gap-2'
+                className="flex flex-col gap-2"
               >
                 <OfferCard
                   title={event.title}
@@ -263,94 +262,94 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
           )}
 
           {session.status === "ACCEPTED" ? (
-            <div className='flex items-center gap-2 rounded-2xl border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-sm font-semibold text-[var(--accent)] shadow-sm shadow-black/5'>
-              <CheckCircle2 className='h-5 w-5' /> Agreement reached.
+            <div className="flex items-center gap-2 rounded-2xl border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-sm font-semibold text-[var(--accent)] shadow-sm shadow-black/5">
+              <CheckCircle2 className="h-5 w-5" /> Agreement reached.
             </div>
           ) : null}
 
           {session.status === "REJECTED" ? (
-            <div className='rounded-2xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--danger-ink)] shadow-sm shadow-black/5'>
+            <div className="rounded-2xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--danger-ink)] shadow-sm shadow-black/5">
               Negotiation rejected. Adjust and try again.
             </div>
           ) : null}
         </div>
 
-        <div className='mt-4 rounded-2xl border border-[var(--line)] bg-[rgba(18,39,49,0.88)] p-3 shadow-sm shadow-black/10'>
+        <div className="mt-4 rounded-2xl border border-[var(--line)] bg-[rgba(18,39,49,0.88)] p-3 shadow-sm shadow-black/10">
           {chatError ? (
-            <div className='mb-3 rounded-xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--danger-ink)]'>
+            <div className="mb-3 rounded-xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--danger-ink)]">
               {chatError}
             </div>
           ) : null}
-          <div className='flex items-end gap-3'>
+          <div className="flex items-end gap-3">
             <textarea
-              className='min-h-[56px] flex-1 resize-none rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-[13px] leading-6 text-[var(--ink-strong)] outline-none placeholder:text-[var(--ink-soft)]'
+              className="min-h-[56px] flex-1 resize-none rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-[13px] leading-6 text-[var(--ink-strong)] outline-none placeholder:text-[var(--ink-soft)]"
               rows={2}
               value={supplierMessage}
               onChange={(event) => setSupplierMessage(event.target.value)}
               onKeyDown={handleComposerKeyDown}
-              placeholder='Write the supplier message here.'
+              placeholder="Write the supplier message here."
             />
             <button
-              type='button'
+              type="button"
               onClick={handleSubmit}
               disabled={submitting || session.closed}
-              className='flex h-[56px] items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60'
+              className="flex h-[56px] items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? "Sending..." : "Send"}
-              <SendHorizontal className='h-4 w-4' />
+              <SendHorizontal className="h-4 w-4" />
             </button>
           </div>
         </div>
       </div>
 
-      <aside className='flex min-h-0 flex-col overflow-hidden border-l border-[var(--line)] bg-[rgba(18,39,49,0.85)] px-4 py-5 shadow-inner shadow-black/10'>
-        <div className='grid grid-cols-2 gap-2'>
+      <aside className="flex min-h-0 flex-col overflow-hidden border-l border-[var(--line)] bg-[rgba(18,39,49,0.85)] px-4 py-5 shadow-inner shadow-black/10">
+        <div className="grid grid-cols-2 gap-2">
           <button
-            type='button'
+            type="button"
             onClick={handleApplySettings}
             disabled={applyingSettings || session.closed}
-            className='rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/25 transition hover:-translate-y-0.5'
+            className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/25 transition hover:-translate-y-0.5"
           >
             {applyingSettings ? "Applying..." : "Apply"}
           </button>
           <button
-            type='button'
+            type="button"
             onClick={onRestart}
-            className='flex items-center justify-center gap-2 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-sm font-semibold text-[var(--ink-strong)] transition hover:-translate-y-0.5'
+            className="flex items-center justify-center gap-2 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-sm font-semibold text-[var(--ink-strong)] transition hover:-translate-y-0.5"
           >
-            <RotateCcw className='h-4 w-4' />
+            <RotateCcw className="h-4 w-4" />
             Restart
           </button>
         </div>
 
-        <div className='mt-4 min-h-0 flex-1 overflow-y-auto pr-1'>
+        <div className="app-scrollbar mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
           {settingsError ? (
-            <div className='rounded-xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--danger-ink)]'>
+            <div className="rounded-xl border border-[var(--danger-ink)] bg-[var(--danger-soft)] px-3 py-2 text-sm font-semibold text-[var(--danger-ink)]">
               {settingsError}
             </div>
           ) : null}
 
-          <div className='rounded-3xl border border-[var(--line)] bg-black/10 p-4'>
-            <div className='grid grid-cols-1 gap-3'>
-              <SettingsSection title='Session'>
+          <div className="rounded-3xl border border-[var(--line)] bg-black/10 p-4">
+            <div className="grid grid-cols-1 gap-3">
+              <SettingsSection title="Session">
                 <CompactSelect
-                  label='Strategy'
+                  label="Strategy"
                   value={settingsDraft.strategy}
                   options={session.strategyDetails.map((detail) => detail.name)}
                   onChange={(value) => handleDraftChange("strategy", value)}
                 />
                 {strategyDetails.get(settingsDraft.strategy) ? (
-                  <p className='text-xs leading-5 text-[var(--ink-muted)]'>
+                  <p className="text-xs leading-5 text-[var(--ink-muted)]">
                     {strategyDetails.get(settingsDraft.strategy)?.summary}
                   </p>
                 ) : null}
                 <CompactField
-                  label='Max rounds'
+                  label="Max rounds"
                   value={settingsDraft.maxRounds}
                   onChange={(value) => handleDraftChange("maxRounds", value)}
                 />
                 <CompactField
-                  label='Walkaway risk'
+                  label="Walkaway risk"
                   value={settingsDraft.riskOfWalkaway}
                   onChange={(value) =>
                     handleDraftChange("riskOfWalkaway", value)
@@ -358,30 +357,30 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                 />
               </SettingsSection>
 
-              <SettingsSection title='Buyer target'>
+              <SettingsSection title="Buyer target">
                 <CompactField
-                  label='Price'
+                  label="Price"
                   value={settingsDraft.idealOffer.price}
                   onChange={(value) =>
                     handleNestedDraftChange("idealOffer", "price", value)
                   }
                 />
                 <CompactField
-                  label='Payment days'
+                  label="Payment days"
                   value={settingsDraft.idealOffer.paymentDays}
                   onChange={(value) =>
                     handleNestedDraftChange("idealOffer", "paymentDays", value)
                   }
                 />
                 <CompactField
-                  label='Delivery days'
+                  label="Delivery days"
                   value={settingsDraft.idealOffer.deliveryDays}
                   onChange={(value) =>
                     handleNestedDraftChange("idealOffer", "deliveryDays", value)
                   }
                 />
                 <CompactField
-                  label='Contract months'
+                  label="Contract months"
                   value={settingsDraft.idealOffer.contractMonths}
                   onChange={(value) =>
                     handleNestedDraftChange(
@@ -393,16 +392,16 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                 />
               </SettingsSection>
 
-              <SettingsSection title='Buyer limits'>
+              <SettingsSection title="Buyer limits">
                 <CompactField
-                  label='Price ceiling'
+                  label="Price ceiling"
                   value={settingsDraft.reservationOffer.price}
                   onChange={(value) =>
                     handleNestedDraftChange("reservationOffer", "price", value)
                   }
                 />
                 <CompactField
-                  label='Payment floor'
+                  label="Payment floor"
                   value={settingsDraft.reservationOffer.paymentDays}
                   onChange={(value) =>
                     handleNestedDraftChange(
@@ -413,7 +412,7 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                   }
                 />
                 <CompactField
-                  label='Delivery ceiling'
+                  label="Delivery ceiling"
                   value={settingsDraft.reservationOffer.deliveryDays}
                   onChange={(value) =>
                     handleNestedDraftChange(
@@ -424,7 +423,7 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                   }
                 />
                 <CompactField
-                  label='Contract ceiling'
+                  label="Contract ceiling"
                   value={settingsDraft.reservationOffer.contractMonths}
                   onChange={(value) =>
                     handleNestedDraftChange(
@@ -436,51 +435,51 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                 />
               </SettingsSection>
 
-              <SettingsSection title='Bounds'>
+              <SettingsSection title="Bounds">
                 <CompactField
-                  label='Min price'
+                  label="Min price"
                   value={settingsDraft.bounds.minPrice}
                   onChange={(value) =>
                     handleNestedDraftChange("bounds", "minPrice", value)
                   }
                 />
                 <CompactField
-                  label='Max price'
+                  label="Max price"
                   value={settingsDraft.bounds.maxPrice}
                   onChange={(value) =>
                     handleNestedDraftChange("bounds", "maxPrice", value)
                   }
                 />
                 <CompactField
-                  label='Min payment'
+                  label="Min payment"
                   value={settingsDraft.bounds.minPaymentDays}
                   onChange={(value) =>
                     handleNestedDraftChange("bounds", "minPaymentDays", value)
                   }
                 />
                 <CompactField
-                  label='Max payment'
+                  label="Max payment"
                   value={settingsDraft.bounds.maxPaymentDays}
                   onChange={(value) =>
                     handleNestedDraftChange("bounds", "maxPaymentDays", value)
                   }
                 />
                 <CompactField
-                  label='Min delivery'
+                  label="Min delivery"
                   value={settingsDraft.bounds.minDeliveryDays}
                   onChange={(value) =>
                     handleNestedDraftChange("bounds", "minDeliveryDays", value)
                   }
                 />
                 <CompactField
-                  label='Max delivery'
+                  label="Max delivery"
                   value={settingsDraft.bounds.maxDeliveryDays}
                   onChange={(value) =>
                     handleNestedDraftChange("bounds", "maxDeliveryDays", value)
                   }
                 />
                 <CompactField
-                  label='Min contract'
+                  label="Min contract"
                   value={settingsDraft.bounds.minContractMonths}
                   onChange={(value) =>
                     handleNestedDraftChange(
@@ -491,7 +490,7 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                   }
                 />
                 <CompactField
-                  label='Max contract'
+                  label="Max contract"
                   value={settingsDraft.bounds.maxContractMonths}
                   onChange={(value) =>
                     handleNestedDraftChange(
@@ -503,30 +502,30 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
                 />
               </SettingsSection>
 
-              <SettingsSection title='Weights'>
+              <SettingsSection title="Weights">
                 <CompactField
-                  label='Price'
+                  label="Price"
                   value={settingsDraft.weights.price}
                   onChange={(value) =>
                     handleNestedDraftChange("weights", "price", value)
                   }
                 />
                 <CompactField
-                  label='Payment'
+                  label="Payment"
                   value={settingsDraft.weights.paymentDays}
                   onChange={(value) =>
                     handleNestedDraftChange("weights", "paymentDays", value)
                   }
                 />
                 <CompactField
-                  label='Delivery'
+                  label="Delivery"
                   value={settingsDraft.weights.deliveryDays}
                   onChange={(value) =>
                     handleNestedDraftChange("weights", "deliveryDays", value)
                   }
                 />
                 <CompactField
-                  label='Contract'
+                  label="Contract"
                   value={settingsDraft.weights.contractMonths}
                   onChange={(value) =>
                     handleNestedDraftChange("weights", "contractMonths", value)
@@ -759,8 +758,8 @@ function StatusChip({
     <div
       className={`rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold ${accent ? "bg-[var(--buyer-soft)] text-[var(--buyer-ink)]" : "bg-black/10 text-[var(--ink-strong)]"}`}
     >
-      <span className='text-[var(--ink-muted)]'>{label}</span>
-      <span className='ml-2'>{value}</span>
+      <span className="text-[var(--ink-muted)]">{label}</span>
+      <span className="ml-2">{value}</span>
     </div>
   );
 }
@@ -773,11 +772,11 @@ function SettingsSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className='rounded-2xl border border-[var(--line)] bg-black/10 p-3'>
-      <p className='mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]'>
+    <section className="rounded-2xl border border-[var(--line)] bg-black/10 p-3">
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ink-muted)]">
         {title}
       </p>
-      <div className='grid grid-cols-2 gap-3'>{children}</div>
+      <div className="grid grid-cols-2 gap-3">{children}</div>
     </section>
   );
 }
@@ -792,15 +791,15 @@ function CompactField({
   onChange: (next: string) => void;
 }) {
   return (
-    <label className='flex flex-col gap-1'>
-      <span className='text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]'>
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
         {label}
       </span>
       <input
-        className='rounded-2xl border border-[var(--line)] bg-[var(--panel)]/90 px-3 py-2 text-sm font-semibold text-[var(--ink-strong)] outline-none'
+        className="rounded-2xl border border-[var(--line)] bg-[var(--panel)]/90 px-3 py-2 text-sm font-semibold text-[var(--ink-strong)] outline-none"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        inputMode='decimal'
+        inputMode="decimal"
       />
     </label>
   );
@@ -818,14 +817,14 @@ function CompactSelect({
   onChange: (next: string) => void;
 }) {
   return (
-    <label className='col-span-2 flex flex-col gap-1'>
-      <span className='text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]'>
+    <label className="col-span-2 flex flex-col gap-1">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
         {label}
       </span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className='rounded-2xl border border-[var(--line)] bg-[var(--panel)]/90 px-3 py-2 text-sm font-semibold text-[var(--ink-strong)] outline-none'
+        className="rounded-2xl border border-[var(--line)] bg-[var(--panel)]/90 px-3 py-2 text-sm font-semibold text-[var(--ink-strong)] outline-none"
       >
         {options.map((option) => (
           <option key={option} value={option}>
