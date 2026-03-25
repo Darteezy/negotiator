@@ -626,6 +626,10 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             OfferVector currentSupplierOffer,
             NegotiationRequest request
     ) {
+        if (request.context().strategy() == NegotiationStrategy.MESO) {
+            return counterOffer;
+        }
+
         BigDecimal priceFloor = historicalPriceFloor(
             request.context(),
             currentSupplierOffer,

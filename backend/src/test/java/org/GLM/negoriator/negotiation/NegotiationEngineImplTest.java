@@ -280,6 +280,33 @@ class NegotiationEngineImplTest {
 	}
 
 	@Test
+	void mesoCanContinueNegotiatingAfterSupplierChoosesAnOptionBranch() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("102.00"), 55, 12, 12);
+		NegotiationContext context = new NegotiationContext(
+			2,
+			8,
+			NegotiationStrategy.MESO,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("102.00"), 50, 12, 12),
+				new OfferVector(new BigDecimal("102.00"), 55, 12, 12)));
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			context,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertTrue(!response.counterOffers().isEmpty());
+		assertTrue(response.counterOffers().stream()
+			.anyMatch(counterOffer -> counterOffer.price().compareTo(supplierOffer.price()) < 0));
+	}
+
+	@Test
 	void countersReservationEdgeOffersBeforeRejectingThem() {
 		OfferVector supplierOffer = new OfferVector(new BigDecimal("120.00"), 30, 30, 24);
 		NegotiationContext context = new NegotiationContext(

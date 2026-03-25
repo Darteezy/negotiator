@@ -93,7 +93,9 @@ public class AiNegotiationMessageService {
 		try {
 			String content = aiGatewayService.complete(systemPrompt, userPrompt);
 			String normalized = normalize(content);
-			return StringUtils.hasText(normalized) ? normalized : fallback;
+			return StringUtils.hasText(normalized) && !looksLikeMetaAssistantReply(normalized)
+				? normalized
+				: fallback;
 		} catch (Exception exception) {
 			log.debug("AI negotiation message generation unavailable, using fallback text.", exception);
 			return fallback;
@@ -124,6 +126,16 @@ public class AiNegotiationMessageService {
 		}
 
 		return sb.toString();
+	}
+
+	private boolean looksLikeMetaAssistantReply(String content) {
+		String normalized = content.toLowerCase(Locale.ROOT);
+		return normalized.contains("you haven't included the actual question")
+			|| normalized.contains("what is the specific question")
+			|| normalized.contains("for example, are you asking me to")
+			|| normalized.contains("please provide the complete question")
+			|| normalized.contains("i notice you've provided detailed context")
+			|| normalized.contains("something else entirely?");
 	}
 
 	private String formatTerms(OfferVector terms) {
