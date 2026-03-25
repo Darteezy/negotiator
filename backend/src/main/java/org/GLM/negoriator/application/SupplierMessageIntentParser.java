@@ -38,7 +38,12 @@ final class SupplierMessageIntentParser {
 
 	SupplierMessageIntent parse(String supplierMessage) {
 		if (supplierMessage == null || supplierMessage.isBlank()) {
-			return new SupplierMessageIntent(SupplierIntentType.ACCEPT_ACTIVE_OFFER, null, false, true);
+			return new SupplierMessageIntent(
+				SupplierIntentType.ACCEPT_ACTIVE_OFFER,
+				null,
+				false,
+				true,
+				SupplierIntentSource.DETERMINISTIC);
 		}
 
 		Integer selectedBuyerOfferIndex = selectedBuyerOfferIndex(supplierMessage);
@@ -63,7 +68,12 @@ final class SupplierMessageIntentParser {
 			type = SupplierIntentType.UNCLEAR;
 		}
 
-		return new SupplierMessageIntent(type, selectedBuyerOfferIndex, referencesBuyerOffer, containsAcceptanceSignal);
+		return new SupplierMessageIntent(
+			type,
+			selectedBuyerOfferIndex,
+			referencesBuyerOffer,
+			containsAcceptanceSignal,
+			SupplierIntentSource.DETERMINISTIC);
 	}
 
 	private boolean containsCounterProposalSignal(String supplierMessage) {
@@ -106,7 +116,8 @@ final class SupplierMessageIntentParser {
 		SupplierIntentType type,
 		Integer selectedBuyerOfferIndex,
 		boolean referencesBuyerOffer,
-		boolean containsAcceptanceSignal
+		boolean containsAcceptanceSignal,
+		SupplierIntentSource source
 	) {
 		boolean acceptsBuyerOffer() {
 			return type == SupplierIntentType.ACCEPT_ACTIVE_OFFER;
@@ -123,6 +134,11 @@ final class SupplierMessageIntentParser {
 		boolean rejectsOrDeclines() {
 			return type == SupplierIntentType.REJECT_OR_DECLINE;
 		}
+	}
+
+	enum SupplierIntentSource {
+		DETERMINISTIC,
+		AI_FALLBACK
 	}
 
 	enum SupplierIntentType {

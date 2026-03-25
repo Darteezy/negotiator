@@ -75,7 +75,8 @@ class SupplierMessageIntentAiFallbackService {
 				type,
 				selectedCounterOfferIndex,
 				referencesBuyerOffer,
-				containsAcceptanceSignal));
+				containsAcceptanceSignal,
+				SupplierMessageIntentParser.SupplierIntentSource.AI_FALLBACK));
 		} catch (Exception exception) {
 			return Optional.empty();
 		}

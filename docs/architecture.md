@@ -49,6 +49,7 @@ What the frontend is responsible for:
 - showing a temporary buyer loading response while the backend prepares the next reply
 - applying live session setting changes
 - displaying buyer explanations, utilities, and counteroffers
+- displaying supplier-side parsing context for each supplier message, including resolved intent, source, selected buyer option, and parsing notes
 - exposing strategy details through compact hint-tooltips in the session header and settings panel
 
 Why it exists in the current project:
@@ -113,7 +114,8 @@ The provider is configured through environment variables.
 
 AI is used for:
 
-- supplier message parsing
+- structured term and constraint extraction from supplier messages
+- supplier intent fallback only when deterministic parsing leaves the message unresolved
 - buyer message generation in a supplier-facing, professional procurement tone
 
 AI is not used for:
@@ -137,12 +139,22 @@ AI is not used for:
 
 1. The supplier types a free-text message in the negotiation view.
 2. The frontend sends that message to the parsing endpoint.
-3. The backend asks the configured AI provider for structured terms.
-4. The backend applies heuristics and fallback handling on top of that result.
-5. The frontend submits the normalized supplier offer to the negotiation session endpoint.
-6. The backend runs the negotiation engine.
-7. The backend stores the round result and returns the updated session state.
-8. The frontend shows the supplier message immediately, keeps a temporary buyer loading state visible, then re-renders the timeline with the latest buyer response.
+3. The backend parses structured terms and constraints from the supplier message.
+4. The frontend submits the normalized supplier offer to the negotiation session endpoint.
+5. During offer submission, the backend resolves supplier intent deterministically into one of the supported intent types.
+6. If intent is still `UNCLEAR`, the backend may call the configured AI provider for a structured fallback classification.
+7. If ambiguity still remains, the backend requests clarification instead of guessing agreement.
+8. Otherwise the backend runs the negotiation engine.
+9. The backend stores the round result together with supplier parsing metadata and returns the updated session state.
+10. The frontend shows the supplier message immediately, keeps a temporary buyer loading state visible, then re-renders the timeline with the latest buyer response and supplier-side parsing context.
+
+Supported supplier intent types:
+
+- `ACCEPT_ACTIVE_OFFER`
+- `SELECT_COUNTER_OPTION`
+- `PROPOSE_NEW_TERMS`
+- `REJECT_OR_DECLINE`
+- `UNCLEAR`
 
 ## Example path
 
@@ -200,6 +212,7 @@ AI layer:
 
 - better for reading supplier language
 - better for producing natural buyer messages in a professional email-like tone
+- only consulted for supplier intent when deterministic parsing remains unresolved
 - not trusted with the final commercial decision
 
 Product channel implication:

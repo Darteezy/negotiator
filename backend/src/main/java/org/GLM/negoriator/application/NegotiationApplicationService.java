@@ -284,6 +284,13 @@ public class NegotiationApplicationService {
 		NegotiationOffer counterOffer = buyerCounterOffers.stream()
 			.findFirst()
 			.orElse(acceptedBuyerOffer);
+		Integer resolvedSelectedBuyerOfferIndex = resolvedSelectedOfferIndex(activeBuyerOffers, supplierMessage, supplierIntent);
+		String supplierIntentDetails = supplierIntentDetails(
+			supplierIntent,
+			acceptedBuyerOffer,
+			clarificationDirective,
+			activeBuyerOffers,
+			resolvedSelectedBuyerOfferIndex);
 
 		for (NegotiationOffer buyerCounterOffer : buyerCounterOffers) {
 			session.addOffer(buyerCounterOffer);
@@ -324,10 +331,48 @@ public class NegotiationApplicationService {
 			clarificationDirective != null ? null : response.focusIssue(),
 			session.getStrategy(),
 			StrategyMetadata.rationaleFor(session.getStrategy()),
-			buyerMessage));
+			buyerMessage,
+			supplierIntent.type().name(),
+			supplierIntent.source().name(),
+			resolvedSelectedBuyerOfferIndex,
+			supplierIntentDetails));
 		session.moveTo(resultingStatus);
 
 		return sessionRepository.saveAndFlush(session);
+	}
+
+	private String supplierIntentDetails(
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent,
+		NegotiationOffer acceptedBuyerOffer,
+		ClarificationDirective clarificationDirective,
+		java.util.List<NegotiationOffer> activeBuyerOffers,
+		Integer resolvedSelectedBuyerOfferIndex
+	) {
+		if (clarificationDirective != null) {
+			return "Supplier message remained unresolved after deterministic parsing"
+				+ (supplierIntent.source() == SupplierMessageIntentParser.SupplierIntentSource.AI_FALLBACK
+					? " and AI fallback"
+					: "")
+				+ ", so the backend requested clarification against the current buyer offer context.";
+		}
+
+		if (acceptedBuyerOffer != null && supplierIntent.type() == SupplierMessageIntentParser.SupplierIntentType.UNCLEAR) {
+			return "Supplier terms exactly matched an active buyer offer, so the round was treated as acceptance even though the message text itself remained unclear.";
+		}
+
+		return switch (supplierIntent.type()) {
+			case ACCEPT_ACTIVE_OFFER -> resolvedSelectedBuyerOfferIndex == null
+				? activeBuyerOffers.size() == 1
+					? "Supplier message was interpreted as accepting the active buyer offer."
+					: "Supplier message was interpreted as accepting the buyer's active offer context."
+				: "Supplier message was interpreted as accepting buyer option " + resolvedSelectedBuyerOfferIndex + ".";
+			case SELECT_COUNTER_OPTION -> resolvedSelectedBuyerOfferIndex == null
+				? "Supplier message referenced one of the buyer's active options without final acceptance."
+				: "Supplier message was interpreted as selecting buyer option " + resolvedSelectedBuyerOfferIndex + " without final acceptance.";
+			case PROPOSE_NEW_TERMS -> "Supplier message was interpreted as a fresh supplier counterproposal.";
+			case REJECT_OR_DECLINE -> "Supplier message was interpreted as declining the buyer's current position.";
+			case UNCLEAR -> "Supplier message remained unresolved by deterministic parsing.";
+		};
 	}
 
 	private SupplierMessageIntentParser.SupplierMessageIntent resolveSupplierIntent(

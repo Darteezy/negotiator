@@ -33,6 +33,7 @@ class SupplierMessageIntentAiFallbackServiceTest {
 			.orElseThrow();
 
 		assertEquals(SupplierMessageIntentParser.SupplierIntentType.ACCEPT_ACTIVE_OFFER, intent.type());
+		assertEquals(SupplierMessageIntentParser.SupplierIntentSource.AI_FALLBACK, intent.source());
 		assertEquals(2, intent.selectedBuyerOfferIndex());
 		assertTrue(intent.referencesBuyerOffer());
 	}

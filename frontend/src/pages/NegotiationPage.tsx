@@ -1001,6 +1001,21 @@ function buildDetailRows(event: ApiConversationEvent) {
       value: debug.counterOfferSummary.join("\n"),
     });
   }
+  if (debug?.supplierIntentType) {
+    rows.push({ label: "Supplier intent", value: debug.supplierIntentType });
+  }
+  if (debug?.supplierIntentSource) {
+    rows.push({ label: "Intent source", value: debug.supplierIntentSource });
+  }
+  if (debug?.supplierSelectedBuyerOfferIndex) {
+    rows.push({
+      label: "Selected buyer option",
+      value: String(debug.supplierSelectedBuyerOfferIndex),
+    });
+  }
+  if (debug?.supplierIntentDetails) {
+    rows.push({ label: "Parsing context", value: debug.supplierIntentDetails });
+  }
 
   return rows;
 }

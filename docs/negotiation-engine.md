@@ -38,6 +38,8 @@ The core logic lives in these backend classes:
 - `DecisionMaker`
 - `CounterOfferGenerator`
 - `NegotiationApplicationService`
+- `SupplierMessageIntentParser`
+- `SupplierMessageIntentAiFallbackService`
 
 ## Session flow
 
@@ -64,9 +66,19 @@ When the supplier submits a message from the frontend:
 
 1. The frontend calls the AI parsing endpoint.
 2. The backend turns the supplier message into structured terms.
-3. Any detected supplier hard constraints are merged into the session.
-4. The negotiation engine evaluates the current supplier offer.
-5. The application service stores the supplier offer, buyer reply, evaluation data, and conversation event.
+3. The application service resolves supplier intent deterministically into one of the supported intent types.
+4. If intent remains `UNCLEAR`, the backend may ask the AI provider for a structured fallback classification.
+5. Any detected supplier hard constraints are merged into the session.
+6. The negotiation engine evaluates the current supplier offer unless the backend instead requests clarification.
+7. The application service stores the supplier offer, buyer reply, evaluation data, supplier parsing metadata, and conversation event.
+
+Supported supplier intent types:
+
+- `ACCEPT_ACTIVE_OFFER`
+- `SELECT_COUNTER_OPTION`
+- `PROPOSE_NEW_TERMS`
+- `REJECT_OR_DECLINE`
+- `UNCLEAR`
 
 ### 3. Session update
 
@@ -79,6 +91,9 @@ After the buyer reply is generated, the backend stores:
 - the evaluation metrics
 - the active strategy and rationale
 - the buyer-facing reply message
+- the resolved supplier intent type and whether it came from deterministic parsing or AI fallback
+- the selected buyer option index when the supplier referenced a numbered buyer option
+- a short supplier intent details string used for debug visibility in the frontend
 
 ## Buyer profile
 
@@ -291,6 +306,22 @@ Important fields:
 - `evaluation`
 - `counterOffers`
 
+Each supplier conversation event also carries parse debug metadata.
+
+Important supplier debug fields:
+
+- `supplierIntentType`
+- `supplierIntentSource`
+- `supplierSelectedBuyerOfferIndex`
+- `supplierIntentDetails`
+
+This metadata appears in round history and in supplier conversation events so the frontend can show how each supplier message was interpreted.
+
+Current `supplierIntentSource` values:
+
+- `DETERMINISTIC`
+- `AI_FALLBACK`
+
 Current reason codes:
 
 - `TARGET_UTILITY_MET`
@@ -342,6 +373,7 @@ Current AI role:
 
 - parse supplier messages into structured terms
 - detect hard supplier constraints from free text
+- classify unresolved supplier intent through a narrow structured fallback
 - generate supplier-facing buyer wording in a professional procurement tone
 
 Current non-AI role:
@@ -352,7 +384,14 @@ Current non-AI role:
 - counteroffer generation
 - strategy selection
 
-The supplier parsing flow is not pure model output. The backend also applies heuristics for option selection and fallback handling.
+The supplier parsing flow is not pure model output.
+
+Current supplier parsing order:
+
+1. parse structured terms and constraints from the supplier message
+2. classify supplier intent deterministically
+3. if intent is still `UNCLEAR`, optionally run AI fallback for structured intent classification
+4. if the message is still ambiguous, ask for clarification instead of assuming acceptance
 
 Buyer wording is also constrained before it is sent out:
 
@@ -429,6 +468,8 @@ Buyer is ready to close on these terms. Reply with accept to finalize the deal.
 
 That keeps the close explicit instead of assuming agreement from ambiguous supplier wording.
 
+If the supplier references a numbered or descriptive buyer option clearly enough, the backend records that resolution in session history and frontend conversation debug.
+
 ## Current limitations
 
 The engine is stronger than the first version, but it is still intentionally narrow.
@@ -440,201 +481,3 @@ Current limits:
 - counteroffers are rule-based, not globally optimized packages
 - AI parsing still depends on provider quality plus backend fallback heuristics
 - replay and analytics are still limited compared with the core negotiation flow
-  \*\*\* Add File: /home/wyller/Kood/negotiator/docs/architecture.md
-
-# Architecture
-
-This project is a small full-stack negotiation system.
-
-The frontend is supplier-facing. The backend acts as the buyer. PostgreSQL stores the session state. An external AI provider helps parse supplier messages and generate buyer wording, but it does not decide the negotiation outcome.
-
-## High-level view
-
-```text
-Supplier user
-	-> React frontend
-	-> Spring Boot API
-	-> negotiation application service
-	-> rule-based negotiation engine
-	-> PostgreSQL session storage
-
-External AI provider
-	-> supplier-message parsing
-	-> buyer message generation
-```
-
-## Main parts
-
-### Frontend
-
-The frontend is a Vite and React app.
-
-Main flow:
-
-- `ConfigurationPage` creates the session
-- `NegotiationPage` runs the live negotiation
-- `negotiationApi` calls the backend endpoints
-
-Runtime behavior:
-
-- in local development, Vite proxies `/api` to `http://localhost:8080`
-- in Docker, Nginx proxies `/api` to the backend container
-
-What the frontend is responsible for:
-
-- collecting buyer setup values
-- sending supplier messages
-- rendering the conversation timeline
-- applying live session setting changes
-- displaying buyer explanations, utilities, and counteroffers
-
-What it does not do:
-
-- it does not score offers
-- it does not decide accept, counter, or reject
-- it does not implement the negotiation strategy itself
-
-### Backend
-
-The backend is a Spring Boot application.
-
-The most important layers are:
-
-- controllers expose the REST API
-- `NegotiationApplicationService` orchestrates the session lifecycle
-- `NegotiationEngineImpl` runs the decision logic
-- domain entities store session, offers, decisions, and strategy history
-
-What the backend is responsible for:
-
-- creating sessions
-- validating and updating configuration
-- evaluating supplier offers
-- generating buyer counteroffers
-- storing every round and decision
-- composing buyer-facing replies
-
-### Database
-
-PostgreSQL stores the persistent session state.
-
-Important stored records:
-
-- session metadata
-- buyer profile snapshot
-- bounds snapshot
-- supplier model snapshot
-- supplier constraints snapshot
-- supplier offers
-- buyer counteroffers
-- decisions and evaluation data
-- strategy change history
-
-The repository uses pessimistic write locking for live session updates so concurrent writes do not corrupt the round state.
-
-### AI provider
-
-The backend supports two provider modes:
-
-- `ollama`
-- `openai`
-
-The provider is configured through environment variables.
-
-AI is used for:
-
-- supplier message parsing
-- buyer message generation
-
-AI is not used for:
-
-- utility scoring
-- reservation checks
-- strategy selection
-- accept, counter, reject decisions
-
-## Request flow
-
-### Session creation
-
-1. The frontend loads defaults from the backend.
-2. The user configures buyer goals and strategy.
-3. The frontend posts the session payload.
-4. The backend validates the setup and stores a new session.
-5. The backend records the initial strategy selection.
-
-### Supplier message flow
-
-1. The supplier types a free-text message in the negotiation view.
-2. The frontend sends that message to the parsing endpoint.
-3. The backend asks the configured AI provider for structured terms.
-4. The backend applies heuristics and fallback handling on top of that result.
-5. The frontend submits the normalized supplier offer to the negotiation session endpoint.
-6. The backend runs the negotiation engine.
-7. The backend stores the round result and returns the updated session state.
-8. The frontend re-renders the timeline with the latest buyer response.
-
-## Example path
-
-Supplier message:
-
-```text
-We can do 118 if payment stays at 30 days and delivery is 21 days.
-```
-
-Typical system path:
-
-1. Parsing resolves price `118`, payment `30`, delivery `21`, contract from the reference terms.
-2. The backend scores the offer against the buyer profile.
-3. The strategy sets the current target utility.
-4. The buyer returns a counteroffer or MESO options.
-5. The reply is stored in the session and shown in the UI.
-
-## Session state and history
-
-The backend keeps the negotiation state explicit.
-
-Important status values:
-
-- `PENDING`
-- `COUNTERED`
-- `ACCEPTED`
-- `REJECTED`
-- `EXPIRED`
-
-The frontend does not reconstruct history on its own. It renders the conversation data returned by the backend.
-
-## Strategy changes
-
-Strategy switching is manual today.
-
-That means:
-
-- the user can start with one strategy
-- the user can change strategy during the session
-- each change is recorded in strategy history
-- there is no automatic policy choosing a new strategy in the background
-
-## Design boundary
-
-The main design choice in this project is the split between deterministic negotiation logic and AI assistance.
-
-Rule-based core:
-
-- safer
-- easier to test
-- easier to explain
-- easier to keep inside buyer limits
-
-AI layer:
-
-- better for reading supplier language
-- better for producing natural buyer messages
-- not trusted with the final commercial decision
-
-## Current limitations
-
-- AI provider availability affects normal supplier-message parsing
-- supplier preference modeling is still shallow
-- strategy switching is manual only
-- analytics and replay are lighter than the core negotiation loop

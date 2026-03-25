@@ -143,14 +143,15 @@ Manual strategy changes are supported from session settings.
 
 ## Docs
 
-| Document                                                 | Focus                                                           |
-| -------------------------------------------------------- | --------------------------------------------------------------- |
-| [docs/README.md](docs/README.md)                         | Docs index and suggested reading order                          |
-| [docs/architecture.md](docs/architecture.md)             | Frontend, backend, database, and AI flow in one place           |
-| [docs/negotiation-engine.md](docs/negotiation-engine.md) | Scoring, decision rules, issue tradeoffs, and counteroffer flow |
-| [docs/strategies.md](docs/strategies.md)                 | Current strategy behavior and intent                            |
-| [docs/api.md](docs/api.md)                               | REST endpoints, payloads, and example requests                  |
-| [TASK.md](TASK.md)                                       | Original challenge brief                                        |
+| Document                                                 | Focus                                                                  |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| [docs/README.md](docs/README.md)                         | Docs index and suggested reading order                                 |
+| [docs/architecture.md](docs/architecture.md)             | Frontend, backend, database, and AI flow in one place                  |
+| [docs/negotiation-engine.md](docs/negotiation-engine.md) | Scoring, decision rules, issue tradeoffs, and counteroffer flow        |
+| [docs/parsing.md](docs/parsing.md)                       | Supplier-message parsing rules, intent examples, and fallback behavior |
+| [docs/strategies.md](docs/strategies.md)                 | Current strategy behavior and intent                                   |
+| [docs/api.md](docs/api.md)                               | REST endpoints, payloads, and example requests                         |
+| [TASK.md](TASK.md)                                       | Original challenge brief                                               |
 
 ## Project layout
 
@@ -168,6 +169,7 @@ negotiator/
 │   ├── architecture.md
 │   ├── api.md
 │   ├── negotiation-engine.md
+│   ├── parsing.md
 │   ├── README.md
 │   └── strategies.md
 ├── frontend/
