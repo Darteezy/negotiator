@@ -45,8 +45,11 @@ What the frontend is responsible for:
 - collecting buyer setup values
 - sending supplier messages
 - rendering the conversation timeline
+- showing the supplier message immediately in the timeline while the backend reply is pending
+- showing a temporary buyer loading response while the backend prepares the next reply
 - applying live session setting changes
 - displaying buyer explanations, utilities, and counteroffers
+- exposing strategy details through compact hint-tooltips in the session header and settings panel
 
 Why it exists in the current project:
 
@@ -79,7 +82,7 @@ What the backend is responsible for:
 - evaluating supplier offers
 - generating buyer counteroffers
 - storing every round and decision
-- composing buyer-facing replies
+- composing supplier-facing replies on behalf of the buyer
 
 ### Database
 
@@ -111,7 +114,7 @@ The provider is configured through environment variables.
 AI is used for:
 
 - supplier message parsing
-- buyer message generation
+- buyer message generation in a supplier-facing, professional procurement tone
 
 AI is not used for:
 
@@ -139,7 +142,7 @@ AI is not used for:
 5. The frontend submits the normalized supplier offer to the negotiation session endpoint.
 6. The backend runs the negotiation engine.
 7. The backend stores the round result and returns the updated session state.
-8. The frontend re-renders the timeline with the latest buyer response.
+8. The frontend shows the supplier message immediately, keeps a temporary buyer loading state visible, then re-renders the timeline with the latest buyer response.
 
 ## Example path
 
@@ -196,7 +199,7 @@ Rule-based core:
 AI layer:
 
 - better for reading supplier language
-- better for producing natural buyer messages
+- better for producing natural buyer messages in a professional email-like tone
 - not trusted with the final commercial decision
 
 Product channel implication:

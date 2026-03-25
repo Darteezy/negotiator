@@ -19,7 +19,7 @@ import org.springframework.util.StringUtils;
 public class AiNegotiationMessageService {
 
 	private static final Logger log = LoggerFactory.getLogger(AiNegotiationMessageService.class);
-	private static final String OPENING_FALLBACK = "Hello, please share your opening offer including price, payment days, delivery days, and contract length.";
+	private static final String OPENING_FALLBACK = "Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.";
 
 	private final AiGatewayService aiGatewayService;
 
@@ -29,17 +29,21 @@ public class AiNegotiationMessageService {
 
 	public String composeOpeningMessage(NegotiationSession session) {
 		StrategyMetadata.StrategyDescriptor descriptor = StrategyMetadata.describe(session.getStrategy());
-		String systemPrompt = "You write procurement negotiation chat messages for the buyer. "
-			+ "Use a professional, polite email/chat hybrid tone. "
-			+ "Write one short sentence. A brief greeting at the start is allowed. "
+		String systemPrompt = "You write buyer-side procurement messages to a supplier. "
+			+ "Write like an experienced procurement manager sending a short formal business email note on behalf of the buyer organization. "
+			+ "The message must sound like a real person in a live commercial discussion. "
+			+ "Use natural business English, not negotiation theory or chatbot phrasing. "
+			+ "Use a formal and official procurement tone, not casual wording. "
+			+ "Write one short sentence. A brief formal greeting at the start is allowed if it feels natural. "
 			+ "No sign-off, no markdown. "
+			+ "Do not mention internal strategy, targets, scoring, algorithms, utilities, or hidden constraints. "
+			+ "The opening should read like a formal request for the supplier's initial commercial terms. "
 			+ descriptor.openingPromptGuidance() + " "
 			+ "Ask the supplier for an opening offer covering price, payment days, delivery days, and contract length.";
 
-		String userPrompt = "Current buyer strategy: " + descriptor.label() + " (" + session.getStrategy().name() + ")"
-			+ ". Negotiation round: " + session.getCurrentRound()
-			+ " of " + session.getMaxRounds()
-			+ ". Write the buyer's opening request.";
+		String userPrompt = "Round: " + session.getCurrentRound()
+			+ " of " + session.getMaxRounds() + "\n"
+			+ "Draft a short formal opening note from the buyer organization to the supplier.";
 
 		return completeOrFallback(systemPrompt, userPrompt, OPENING_FALLBACK);
 	}
@@ -50,42 +54,39 @@ public class AiNegotiationMessageService {
 			&& request.counterOffers() != null
 			&& request.counterOffers().size() > 1
 			&& "COUNTER".equalsIgnoreCase(request.decision());
-		String systemPrompt = "You write buyer-side negotiation messages for a live procurement discussion. "
-			+ "Use a professional, polite email/chat hybrid tone. "
+		String systemPrompt = "You write buyer-side procurement messages to a supplier in a live negotiation. "
+			+ "Write like an experienced procurement manager sending a short business email note. "
+			+ "The message must feel like it was written by a real person in an active commercial exchange. "
+			+ "Use natural business English, not negotiation theory, consulting jargon, or chatbot phrasing. "
 			+ (allowMesoOptionList
-				? "Write a short intro followed by a dotted list with one concise option per bullet. "
+				? "Write a short intro followed by a simple bullet list with one concise option per bullet. "
 				: "Write 2 to 4 short sentences in a single paragraph. ")
-			+ "A brief greeting at the start is allowed when it feels natural. "
+			+ "A brief greeting at the start is allowed when it feels natural. Prefer email tone over chat tone. "
 			+ (allowMesoOptionList
 				? "No sign-off. Markdown bullet points are allowed only for the option list. "
 				: "No sign-off, no markdown, no bullet points. ")
-			+ "Do not mention internal strategy names, utilities, reason codes, algorithms, or reservation logic. "
+			+ "Only mention commercial points the supplier can observe: the supplier's latest proposal, any concrete movement worth acknowledging, the buyer's position, and the next step. "
+			+ "Do not reveal or hint at internal strategy names, targets, utilities, scoring, algorithms, reservation logic, hidden limits, or tactical reasoning. "
+			+ "Do not use phrases like 'price gap', 'our target', 'workable range', 'commitment to a partnership', 'move for this to become workable', or similar analytical wording. "
 			+ descriptor.replyPromptGuidance() + " "
-			+ "If the supplier offer is close but still outside the buyer range, keep the message constructive and steer the supplier back inside workable terms. "
-			+ "If countering, clearly state the buyer position and invite the supplier to respond. "
+			+ "If countering, keep the message constructive, state the buyer position in plain business language, and invite the supplier to respond. "
 			+ (allowMesoOptionList
 				? "For MESO multi-option counters, keep the intro short and present each option as its own bullet. "
 				: "")
 			+ "If accepting, clearly confirm the agreement. "
-			+ "If rejecting, close respectfully and state that the offer is outside the buyer's workable range.";
+			+ "If rejecting, close respectfully without explaining internal thresholds.";
 
 		String userPrompt = "Buyer decision: " + request.decision() + "\n"
 			+ "Negotiation status after reply: " + request.resultingStatus() + "\n"
 			+ "Round: " + request.roundNumber() + " of " + request.maxRounds() + "\n"
-			+ "Internal buyer strategy context: " + descriptor.label() + " (" + request.strategy().name() + ")\n"
-			+ "Internal strategy rationale: " + blankIfMissing(request.strategyRationale()) + "\n"
-			+ "Strategy boundary posture: " + descriptor.boundaryStyle() + "\n"
-			+ "Fallback message intent: " + request.fallbackMessage() + "\n"
 			+ "Supplier message: " + blankIfMissing(request.supplierMessage()) + "\n"
 			+ "Supplier terms: " + formatTerms(request.supplierTerms()) + "\n"
-			+ "Primary buyer terms: " + formatNullableTerms(request.primaryBuyerTerms()) + "\n"
+			+ "Buyer terms to communicate: " + formatNullableTerms(request.primaryBuyerTerms()) + "\n"
 			+ "Alternative buyer terms: " + formatCounterOffers(request.counterOffers()) + "\n"
-			+ "Reason code: " + blankIfMissing(request.reasonCode() == null ? null : request.reasonCode().name()) + "\n"
-			+ "Focus issue: " + blankIfMissing(request.focusIssue() == null ? null : request.focusIssue().name()) + "\n"
-			+ "Evaluation summary: " + formatEvaluation(request.evaluation()) + "\n"
+			+ "Supplier-facing guidance: " + buildSupplierFacingGuidance(request, allowMesoOptionList) + "\n"
 			+ "Write the exact buyer message to send to the supplier.";
 
-		return completeOrFallback(systemPrompt, userPrompt, request.fallbackMessage());
+		return completeOrFallback(systemPrompt, userPrompt, buildBuyerReplyFallback(request, allowMesoOptionList));
 	}
 
 	private String completeOrFallback(String systemPrompt, String userPrompt, String fallback) {
@@ -152,6 +153,80 @@ public class AiNegotiationMessageService {
 		return sb.toString();
 	}
 
+	private String buildSupplierFacingGuidance(
+		BuyerReplyMessageRequest request,
+		boolean allowMesoOptionList
+	) {
+		if ("ACCEPT".equalsIgnoreCase(request.decision())) {
+			return "Confirm the agreement clearly and keep the tone concise and professional.";
+		}
+
+		if ("REJECT".equalsIgnoreCase(request.decision())) {
+			return "Close respectfully, state that the current terms will not work, and do not explain internal limits.";
+		}
+
+		StringBuilder guidance = new StringBuilder("Keep the negotiation open and businesslike. ");
+
+		if (allowMesoOptionList) {
+			guidance.append("Present the buyer positions as different workable structures and ask which option is closest on the supplier side. ");
+		} else if (request.primaryBuyerTerms() != null) {
+			guidance.append("State the buyer terms plainly as the basis for continuing. ");
+		}
+
+		if (request.focusIssue() == null) {
+			guidance.append("Keep the language concrete and commercial.");
+			return guidance.toString().trim();
+		}
+
+		switch (request.focusIssue()) {
+			case PRICE -> guidance.append("The main open point is price. Ask for a better price or state the buyer price plainly.");
+			case PAYMENT_DAYS -> guidance.append("The main open point is payment terms. State that longer payment terms are still needed.");
+			case DELIVERY_DAYS -> guidance.append("The main open point is delivery timing. State that faster delivery is still needed.");
+			case CONTRACT_MONTHS -> guidance.append("The main open point is contract length. State that a shorter contract term is still needed.");
+		}
+
+		return guidance.toString().trim();
+	}
+
+	private String buildBuyerReplyFallback(BuyerReplyMessageRequest request, boolean allowMesoOptionList) {
+		if ("ACCEPT".equalsIgnoreCase(request.decision())) {
+			if (request.primaryBuyerTerms() == null) {
+				return "Thank you. We can confirm the agreement.";
+			}
+			return "Thank you. We can confirm agreement on "
+				+ formatTermsForMessage(request.primaryBuyerTerms()) + ".";
+		}
+
+		if ("REJECT".equalsIgnoreCase(request.decision())) {
+			return "Thank you for the proposal. We won't be able to proceed on the current terms.";
+		}
+
+		if (allowMesoOptionList && request.counterOffers() != null && !request.counterOffers().isEmpty()) {
+			StringBuilder sb = new StringBuilder("Thank you for the update. We can continue on one of the following structures:\n");
+			for (int index = 0; index < request.counterOffers().size(); index++) {
+				sb.append("- Option ").append(index + 1).append(": ")
+					.append(formatTermsForMessage(request.counterOffers().get(index))).append("\n");
+			}
+			sb.append("Please let me know which option is closest on your side.");
+			return sb.toString();
+		}
+
+		if (request.primaryBuyerTerms() == null) {
+			return "Thank you for the update. Please send a revised offer if you would like to keep negotiating.";
+		}
+
+		return "Thank you for the update. To keep this moving, we would need "
+			+ formatTermsForMessage(request.primaryBuyerTerms())
+			+ ". Let me know if you can work on that basis.";
+	}
+
+	private String formatTermsForMessage(OfferVector terms) {
+		return "price " + terms.price()
+			+ ", payment in " + terms.paymentDays() + " days"
+			+ ", delivery in " + terms.deliveryDays() + " days"
+			+ ", and a " + terms.contractMonths() + " month contract";
+	}
+
 	private String formatEvaluation(OfferEvaluation evaluation) {
 		if (evaluation == null) {
 			return "none";
@@ -184,8 +259,7 @@ public class AiNegotiationMessageService {
 		NegotiationIssue focusIssue,
 		NegotiationStrategy strategy,
 		String strategyRationale,
-		OfferEvaluation evaluation,
-		String fallbackMessage
+		OfferEvaluation evaluation
 	) {
 	}
 }

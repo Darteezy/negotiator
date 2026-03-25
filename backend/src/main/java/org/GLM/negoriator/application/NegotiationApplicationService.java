@@ -283,8 +283,7 @@ public class NegotiationApplicationService {
 			response.focusIssue(),
 			session.getStrategy(),
 			StrategyMetadata.rationaleFor(session.getStrategy()),
-			response.evaluation(),
-			response.explanation()));
+			response.evaluation()));
 
 		session.addDecision(new NegotiationDecision(
 			supplierOffer.getRoundNumber(),

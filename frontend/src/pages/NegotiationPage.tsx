@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, RotateCcw, SendHorizontal } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  CheckCircle2,
+  CircleHelp,
+  RotateCcw,
+  SendHorizontal,
+} from "lucide-react";
 import { OfferCard } from "@/components/OfferCard";
 import {
   parseSupplierOffer,
@@ -22,6 +28,7 @@ interface Props {
 export function NegotiationPage({ initialSession, onRestart }: Props) {
   const [session, setSession] = useState(initialSession);
   const [supplierMessage, setSupplierMessage] = useState("");
+  const [pendingSupplierMessage, setPendingSupplierMessage] = useState("");
   const [chatError, setChatError] = useState("");
   const [settingsError, setSettingsError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -34,9 +41,20 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
   useEffect(() => {
     setSession(initialSession);
     setSettingsDraft(createSettingsDraft(initialSession));
+    setPendingSupplierMessage("");
     setChatError("");
     setSettingsError("");
   }, [initialSession]);
+
+  const visibleConversation = useMemo(
+    () =>
+      buildVisibleConversation(
+        session.conversation,
+        pendingSupplierMessage,
+        submitting,
+      ),
+    [pendingSupplierMessage, session.conversation, submitting],
+  );
 
   useEffect(() => {
     if (!scrollRef.current) {
@@ -47,7 +65,7 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [session.conversation]);
+  }, [visibleConversation]);
 
   async function handleSubmit() {
     const message = supplierMessage.trim();
@@ -57,6 +75,8 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
     }
 
     setChatError("");
+    setPendingSupplierMessage(message);
+    setSupplierMessage("");
 
     try {
       setSubmitting(true);
@@ -83,8 +103,10 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
       });
 
       setSession(nextSession);
-      setSupplierMessage("");
+      setPendingSupplierMessage("");
     } catch (nextError) {
+      setPendingSupplierMessage("");
+      setSupplierMessage(message);
       setChatError(
         nextError instanceof Error
           ? nextError.message
@@ -202,6 +224,11 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
           <StatusChip
             label="Strategy"
             value={activeStrategy?.label ?? session.strategy}
+            hintContent={
+              activeStrategy ? (
+                <StrategyTooltipContent strategy={activeStrategy} />
+              ) : null
+            }
           />
           <StatusChip
             label="Round"
@@ -215,25 +242,11 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
           />
         </header>
 
-        {activeStrategy ? (
-          <div className="mt-3 rounded-2xl border border-[var(--line)] bg-black/10 px-4 py-3 text-sm text-[var(--ink-soft)] shadow-sm shadow-black/10">
-            <p className="font-semibold text-[var(--ink-strong)]">
-              {activeStrategy.summary}
-            </p>
-            <p className="mt-1">
-              Concessions: {activeStrategy.concessionStyle}
-            </p>
-            <p className="mt-1">
-              Boundary posture: {activeStrategy.boundaryStyle}
-            </p>
-          </div>
-        ) : null}
-
         <div
           ref={scrollRef}
           className="app-scrollbar mt-4 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto rounded-3xl border border-[var(--line)] bg-black/10 px-4 py-4 shadow-inner shadow-black/10"
         >
-          {session.conversation.map((event, index) =>
+          {visibleConversation.map((event, index) =>
             event.actor === "system" ? (
               <div
                 key={`${event.eventType}-${event.at}-${index}`}
@@ -295,7 +308,7 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
               disabled={submitting || session.closed}
               className="flex h-[56px] items-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? "Sending..." : "Send"}
+              Send
               <SendHorizontal className="h-4 w-4" />
             </button>
           </div>
@@ -337,12 +350,14 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
                   value={settingsDraft.strategy}
                   options={session.strategyDetails.map((detail) => detail.name)}
                   onChange={(value) => handleDraftChange("strategy", value)}
+                  hintContent={
+                    strategyDetails.get(settingsDraft.strategy) ? (
+                      <StrategyTooltipContent
+                        strategy={strategyDetails.get(settingsDraft.strategy)!}
+                      />
+                    ) : null
+                  }
                 />
-                {strategyDetails.get(settingsDraft.strategy) ? (
-                  <p className="text-xs leading-5 text-[var(--ink-muted)]">
-                    {strategyDetails.get(settingsDraft.strategy)?.summary}
-                  </p>
-                ) : null}
                 <CompactField
                   label="Max rounds"
                   value={settingsDraft.maxRounds}
@@ -749,16 +764,21 @@ function StatusChip({
   label,
   value,
   accent = false,
+  hintContent,
 }: {
   label: string;
   value: string;
   accent?: boolean;
+  hintContent?: React.ReactNode;
 }) {
   return (
     <div
       className={`rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold ${accent ? "bg-[var(--buyer-soft)] text-[var(--buyer-ink)]" : "bg-black/10 text-[var(--ink-strong)]"}`}
     >
-      <span className="text-[var(--ink-muted)]">{label}</span>
+      <span className="inline-flex items-center gap-1 text-[var(--ink-muted)]">
+        {label}
+        {hintContent ? <HintTooltip>{hintContent}</HintTooltip> : null}
+      </span>
       <span className="ml-2">{value}</span>
     </div>
   );
@@ -810,16 +830,19 @@ function CompactSelect({
   value,
   options,
   onChange,
+  hintContent,
 }: {
   label: string;
   value: string;
   options: string[];
   onChange: (next: string) => void;
+  hintContent?: React.ReactNode;
 }) {
   return (
     <label className="col-span-2 flex flex-col gap-1">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
         {label}
+        {hintContent ? <HintTooltip>{hintContent}</HintTooltip> : null}
       </span>
       <select
         value={value}
@@ -833,6 +856,107 @@ function CompactSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function HintTooltip({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ left: 16, top: 16 });
+  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const tooltipRef = useRef<HTMLSpanElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current || !tooltipRef.current) {
+      return;
+    }
+
+    const updatePosition = () => {
+      if (!triggerRef.current || !tooltipRef.current) {
+        return;
+      }
+
+      const viewportPadding = 16;
+      const triggerRect = triggerRef.current.getBoundingClientRect();
+      const tooltipRect = tooltipRef.current.getBoundingClientRect();
+      const centeredLeft =
+        triggerRect.left + triggerRect.width / 2 - tooltipRect.width / 2;
+      const clampedLeft = Math.min(
+        Math.max(centeredLeft, viewportPadding),
+        window.innerWidth - tooltipRect.width - viewportPadding,
+      );
+      const top = triggerRect.bottom + 10;
+
+      setTooltipPosition({ left: clampedLeft, top });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
+
+  return (
+    <span
+      ref={triggerRef}
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+    >
+      <span
+        className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full text-[var(--ink-soft)] transition hover:text-[var(--accent)]"
+        aria-label="Show description"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+      >
+        <CircleHelp className="h-3.5 w-3.5" />
+      </span>
+      {createPortal(
+        <span
+          ref={tooltipRef}
+          className={`pointer-events-none fixed z-[120] w-[min(18rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--line)] bg-[rgba(18,39,49,0.98)] px-3 py-3 text-left normal-case tracking-normal text-[12px] font-medium leading-5 text-[var(--ink-strong)] shadow-xl shadow-black/30 transition duration-150 ${open ? "opacity-100" : "opacity-0"}`}
+          style={{
+            left: `${tooltipPosition.left}px`,
+            top: `${tooltipPosition.top}px`,
+          }}
+        >
+          {children}
+        </span>,
+        document.body,
+      )}
+    </span>
+  );
+}
+
+function StrategyTooltipContent({
+  strategy,
+}: {
+  strategy: ApiStrategyDetails;
+}) {
+  return (
+    <span className="block">
+      <span className="block font-semibold text-[var(--ink-strong)]">
+        {strategy.label}
+      </span>
+      <span className="mt-1 block text-[var(--ink-soft)]">
+        {strategy.summary}
+      </span>
+      <span className="mt-2 block text-[var(--ink-soft)]">
+        Concessions: {strategy.concessionStyle}
+      </span>
+      <span className="mt-1 block text-[var(--ink-soft)]">
+        Boundary posture: {strategy.boundaryStyle}
+      </span>
+    </span>
   );
 }
 
@@ -879,6 +1003,40 @@ function buildDetailRows(event: ApiConversationEvent) {
   }
 
   return rows;
+}
+
+function buildVisibleConversation(
+  conversation: ApiConversationEvent[],
+  pendingSupplierMessage: string,
+  submitting: boolean,
+) {
+  if (!pendingSupplierMessage) {
+    return conversation;
+  }
+
+  const pendingEvents: ApiConversationEvent[] = [
+    {
+      eventType: "SUPPLIER_PENDING",
+      actor: "supplier",
+      title: "Supplier",
+      message: pendingSupplierMessage,
+      at: "pending-supplier",
+      counterOffers: [],
+    },
+  ];
+
+  if (submitting) {
+    pendingEvents.push({
+      eventType: "BUYER_PENDING",
+      actor: "buyer",
+      title: "Buyer",
+      message: "Reviewing your proposal and preparing a response...",
+      at: "pending-buyer",
+      counterOffers: [],
+    });
+  }
+
+  return [...conversation, ...pendingEvents];
 }
 
 function formatTerms(terms: OfferTerms) {

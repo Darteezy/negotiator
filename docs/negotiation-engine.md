@@ -342,7 +342,7 @@ Current AI role:
 
 - parse supplier messages into structured terms
 - detect hard supplier constraints from free text
-- generate buyer-facing reply wording
+- generate supplier-facing buyer wording in a professional procurement tone
 
 Current non-AI role:
 
@@ -353,6 +353,13 @@ Current non-AI role:
 - strategy selection
 
 The supplier parsing flow is not pure model output. The backend also applies heuristics for option selection and fallback handling.
+
+Buyer wording is also constrained before it is sent out:
+
+- the model is prompted to write like a real procurement professional, not like an internal negotiation engine
+- the wording should read like a short business email note to the supplier
+- internal strategy names, targets, utility language, reservation logic, and similar hidden reasoning must not appear in supplier-facing text
+- if AI wording is unavailable, the backend falls back to human-readable supplier-facing text rather than engine explanation text
 
 ## Shared example
 
@@ -376,11 +383,13 @@ What usually happens:
 5. The engine ranks the biggest gaps.
 6. The buyer returns a counter rather than accepting.
 
-Possible explanation shape:
+Possible internal explanation shape:
 
 ```text
 Countered because the offer is still below the current target. Buyer utility is lower than the target for this round. The counteroffer changes the most important remaining gap for the buyer.
 ```
+
+That explanation is internal engine reasoning. It is useful for debugging and inspection, but it is not the style that should be sent to the supplier.
 
 One realistic counter shape under the default buyer profile could be:
 

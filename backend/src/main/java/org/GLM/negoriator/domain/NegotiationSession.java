@@ -253,7 +253,7 @@ public class NegotiationSession {
 			sessionToken = UUID.randomUUID().toString();
 		}
 		if (openingMessage == null || openingMessage.isBlank()) {
-			openingMessage = "Please send your opening offer with price, payment days, delivery days, and contract length.";
+			openingMessage = "Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.";
 		}
 		createdAt = now;
 		updatedAt = now;
