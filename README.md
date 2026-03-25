@@ -1,228 +1,203 @@
 # Negotiator
 
-Negotiator is a buyer-side autonomous negotiation application built for the Pactum technical challenge. The current codebase now includes a Spring Boot backend, a supplier-facing Vite + React frontend, a rule-based buyer agent, persistence for sessions and decisions, and test coverage for the scoring and decision loop.
+Buyer-side autonomous negotiation agent built for the Pactum technical challenge.
 
-## Challenge Alignment
+The backend acts as the buyer. It evaluates supplier offers across price, payment days, delivery days, and contract length, then accepts, counters, or rejects based on the buyer's goals and limits. The frontend gives a human supplier a live interface to configure a session, negotiate round by round, and inspect the latest buyer response.
 
-The challenge in [TASK.md](TASK.md) asks for a buyer agent that can negotiate with a human supplier across multiple terms such as price, payment terms, delivery time, and contract length.
+The current frontend is a demo and testing surface for the buyer engine. The same backend logic could later be used behind richer supplier-facing channels such as email or chat-based communication.
 
-This repository already implements the core buyer-side negotiation engine around those terms:
+## What is in the app
 
-- Weighted utility scoring across four negotiation issues.
-- Offer evaluation using configurable buyer preferences, reservation limits, and round context.
-- A decision loop that accepts, counters, or rejects supplier offers.
-- Persistence of sessions, offers, decisions, evaluation metrics, and supplier-belief snapshots.
+- Rule-based buyer decision engine with four negotiation issues
+- Configurable buyer mandate: ideal offer, walk-away limits, weights, rounds, and risk of walkaway
+- Five manual strategies: Baseline, Meso, Boulware, Conceder, and Tit-for-Tat
+- Session history with structured buyer reasoning and utility snapshots
+- AI-assisted supplier message parsing and buyer message generation
+- Demo frontend for product demonstration and testing of the buyer workflow
 
-Current gaps against the full challenge scope:
+## Prerequisites
 
-- AI-assisted strategy switching is still planned, not implemented.
-- The current frontend is structured-offer first, not natural-language AI chat yet.
-- The optional AI endpoint exists for helper parsing and experiments, but it is not part of the negotiation engine yet.
+For the default Docker path:
 
-That means the current MVP does work without any AI provider for the main negotiation flow. An external AI service is only needed for the optional parsing and chat helper endpoints.
+- Docker with Compose support
+- A reachable AI model endpoint for supplier-message parsing
 
-## Current State
-
-### Implemented
-
-- Spring Boot backend with JPA persistence and PostgreSQL support.
-- Vite 8 + React 19 frontend for the human supplier experience.
-- Main-page buyer setup flow for configurable goals and reservation limits.
-- Negotiation REST API for session creation, retrieval, and supplier-offer submission.
-- Negotiation engine built from these components:
-  - [BuyerUtilityCalculator](backend/src/main/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculator.java)
-  - [DecisionMaker](backend/src/main/java/org/GLM/negoriator/negotiation/DecisionMaker.java)
-  - [CounterOfferGenerator](backend/src/main/java/org/GLM/negoriator/negotiation/CounterOfferGenerator.java)
-  - [NegotiationEngineImpl](backend/src/main/java/org/GLM/negoriator/negotiation/NegotiationEngineImpl.java)
-- Application service that starts sessions and records the full offer-decision loop:
-  - [NegotiationApplicationService](backend/src/main/java/org/GLM/negoriator/application/NegotiationApplicationService.java)
-- Persistence model for sessions, offers, decisions, buyer profiles, bounds, and supplier beliefs:
-  - [NegotiationSession](backend/src/main/java/org/GLM/negoriator/domain/NegotiationSession.java)
-- Automated tests for utility scoring, decision thresholds, counteroffers, engine orchestration, and repository persistence.
-
-### Planned
-
-- AI-assisted strategy switching and richer supplier modeling.
-- AI-generated buyer phrasing layered on top of the structured decision contract.
-- Better analytics, replay, and negotiation observability.
-
-## Negotiation Strategy Today
-
-The engine is still rule-based, but it now supports runtime strategy selection. The default is `MESO`, not `Boulware`.
-
-At a high level:
-
-1. Convert the supplier offer into a buyer utility score in the range `0.0000` to `1.0000`.
-2. Compute the current target utility based on the buyer reservation utility and negotiation round.
-3. Reject immediately if the offer violates buyer reservation limits.
-4. Accept if the offer utility meets the current target.
-5. Reject if the offer is far below the buyer floor, or if the last round is reached without meeting reservation utility.
-6. Otherwise generate a counteroffer.
-
-Current strategy behavior:
-
-- `MESO` is the default. It returns up to three buyer-equivalent counteroffers so the supplier can choose among nearby trade-offs.
-- `BOULWARE` keeps the buyer stricter for longer.
-- `CONCEDER` relaxes faster.
-- `BASELINE` and `TIT_FOR_TAT` currently use the baseline target curve, with richer tit-for-tat behavior still planned.
-- Counteroffers can now give price back when stronger payment terms, faster delivery, or shorter contract length justify the trade.
-
-This behavior is implemented in [NegotiationEngineImpl](backend/src/main/java/org/GLM/negoriator/negotiation/NegotiationEngineImpl.java), [DecisionMaker](backend/src/main/java/org/GLM/negoriator/negotiation/DecisionMaker.java), and [CounterOfferGenerator](backend/src/main/java/org/GLM/negoriator/negotiation/CounterOfferGenerator.java).
-
-For the full algorithm description, formulas, and test mapping, see [docs/negotiation-engine.md](docs/negotiation-engine.md).
-
-## Architecture Summary
-
-The current architecture is frontend-plus-backend:
-
-- Vite + React hosts the supplier-facing negotiation workspace.
-- Spring Boot hosts the negotiation logic and REST API.
-- PostgreSQL stores session state for reconstruction and later analysis.
-- The application service orchestrates session start and supplier-offer submission.
-- A separate AI endpoint exists for generic chat completion and optional supplier-message parsing, but it is not used by the negotiation engine.
-- The backend can call either a remote Ollama server or an OpenAI-compatible API.
-
-More detail is in [docs/architecture.md](docs/architecture.md).
-
-## Tech Stack
+For local development:
 
 - Java 21
-- Spring Boot 3.4
-- React 19
-- Vite 8
-- Spring Web
-- Spring Data JPA
-- PostgreSQL
-- H2 for tests
-- External AI provider via HTTP
-- Tailwind CSS 4
-- shadcn-style component structure
-- Docker Compose
-- Maven Wrapper
+- Node.js 20+
+- npm 10+
+- PostgreSQL 16
 
-## Getting Started
+## Getting started
 
-### Prerequisites
-
-- Docker and Docker Compose
-- Java 21 if running outside Docker
-- An `.env` file based on `.env.example`
-
-### Start the full stack with Docker
-
-1. Create the local environment file:
+### 1. Create the environment file
 
 ```bash
 cp .env.example .env
 ```
 
-2. Build and start the containers:
+Minimum values to check in `.env`:
+
+```env
+POSTGRES_DB=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=change-me
+
+AI_PROVIDER=ollama
+AI_BASE_URL=http://host.docker.internal:11434
+AI_API_KEY=
+AI_CHAT_MODEL=qwen3.5:9b
+```
+
+Notes:
+
+- Supported AI providers are `ollama` and `openai`.
+- If you use Ollama, it must already be running and the model in `AI_CHAT_MODEL` must be available there.
+- Set both the AI server address and the model name in `.env` before starting the stack.
+- When the backend runs in Docker and Ollama runs on your host machine, use `http://host.docker.internal:11434`.
+- When the backend runs outside Docker and Ollama runs locally, `http://localhost:11434` is the default.
+- For OpenAI-compatible setups, point `AI_BASE_URL` to the `/v1` root and set `AI_API_KEY` if the provider requires bearer auth.
+- `VITE_API_BASE_URL` is only needed when the frontend runs outside Docker.
+- The negotiation engine is rule-based, but the current supplier-message flow still calls `/api/ai/parse-offer`, so the app needs a configured and reachable AI model during normal UI use.
+
+### 2. Start the stack
 
 ```bash
 docker compose up --build
 ```
 
-3. Open the app:
+Open:
 
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:8080`
-- PostgreSQL: `localhost:5432`
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8080
+- PostgreSQL: localhost:5432
 
-The Dockerized frontend serves the built React app and proxies `/api` traffic to the backend service inside Compose.
+### 3. Use the app
 
-The core negotiation MVP should be usable as soon as the frontend, backend, and database are up.
+1. Open the configuration screen.
+2. Pick a buyer strategy.
+3. Set the buyer target, limits, weights, and round count.
+4. Start the session.
+5. Negotiate as the supplier from the main negotiation view.
+6. Adjust strategy or session settings during the session if needed.
 
-Docker Compose no longer runs Ollama. If you want AI-assisted parsing or the generic AI endpoint, point the backend at an external provider from `.env`.
+> Screenshot placeholder: configuration screen
 
-To stop the Docker stack:
+> Screenshot placeholder: negotiation screen
+
+## Local development
+
+Docker is the shortest path. If you want to run the services separately:
 
 ```bash
-docker compose down
-```
+# backend
+cd backend
+./mvnw spring-boot:run
 
-### Start the frontend outside Docker
-
-```bash
-cd frontend
+# frontend
+cd ../frontend
 npm install
 npm run dev
 ```
 
-Frontend development server: `http://localhost:5173`
+The frontend dev server runs on `http://localhost:5173` and proxies `/api` requests to `http://localhost:8080`.
 
-The Vite dev server proxies `/api` requests to `http://localhost:8080`.
+## How it works
 
-### Run backend tests
+Each supplier message goes through the same flow:
 
-```bash
-cd backend
-sh mvnw test
-```
+1. The frontend sends the supplier message for parsing.
+2. The backend turns that message into structured terms.
+3. The negotiation engine scores the offer from the buyer's point of view.
+4. Hard buyer limits are checked first.
+5. The active strategy shapes the buyer's concession curve and counter style.
+6. The backend accepts, counters, or rejects and stores the result in the session history.
 
-## Environment Variables
+The buyer does not negotiate on price alone. Every round can trade off:
 
-The current backend expects these environment variables:
+- price
+- payment days
+- delivery days
+- contract months
 
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `POSTGRES_DB`
-- `SPRING_DATASOURCE_URL` or Docker Compose-provided database URL wiring
-- `AI_PROVIDER`
-- `AI_BASE_URL`
-- `AI_CHAT_MODEL`
-- `AI_API_KEY` for OpenAI or OpenAI-compatible providers that require bearer auth
+## AI role
 
-Optional frontend override:
+AI is present, but it does not decide the deal.
 
-- `VITE_API_BASE_URL` if you do not want to use the Vite development proxy
+- AI parses supplier messages into structured offer terms and hard constraints.
+- AI can generate buyer-facing negotiation text.
+- The accept, counter, and reject decision stays rule-based in the backend.
 
-Recommended model defaults:
+Today that parsing flow combines the model response with backend heuristics for things like option selection and fallback handling. It is not a free-form agent deciding the negotiation.
 
-- `qwen2.5:7b-instruct`
-- `qwen3.5:9b` if your machine has enough memory
+## Strategies
 
-Provider examples:
+- Baseline: balanced default with steady concessions
+- Meso: sends a small set of buyer-safe alternatives when useful
+- Boulware: holds firm longer and concedes later
+- Conceder: gives ground earlier to improve close rate
+- Tit-for-Tat: reacts more directly to supplier movement
 
-- Remote Ollama on another server:
-  - `AI_PROVIDER=ollama`
-  - `AI_BASE_URL=http://your-gpu-server:11434`
-  - `AI_CHAT_MODEL=qwen3.5:9b`
-- OpenAI:
-  - `AI_PROVIDER=openai`
-  - `AI_BASE_URL=https://api.openai.com/v1`
-  - `AI_API_KEY=...`
-  - `AI_CHAT_MODEL=gpt-4.1-mini`
-- OpenAI-compatible server:
-  - `AI_PROVIDER=openai`
-  - `AI_BASE_URL=https://your-proxy-or-server/v1`
-  - `AI_API_KEY=...` if required by that server
-  - `AI_CHAT_MODEL=your-model-name`
+Manual strategy changes are supported from session settings.
 
-The AI settings are only required for the optional AI controller in [backend/src/main/java/org/GLM/negoriator/controller/AIController.java](backend/src/main/java/org/GLM/negoriator/controller/AIController.java). They are not required for the negotiation engine logic itself.
+## Docs
 
-## Repository Layout
+| Document                                                 | Focus                                                           |
+| -------------------------------------------------------- | --------------------------------------------------------------- |
+| [docs/README.md](docs/README.md)                         | Docs index and suggested reading order                          |
+| [docs/architecture.md](docs/architecture.md)             | Frontend, backend, database, and AI flow in one place           |
+| [docs/negotiation-engine.md](docs/negotiation-engine.md) | Scoring, decision rules, issue tradeoffs, and counteroffer flow |
+| [docs/strategies.md](docs/strategies.md)                 | Current strategy behavior and intent                            |
+| [docs/api.md](docs/api.md)                               | REST endpoints, payloads, and example requests                  |
+| [TASK.md](TASK.md)                                       | Original challenge brief                                        |
+
+## Project layout
 
 ```text
 negotiator/
-├── frontend/
-│   ├── src/
-│   └── package.json
 ├── backend/
 │   ├── src/main/java/org/GLM/negoriator/
+│   │   ├── ai/
 │   │   ├── application/
 │   │   ├── controller/
 │   │   ├── domain/
 │   │   └── negotiation/
 │   └── src/test/java/org/GLM/negoriator/
 ├── docs/
+│   ├── architecture.md
+│   ├── api.md
+│   ├── negotiation-engine.md
+│   ├── README.md
+│   └── strategies.md
+├── frontend/
+│   └── src/
+│       ├── components/
+│       ├── lib/
+│       └── pages/
 ├── docker-compose.yml
-├── PROJECT_PLAN.md
 ├── README.md
 └── TASK.md
 ```
 
-## Documentation Map
+## Useful notes
 
-- [docs/architecture.md](docs/architecture.md): system structure, persistence flow, and current gaps.
-- [docs/negotiation-engine.md](docs/negotiation-engine.md): algorithm, decision logic, test strategy, and future strategy design.
-- [PROJECT_PLAN.md](PROJECT_PLAN.md): delivery roadmap and planned improvements.
+- New sessions start from the configuration page, not directly in the chat.
+- Strategy selection is manual. The system does not auto-switch strategies during a live negotiation.
+- The frontend is supplier-facing. The backend represents the buyer.
+- The current web UI is a demonstration layer, not the final required product channel.
+- In future work, the same buyer engine could be exposed through supplier email or chat workflows instead of this demo-only interface.
+- If you want the deeper algorithm details, use the docs above instead of making the root README longer.
+
+## Roadmap
+
+- [x] Rule-based buyer negotiation engine across four issues
+- [x] Configurable buyer mandate and live session settings
+- [x] Manual strategy selection with multiple strategies
+- [x] Session history with structured buyer reasoning
+- [x] Dockerized frontend, backend, and database stack
+- [ ] Automatic strategy switching based on negotiation context
+- [ ] Stronger supplier context understanding beyond the current AI parsing plus heuristic fallback flow
+- [ ] Better explanation of supplier constraints and preference signals across rounds
+- [ ] Replay and analytics views for comparing negotiation outcomes
+- [ ] Broader simulation and evaluation tooling across strategies

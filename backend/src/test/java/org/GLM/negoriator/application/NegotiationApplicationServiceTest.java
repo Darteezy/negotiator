@@ -2,14 +2,21 @@ package org.GLM.negoriator.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationDecisionType;
 import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.domain.NegotiationSessionRepository;
 import org.GLM.negoriator.domain.NegotiationSessionStatus;
+import org.GLM.negoriator.domain.NegotiationStrategyChangeTrigger;
+import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
+import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
+import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -57,9 +64,8 @@ class NegotiationApplicationServiceTest {
 		assertEquals(NegotiationSessionStatus.COUNTERED, pendingAcceptanceSession.getStatus());
 		assertEquals(NegotiationDecisionType.COUNTER, pendingAcceptanceDecision.getDecision());
 		assertNotNull(pendingAcceptanceDecision.getCounterOffer());
-		assertEquals(
-			"Buyer is ready to close on these terms. Reply with accept to finalize the deal.",
-			pendingAcceptanceDecision.getExplanation());
+		assertNotNull(pendingAcceptanceDecision.getExplanation());
+		assertTrue(!pendingAcceptanceDecision.getExplanation().isBlank());
 		assertEquals(0, new BigDecimal("120.00").compareTo(pendingAcceptanceDecision.getCounterOffer().toOfferVector().price()));
 		assertEquals(60, pendingAcceptanceDecision.getCounterOffer().toOfferVector().paymentDays());
 		assertEquals(7, pendingAcceptanceDecision.getCounterOffer().toOfferVector().deliveryDays());
@@ -73,9 +79,144 @@ class NegotiationApplicationServiceTest {
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
 		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
+		assertNotNull(acceptedDecision.getExplanation());
+		assertTrue(!acceptedDecision.getExplanation().isBlank());
+	}
+
+	@Test
+	void startSessionProvidesImmediateDefaultOpeningMessage() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
+
+		assertNotNull(startedSession.getOpeningMessage());
 		assertEquals(
-			"Accepted because the supplier agreed to the buyer's active offer from the previous round.",
-			acceptedDecision.getExplanation());
+			"Please send your opening offer with price, payment days, delivery days, and contract length.",
+			startedSession.getOpeningMessage());
+	}
+
+	@Test
+	void updatesSessionSettingsForFutureRoundsAndRecordsManualStrategyChange() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
+
+		NegotiationSession updatedSession = service.updateSessionSettings(
+			startedSession.getId(),
+			new NegotiationApplicationService.UpdateSessionSettingsCommand(
+				NegotiationStrategy.BOULWARE,
+				10,
+				new BigDecimal("0.25"),
+				new BuyerProfile(
+					new OfferVector(new BigDecimal("88.00"), 70, 9, 6),
+					new OfferVector(new BigDecimal("126.00"), 35, 28, 24),
+					new IssueWeights(
+						new BigDecimal("0.50"),
+						new BigDecimal("0.20"),
+						new BigDecimal("0.20"),
+						new BigDecimal("0.10")),
+					BigDecimal.ZERO),
+				new NegotiationBounds(
+					new BigDecimal("80.00"),
+					new BigDecimal("130.00"),
+					30,
+					90,
+					7,
+					30,
+					3,
+					24)));
+
+		NegotiationSession reloadedSession = service.getSession(updatedSession.getId());
+
+		assertEquals(NegotiationStrategy.BOULWARE, reloadedSession.getStrategy());
+		assertEquals(10, reloadedSession.getMaxRounds());
+		assertEquals(0, new BigDecimal("0.25").compareTo(reloadedSession.getRiskOfWalkaway()));
+		assertEquals(0, new BigDecimal("88.00").compareTo(reloadedSession.toBuyerProfile().idealOffer().price()));
+		assertEquals(0, new BigDecimal("130.00").compareTo(reloadedSession.toNegotiationBounds().maxPrice()));
+		assertTrue(reloadedSession.getStrategyChanges().stream()
+			.anyMatch(change -> change.getTrigger() == NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION
+				&& "Session settings updated. Future rounds will use Boulware.".equals(change.getRationale())));
+	}
+
+	@Test
+	void recordsManualConfigurationChangeEvenWhenStrategyDoesNotChange() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
+
+		NegotiationSession updatedSession = service.updateSessionSettings(
+			startedSession.getId(),
+			new NegotiationApplicationService.UpdateSessionSettingsCommand(
+				NegotiationStrategy.BASELINE,
+				9,
+				new BigDecimal("0.20"),
+				new BuyerProfile(
+					new OfferVector(new BigDecimal("95.00"), 65, 11, 8),
+					new OfferVector(new BigDecimal("126.00"), 35, 28, 24),
+					new IssueWeights(
+						new BigDecimal("0.50"),
+						new BigDecimal("0.20"),
+						new BigDecimal("0.20"),
+						new BigDecimal("0.10")),
+					BigDecimal.ZERO),
+				new NegotiationBounds(
+					new BigDecimal("80.00"),
+					new BigDecimal("130.00"),
+					30,
+					90,
+					7,
+					30,
+					3,
+					24)));
+
+		NegotiationSession reloadedSession = service.getSession(updatedSession.getId());
+
+		assertTrue(reloadedSession.getStrategyChanges().stream()
+			.anyMatch(change -> change.getTrigger() == NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION
+				&& change.getPreviousStrategy() == NegotiationStrategy.BASELINE
+				&& change.getNextStrategy() == NegotiationStrategy.BASELINE
+				&& "Session settings updated.".equals(change.getRationale())));
+	}
+
+	@Test
+	void doesNotRecordManualConfigurationChangeWhenNothingChanged() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
+
+		NegotiationSession updatedSession = service.updateSessionSettings(
+			startedSession.getId(),
+			new NegotiationApplicationService.UpdateSessionSettingsCommand(
+				startedSession.getStrategy(),
+				startedSession.getMaxRounds(),
+				startedSession.getRiskOfWalkaway(),
+				startedSession.toBuyerProfile(),
+				startedSession.toNegotiationBounds()));
+
+		NegotiationSession reloadedSession = service.getSession(updatedSession.getId());
+
+		assertEquals(1, reloadedSession.getStrategyChanges().size());
+	}
+
+	@Test
+	void acceptsSupplierSelectionOfPriorBuyerOptionWithoutExplicitAcceptKeyword() {
+		NegotiationSession startedSession = service.startSession(
+			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
+
+		NegotiationSession counteredSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("110.00"), 40, 29, 20),
+			"Price 110, payment 40, delivery 29, contract 20");
+
+		OfferVector selectedBuyerOption = counteredSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == 1)
+			.sorted(Comparator.comparing(org.GLM.negoriator.domain.NegotiationOffer::getCreatedAt))
+			.skip(1)
+			.findFirst()
+			.orElseThrow()
+			.toOfferVector();
+
+		NegotiationSession acceptedSession = submit(
+			counteredSession,
+			selectedBuyerOption,
+			"option 2");
+		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
+
+		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
+		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
 	}
 
 	private NegotiationSession submit(NegotiationSession session, OfferVector offer, String message) {

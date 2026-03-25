@@ -1,354 +1,640 @@
 # Negotiation Engine
 
-## Purpose
+This project uses a rule-based buyer engine.
 
-This document explains how the current buyer-side negotiation engine works in simple language.
-
-The backend is still rule-based, but it now supports named strategies per session. The current default is `MESO`. The future plan is to keep the final deal decision rule-based, then add AI strategy advice and AI-generated formal messaging on top of that stable base.
-
-The main implementation lives in:
-
-- [NegotiationEngine](../backend/src/main/java/org/GLM/negoriator/negotiation/NegotiationEngine.java)
-- [NegotiationEngineImpl](../backend/src/main/java/org/GLM/negoriator/negotiation/NegotiationEngineImpl.java)
-- [BuyerUtilityCalculator](../backend/src/main/java/org/GLM/negoriator/negotiation/BuyerUtilityCalculator.java)
-- [DecisionMaker](../backend/src/main/java/org/GLM/negoriator/negotiation/DecisionMaker.java)
-- [CounterOfferGenerator](../backend/src/main/java/org/GLM/negoriator/negotiation/CounterOfferGenerator.java)
-
-## Short Version
-
-Today the buyer does this in every round:
-
-1. Score the supplier offer from the buyer point of view.
-2. Compare that score with the minimum score the buyer wants in the current round.
-3. Reject immediately if the offer breaks any hard buyer limits.
-4. Accept if the offer is strong enough.
-5. Reject if the offer is too weak to continue.
-6. Otherwise send a counteroffer.
-
-Important clarification:
-
-- the engine is not price-only
-- the engine can change price, payment days, delivery days, and contract months
-- most strategies still change one issue per counteroffer
-- price can now move upward when better payment, delivery, or contract terms justify that trade
-- the `MESO` strategy can send multiple buyer-equivalent options in the same round
-- with the default weights, price often wins first because it is the strongest buyer priority
-
-## The Four Negotiation Issues
-
-The engine negotiates on four terms:
+The buyer negotiates across four issues:
 
 - price
 - payment days
 - delivery days
 - contract months
 
-These four values are stored in `OfferVector`.
+The final deal decision is deterministic. AI can help parse supplier messages and draft buyer wording, but AI does not decide whether the buyer accepts, counters, or rejects.
 
-## What The Buyer Profile Means
+## Core idea
 
-Each session has a buyer profile with four important parts:
+In each round, the backend does three things:
 
-1. `idealOffer`
-   - the best realistic deal the buyer wants
-2. `reservationOffer`
-   - the worst deal the buyer is still willing to accept on each issue
-3. `weights`
-   - how important each issue is to the buyer
-4. `reservationUtility`
-   - the minimum overall quality level the buyer can live with
+1. Turn the supplier offer into a buyer utility score.
+2. Compare that score with the buyer's current target for this round.
+3. Decide whether to accept, counter, or reject.
 
-## How The Buyer Scores An Offer
+That sounds simple, but the current engine also adds:
 
-The engine converts every offer into a buyer utility score between `0.0000` and `1.0000`.
+- hard reservation checks
+- strategy-specific concession curves
+- issue ranking for counteroffers
+- MESO multiple-option replies
+- supplier constraint handling
+- historical consistency checks so the buyer does not contradict earlier concessions
+
+## Main backend pieces
+
+The core logic lives in these backend classes:
+
+- `NegotiationEngine`
+- `NegotiationEngineImpl`
+- `BuyerUtilityCalculator`
+- `DecisionMaker`
+- `CounterOfferGenerator`
+- `NegotiationApplicationService`
+
+## Session flow
+
+### 1. Session start
+
+The frontend creates a session from the configuration page.
+
+That session stores:
+
+- the active strategy
+- max rounds
+- risk of walkaway
+- buyer ideal offer
+- buyer reservation offer
+- issue weights
+- negotiation bounds
+- supplier model snapshot
+
+The backend also records the initial strategy selection in strategy history.
+
+### 2. Supplier offer arrives
+
+When the supplier submits a message from the frontend:
+
+1. The frontend calls the AI parsing endpoint.
+2. The backend turns the supplier message into structured terms.
+3. Any detected supplier hard constraints are merged into the session.
+4. The negotiation engine evaluates the current supplier offer.
+5. The application service stores the supplier offer, buyer reply, evaluation data, and conversation event.
+
+### 3. Session update
+
+After the buyer reply is generated, the backend stores:
+
+- the supplier offer
+- any buyer counteroffers
+- the decision type
+- the resulting session status
+- the evaluation metrics
+- the active strategy and rationale
+- the buyer-facing reply message
+
+## Buyer profile
+
+The buyer profile has four important parts.
+
+### `idealOffer`
+
+The buyer's preferred commercial outcome.
+
+### `reservationOffer`
+
+The buyer's hard limit on each issue.
+
+Examples:
+
+- price must not go above the reservation price
+- payment days must not go below the reservation payment term
+- delivery must not get slower than the reservation delivery term
+- contract must not exceed the reservation contract length
+
+### `weights`
+
+How much each issue matters to the buyer.
+
+The backend normalizes the weights before using them, so they do not need to sum exactly to `1.0` in the request.
+
+### `reservationUtility`
+
+The minimum overall utility floor the buyer can accept.
+
+## Utility scoring
+
+Every supplier offer is converted into a buyer utility score between `0.0000` and `1.0000`.
 
 Meaning:
 
-- `1.0000` is excellent for the buyer
-- `0.0000` is very bad for the buyer
+- `1.0000` is very strong for the buyer
+- `0.0000` is the buyer's floor
 
-The scoring rules are:
+The direction of preference is:
 
 - lower price is better for the buyer
 - longer payment terms are better for the buyer
 - faster delivery is better for the buyer
-- shorter contract length is better for the buyer in the current implementation
+- shorter contract length is better for the buyer
 
-Each issue is normalized into the same scale, then multiplied by its buyer weight.
+Each issue is normalized into a common scale, multiplied by its normalized weight, and combined into one buyer utility score.
 
-The backend now normalizes the weights before calculating utility. That means the utility scale stays interpretable even if the input weights do not already sum exactly to `1.0`.
-
-## How The Buyer Becomes More Flexible Over Time
+## Strategy-driven target utility
 
 The buyer does not expect the same quality level in every round.
 
-Early rounds:
+The `DecisionMaker` calculates a target utility for the current round. That target changes by strategy.
 
-- the buyer is stricter
-- the target utility is higher
+### Current target curves
 
-Later rounds:
+| Strategy      | Current target pattern                              |
+| ------------- | --------------------------------------------------- |
+| `BASELINE`    | `1.0 - progress`                                    |
+| `MESO`        | `1.0 - progress^1.35`                               |
+| `BOULWARE`    | `1.0 - progress^2.4`                                |
+| `CONCEDER`    | `1.0 - sqrt(progress)`                              |
+| `TIT_FOR_TAT` | baseline curve adjusted by recent supplier movement |
 
-- the buyer becomes more flexible
-- the target utility moves closer to the reservation utility
+That means:
 
-So the current engine already has time-based concession behavior, and some strategies now change that concession curve.
+- `BOULWARE` stays stricter longer
+- `CONCEDER` softens faster
+- `BASELINE` stays in the middle
+- `MESO` uses its own curve but mainly stands out through multiple options
+- `TIT_FOR_TAT` rewards supplier concessions and becomes firmer when the supplier stalls
 
-Current strategy summary:
+The target utility is never allowed to drop below the buyer's configured reservation utility.
 
-- `MESO`: default strategy, returns multiple equivalent counteroffers when possible
-- `BOULWARE`: stays tougher for longer
-- `CONCEDER`: relaxes faster
-- `BASELINE`: uses the original linear target curve
-- `TIT_FOR_TAT`: currently shares the baseline target curve until richer reciprocal history is added
+## Hard rejection floor
 
-## Hard Limits That Cause Immediate Rejection
+The engine also calculates a hard reject threshold by strategy.
 
-Before the engine thinks about accept or counter, it checks hard buyer limits.
+Current thresholds:
 
-The offer is rejected immediately if any of these are true:
+- `BASELINE`: `-0.0500`
+- `MESO`: `-0.0600`
+- `BOULWARE`: `-0.0350`
+- `CONCEDER`: `-0.0800`
+- `TIT_FOR_TAT`: `-0.0650` after a real supplier concession, otherwise `-0.0400`
+
+This threshold is separate from the reservation checks. It controls when an offer is simply too weak to keep discussing.
+
+## Decision rules
+
+After scoring the supplier offer, the engine follows this order:
+
+1. Check whether the offer breaks buyer reservation limits.
+2. Compute buyer utility.
+3. Compute target utility and hard reject threshold.
+4. Reject immediately if utility is below the hard reject threshold.
+5. Accept if utility meets the current target.
+6. Reject on the final round if utility is still below the target floor.
+7. Otherwise counter.
+
+There is one important adjustment:
+
+- if the offer is outside reservation limits but still close enough and there is time left, the engine can convert what would have been an accept or reject into a counter instead
+
+That is how the buyer stays practical near the edge instead of behaving too abruptly.
+
+## Reservation checks
+
+An offer is outside the buyer reservation range if any of these are true:
 
 - price is above the buyer reservation price
-- payment days are below the buyer reservation payment days
-- delivery days are above the buyer reservation delivery days
-- contract months are above the buyer reservation contract months
+- payment days are below the buyer reservation payment term
+- delivery days are above the buyer reservation delivery term
+- contract months are above the buyer reservation contract term
 
-This is the strongest rule in the engine. It means some offers are non-negotiable regardless of the round.
+If the offer is too far outside those limits, the engine rejects immediately.
 
-## The Main Decision Rules
+If the offer is only slightly outside and there is still time left, the engine can continue with a counter.
 
-After hard-limit checks, the engine follows these rules:
+The amount of slack before that immediate rejection depends on strategy.
 
-1. Accept when buyer utility is at or above the current round target.
-2. Reject when buyer utility is below the hard continuation floor.
-3. Reject when the final round is reached and buyer utility is still below reservation utility.
-4. Counter in all other cases.
+## Counteroffer generation
 
-In plain language:
+When the decision is `COUNTER`, the backend builds one or more buyer-safe offers.
 
-- good offer: accept now
-- very weak offer: reject now
-- borderline offer: keep negotiating
+### Step 1: rank the gaps
 
-## Why Price Now Moves In Both Directions
+`CounterOfferGenerator` measures the weighted gap between the supplier offer and the buyer ideal for each issue.
 
-This was a valid concern from testing the frontend.
+The biggest weighted gap is usually the first candidate issue.
 
-What was missing before:
+### Step 2: respect supplier constraints
 
-- the engine often changed only one issue
-- price was filtered so that it could only stay flat or move down
-- that meant the buyer could ask for better payment, delivery, or contract terms without giving anything back on price
-
-What changed in the backend:
-
-- weights are normalized before use
-- the engine now exposes the exact reason code and focus issue in its response
-- counteroffers are validated by overall buyer utility, not only by issue-by-issue monotonic improvement
-- when the supplier improves payment, delivery, or contract terms, the buyer can now give back some price while staying above its reservation floor
-
-So the current engine is still deterministic and simple, but it now supports the main Pactum-style tradeoff that the challenge explicitly calls for.
-
-## How Counteroffers Are Built
-
-Most strategies still follow a one-issue focus rule.
-
-That means it first asks:
-
-"Which single issue hurts the buyer most right now?"
-
-Then it moves that issue toward the buyer ideal.
+If the supplier message or prior parsing established a hard constraint, the engine can block that issue from being selected.
 
 Examples:
 
-- if price is the biggest problem, the buyer changes price
-- if delivery is the biggest problem, the buyer changes delivery days
-- if payment is the biggest problem, the buyer changes payment days
-- if contract length is the biggest problem, the buyer changes contract months
+- a supplier price floor blocks further buyer pressure on price
+- a payment-days ceiling blocks asking for even longer payment
+- a delivery-days floor blocks asking for even faster delivery
+- a contract-months floor blocks asking for an even shorter contract
 
-After that first move, the engine can now rebalance price in the supplier's favor when:
+### Step 3: avoid repeating a dead move
 
-- the counteroffer already gives the buyer better payment, delivery, or contract terms than the current supplier offer
-- or the supplier just conceded on one of those non-price terms compared with the previous round
+If the buyer pushed one issue in the previous round and the supplier ignored it, the engine may promote another issue if it is still close enough in importance.
 
-That price giveback is still bounded:
+### Step 4: move halfway toward the ideal
+
+The selected issue moves toward the buyer ideal.
+
+Current movement rule:
+
+- decimal values move halfway toward the target and are rounded
+- integer values move halfway toward the target and are rounded
+
+### Step 5: rebalance price for trade-offs
+
+If the supplier improved on non-price terms, the buyer can now give some price back while staying buyer-safe.
+
+This is one of the most important current behaviors.
+
+It means the buyer can do things like:
+
+- accept a slightly higher price in exchange for longer payment terms
+- accept a slightly higher price for faster delivery
+- accept a slightly higher price for a shorter contract
+
+That price giveback is bounded:
 
 - it cannot cross the buyer reservation price
-- it cannot make the counteroffer worse than the buyer reservation utility
-- it cannot make the counteroffer worse overall than the supplier's current offer
+- it cannot make the counter worse than the supplier's current offer from the buyer's point of view
+- it keeps a minimum improvement margin over the current supplier offer
 
-Why this rule exists:
+### Step 6: keep historical consistency
 
-- it keeps behavior explainable
-- it makes each concession easy to test
-- it shows which issue currently matters most to the buyer
+The engine checks earlier rounds so the buyer does not become more aggressive against a supplier package that is already as good as or better than a previous one.
 
-`MESO` adds one important difference:
+In practice this means:
 
-- instead of sending only one counteroffer, it can return up to three nearby options
-- each option moves a different high-impact issue
-- each option can now carry a different price if that is needed to keep the trade balanced
-- the buyer still keeps the decision explainable because each option is built from the same deterministic issue ranking logic
+- price cannot suddenly become harsher against a comparable package
+- payment, delivery, and contract demands are capped by the buyer's own earlier concession frontier
 
-## New Response Metadata
+### Step 7: clamp to supplier constraints after generation
 
-Each buyer reply now includes more structured information:
+The application service applies any active supplier constraints again after counteroffers are generated.
+
+So the flow is two-phase:
+
+1. the engine uses constraints while ranking issues
+2. the application service clamps returned counteroffers again before storing them
+
+## MESO behavior
+
+`MESO` uses the same safety checks as the other strategies, but it can return up to three viable counteroffers in one round.
+
+Those options come from the top-ranked issues, not from random variation.
+
+The goal is to test supplier preferences without weakening the buyer position.
+
+If several options survive the viability checks, the explanation text includes numbered option lines.
+
+## Response metadata
+
+Each buyer reply carries structured metadata that the frontend can use directly.
+
+Important fields:
 
 - `reasonCode`
 - `focusIssue`
-- `explanation`
+- `evaluation`
+- `counterOffers`
 
-Current reason codes are:
+Current reason codes:
 
 - `TARGET_UTILITY_MET`
 - `OUTSIDE_RESERVATION_LIMITS`
+- `FINAL_ROUND_WITHIN_LIMITS`
 - `BELOW_HARD_REJECT_THRESHOLD`
 - `FINAL_ROUND_BELOW_RESERVATION`
 - `COUNTER_TO_CLOSE_GAP`
 
-Current focus issues are:
+Current focus issues:
 
 - `PRICE`
 - `PAYMENT_DAYS`
 - `DELIVERY_DAYS`
 - `CONTRACT_MONTHS`
 
-This metadata is important because the frontend and future AI messaging should not guess why the engine made a decision.
+## Evaluation metrics
 
-## Evaluation Metrics Stored For Analysis
+The backend stores extra values for diagnostics and later analysis.
 
-The backend also stores extra metrics for diagnostics:
+Current metrics:
 
 1. `buyerUtility`
-   - how good the offer is for the buyer
-2. `targetUtility`
-   - how good the offer needs to be in this round
-3. `estimatedSupplierUtility`
-   - rough estimate of supplier attractiveness based on current belief weights
+2. `estimatedSupplierUtility`
+3. `targetUtility`
 4. `continuationValue`
-   - expected value of continuing after adjusting for walkaway risk
 5. `nashProduct`
-   - rough fairness / joint-value indicator
 
-These metrics are useful for analysis today. They are not yet the main rule drivers for action selection.
+These metrics are useful for understanding the round, but they are not all direct decision drivers.
 
-## Supplier Modeling Today
+## Supplier model
 
-The backend keeps a supplier model with archetype beliefs such as:
+The supplier model is still lightweight.
+
+It currently helps estimate supplier utility using four archetype beliefs:
 
 - margin focused
 - cashflow focused
 - operations focused
 - stability focused
 
-Today this model is still mostly diagnostic.
+Today this is mainly diagnostic. It does not yet drive automatic strategy switching.
 
-What it does now:
+## AI role
 
-- helps estimate supplier utility
-- is stored with each decision
+AI supports the negotiation flow, but it does not control the decision.
 
-What it does not do yet:
+Current AI role:
 
-- learn meaningfully from conversation history
-- switch strategy automatically
-- drive strategy selection
+- parse supplier messages into structured terms
+- detect hard supplier constraints from free text
+- generate supplier-facing buyer wording in a professional procurement tone
 
-## Round Count Today
+Current non-AI role:
 
-Round count is now strategy-aware.
+- utility scoring
+- reservation checks
+- accept, counter, reject decisions
+- counteroffer generation
+- strategy selection
 
-Current defaults:
+The supplier parsing flow is not pure model output. The backend also applies heuristics for option selection and fallback handling.
 
-- `MESO`: `10` rounds
-- `BOULWARE`: `10` rounds
-- `CONCEDER`: `6` rounds
-- `BASELINE`: `8` rounds
-- `TIT_FOR_TAT`: `8` rounds
+Buyer wording is also constrained before it is sent out:
 
-The session can still override these defaults when needed.
+- the model is prompted to write like a real procurement professional, not like an internal negotiation engine
+- the wording should read like a short business email note to the supplier
+- internal strategy names, targets, utility language, reservation logic, and similar hidden reasoning must not appear in supplier-facing text
+- if AI wording is unavailable, the backend falls back to human-readable supplier-facing text rather than engine explanation text
 
-## Strategy Layer Today
+## Shared example
 
-The strategy set now exists at the session level:
+Default buyer setup:
 
-1. Boulware
-   - implemented as a slower concession curve
-2. Conceder
-   - implemented as a faster concession curve
-3. Tit-for-Tat
-   - selectable now, but still awaiting richer reciprocal behavior
-4. MESO
-   - implemented as the default strategy
-   - generates multiple equivalent offers instead of just one
+- ideal: price `90`, payment `60`, delivery `7`, contract `6`
+- reservation: price `120`, payment `30`, delivery `30`, contract `24`
 
-## Next Strategy Work
+Supplier message:
 
-The next major backend evolution should keep the final deal decision rule-based, then deepen the strategy layer instead of replacing it.
-
-Most important next steps:
-
-- make `TIT_FOR_TAT` truly respond to supplier movement
-- make the supplier model influence strategy recommendation
-- let AI advise when to switch strategies
-- improve MESO so it balances option quality more explicitly instead of only using ranked issue gaps
-
-## Planned AI Role
-
-The AI layer should not replace the deterministic decision core.
-
-Recommended role:
-
-1. AI strategy advisor
-   - suggests which strategy to start with
-   - suggests whether to switch strategy during negotiation
-   - remains advisory only
-2. AI message generator
-   - converts structured backend decisions into formal supplier-facing chat or email text
-   - should produce official business language
-   - should never change the underlying deal decision
-
-## Ollama Model Recommendation
-
-For the current local AI path, the backend is now configured for Ollama.
-
-Recommended default model:
-
-- `qwen2.5:7b-instruct`
-
-Why this is the best current default:
-
-- good instruction following
-- good enough tone control for formal business wording
-- lighter local footprint than larger models
-- suitable for advisory strategy prompts and supplier-facing message drafting
-
-If you want a stronger but heavier local option later, `llama3.1:8b-instruct` is also a reasonable candidate.
-
-## How To Test The Current Engine
-
-Current checked-in backend tests include:
-
-- [NegotiationEngineImplTest](../backend/src/test/java/org/GLM/negoriator/negotiation/NegotiationEngineImplTest.java)
-- [SessionConfigurationValidatorTest](../backend/src/test/java/org/GLM/negoriator/application/SessionConfigurationValidatorTest.java)
-
-Run all backend tests with:
-
-```bash
-cd backend
-./mvnw test
+```text
+We can do price 118, payment in 30 days, delivery in 21 days, and a 12 month contract.
 ```
 
-## Current Limitations
+What usually happens:
 
-The engine is improved, but still intentionally simple.
+1. The offer is parsed into structured terms.
+2. The offer is still inside buyer hard limits.
+3. Buyer utility is calculated.
+4. The offer is likely below the current round target.
+5. The engine ranks the biggest gaps.
+6. The buyer returns a counter rather than accepting.
 
-Current limitations:
+Possible internal explanation shape:
 
-- AI is not yet part of the main negotiation loop
-- `TIT_FOR_TAT` still behaves like the baseline target curve
-- MESO still builds options from one-issue moves instead of full multi-issue optimization
-- supplier belief updates are still shallow
-- unused buyer profile parameters still exist
+```text
+Countered because the offer is still below the current target. Buyer utility is lower than the target for this round. The counteroffer changes the most important remaining gap for the buyer.
+```
 
-That is acceptable for the current phase, but it is also the reason the planned overhaul is necessary.
+That explanation is internal engine reasoning. It is useful for debugging and inspection, but it is not the style that should be sent to the supplier.
+
+One realistic counter shape under the default buyer profile could be:
+
+```text
+Price 104.00, payment 30 days, delivery 14 days, contract 12 months
+```
+
+That is still buyer-safe, improves the biggest remaining gaps, and keeps the negotiation alive without conceding all the way to the supplier position.
+
+If the same negotiation is run under `MESO`, the reply may instead contain several numbered options.
+
+If the supplier later says something like:
+
+```text
+Option 2 works for us, but we cannot go below 115.
+```
+
+then the parsing flow can:
+
+- select the referenced buyer option
+- record a supplier price floor of `115`
+- prevent future counters from asking for a lower price than that floor
+
+That changes the next countering step. Price may stop being the active issue, and the buyer may shift the negotiation toward payment, delivery, or contract terms instead.
+
+## Acceptance nuance
+
+There is one important product behavior in the application service.
+
+If the supplier exactly accepts the buyer's active offer from the previous round, the backend can finalize the deal as an acceptance.
+
+If the supplier sends terms that the buyer is ready to accept but does not clearly accept the buyer's active option, the backend can return a counter that effectively says:
+
+```text
+Buyer is ready to close on these terms. Reply with accept to finalize the deal.
+```
+
+That keeps the close explicit instead of assuming agreement from ambiguous supplier wording.
+
+## Current limitations
+
+The engine is stronger than the first version, but it is still intentionally narrow.
+
+Current limits:
+
+- strategy switching is manual, not automatic
+- supplier modeling is still shallow
+- counteroffers are rule-based, not globally optimized packages
+- AI parsing still depends on provider quality plus backend fallback heuristics
+- replay and analytics are still limited compared with the core negotiation flow
+  \*\*\* Add File: /home/wyller/Kood/negotiator/docs/architecture.md
+
+# Architecture
+
+This project is a small full-stack negotiation system.
+
+The frontend is supplier-facing. The backend acts as the buyer. PostgreSQL stores the session state. An external AI provider helps parse supplier messages and generate buyer wording, but it does not decide the negotiation outcome.
+
+## High-level view
+
+```text
+Supplier user
+	-> React frontend
+	-> Spring Boot API
+	-> negotiation application service
+	-> rule-based negotiation engine
+	-> PostgreSQL session storage
+
+External AI provider
+	-> supplier-message parsing
+	-> buyer message generation
+```
+
+## Main parts
+
+### Frontend
+
+The frontend is a Vite and React app.
+
+Main flow:
+
+- `ConfigurationPage` creates the session
+- `NegotiationPage` runs the live negotiation
+- `negotiationApi` calls the backend endpoints
+
+Runtime behavior:
+
+- in local development, Vite proxies `/api` to `http://localhost:8080`
+- in Docker, Nginx proxies `/api` to the backend container
+
+What the frontend is responsible for:
+
+- collecting buyer setup values
+- sending supplier messages
+- rendering the conversation timeline
+- applying live session setting changes
+- displaying buyer explanations, utilities, and counteroffers
+
+What it does not do:
+
+- it does not score offers
+- it does not decide accept, counter, or reject
+- it does not implement the negotiation strategy itself
+
+### Backend
+
+The backend is a Spring Boot application.
+
+The most important layers are:
+
+- controllers expose the REST API
+- `NegotiationApplicationService` orchestrates the session lifecycle
+- `NegotiationEngineImpl` runs the decision logic
+- domain entities store session, offers, decisions, and strategy history
+
+What the backend is responsible for:
+
+- creating sessions
+- validating and updating configuration
+- evaluating supplier offers
+- generating buyer counteroffers
+- storing every round and decision
+- composing buyer-facing replies
+
+### Database
+
+PostgreSQL stores the persistent session state.
+
+Important stored records:
+
+- session metadata
+- buyer profile snapshot
+- bounds snapshot
+- supplier model snapshot
+- supplier constraints snapshot
+- supplier offers
+- buyer counteroffers
+- decisions and evaluation data
+- strategy change history
+
+The repository uses pessimistic write locking for live session updates so concurrent writes do not corrupt the round state.
+
+### AI provider
+
+The backend supports two provider modes:
+
+- `ollama`
+- `openai`
+
+The provider is configured through environment variables.
+
+AI is used for:
+
+- supplier message parsing
+- buyer message generation
+
+AI is not used for:
+
+- utility scoring
+- reservation checks
+- strategy selection
+- accept, counter, reject decisions
+
+## Request flow
+
+### Session creation
+
+1. The frontend loads defaults from the backend.
+2. The user configures buyer goals and strategy.
+3. The frontend posts the session payload.
+4. The backend validates the setup and stores a new session.
+5. The backend records the initial strategy selection.
+
+### Supplier message flow
+
+1. The supplier types a free-text message in the negotiation view.
+2. The frontend sends that message to the parsing endpoint.
+3. The backend asks the configured AI provider for structured terms.
+4. The backend applies heuristics and fallback handling on top of that result.
+5. The frontend submits the normalized supplier offer to the negotiation session endpoint.
+6. The backend runs the negotiation engine.
+7. The backend stores the round result and returns the updated session state.
+8. The frontend re-renders the timeline with the latest buyer response.
+
+## Example path
+
+Supplier message:
+
+```text
+We can do 118 if payment stays at 30 days and delivery is 21 days.
+```
+
+Typical system path:
+
+1. Parsing resolves price `118`, payment `30`, delivery `21`, contract from the reference terms.
+2. The backend scores the offer against the buyer profile.
+3. The strategy sets the current target utility.
+4. The buyer returns a counteroffer or MESO options.
+5. The reply is stored in the session and shown in the UI.
+
+## Session state and history
+
+The backend keeps the negotiation state explicit.
+
+Important status values:
+
+- `PENDING`
+- `COUNTERED`
+- `ACCEPTED`
+- `REJECTED`
+- `EXPIRED`
+
+The frontend does not reconstruct history on its own. It renders the conversation data returned by the backend.
+
+## Strategy changes
+
+Strategy switching is manual today.
+
+That means:
+
+- the user can start with one strategy
+- the user can change strategy during the session
+- each change is recorded in strategy history
+- there is no automatic policy choosing a new strategy in the background
+
+## Design boundary
+
+The main design choice in this project is the split between deterministic negotiation logic and AI assistance.
+
+Rule-based core:
+
+- safer
+- easier to test
+- easier to explain
+- easier to keep inside buyer limits
+
+AI layer:
+
+- better for reading supplier language
+- better for producing natural buyer messages
+- not trusted with the final commercial decision
+
+## Current limitations
+
+- AI provider availability affects normal supplier-message parsing
+- supplier preference modeling is still shallow
+- strategy switching is manual only
+- analytics and replay are lighter than the core negotiation loop

@@ -5,7 +5,8 @@ import java.util.UUID;
 
 import jakarta.persistence.EntityNotFoundException;
 
-import org.GLM.negoriator.ai.AiStrategyAdvisor;
+import org.GLM.negoriator.ai.AiNegotiationMessageService;
+import org.GLM.negoriator.ai.AiNegotiationMessageService.BuyerReplyMessageRequest;
 import org.GLM.negoriator.domain.BuyerProfileSnapshot;
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationDecisionType;
@@ -35,18 +36,27 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class NegotiationApplicationService {
 
+	private static final java.util.regex.Pattern OPTION_SELECTION_PATTERN = java.util.regex.Pattern.compile(
+		"\\b(option|offer)\\s*(\\d+|one|two|three|first|second|third)\\b",
+		java.util.regex.Pattern.CASE_INSENSITIVE);
+	private static final java.util.regex.Pattern BUYER_SELECTION_PATTERN = java.util.regex.Pattern.compile(
+		"\\b(original offer|same terms|your offer|your terms|that option|that offer)\\b",
+		java.util.regex.Pattern.CASE_INSENSITIVE);
+
 	private final NegotiationSessionRepository sessionRepository;
 	private final NegotiationEngine negotiationEngine;
 	private final SessionConfigurationValidator sessionConfigurationValidator;
+	private final AiNegotiationMessageService aiNegotiationMessageService;
 
 	public NegotiationApplicationService(
 		NegotiationSessionRepository sessionRepository,
 		NegotiationEngine negotiationEngine,
-		AiStrategyAdvisor aiStrategyAdvisor
+		AiNegotiationMessageService aiNegotiationMessageService
 	) {
 		this.sessionRepository = sessionRepository;
 		this.negotiationEngine = negotiationEngine;
 		this.sessionConfigurationValidator = new SessionConfigurationValidator();
+		this.aiNegotiationMessageService = aiNegotiationMessageService;
 	}
 
 	public NegotiationSession startSession(StartSessionCommand command) {
@@ -66,7 +76,7 @@ public class NegotiationApplicationService {
 			null,
 			command.strategy(),
 			NegotiationStrategyChangeTrigger.INITIAL_SELECTION,
-			"Session started with " + command.strategy().name() + " as the configured opening strategy."));
+			StrategyMetadata.initialSelectionRationale(command.strategy())));
 
 		return sessionRepository.saveAndFlush(session);
 	}
@@ -79,6 +89,96 @@ public class NegotiationApplicationService {
 		session.getDecisions().size();
 		session.getStrategyChanges().size();
 		return session;
+	}
+
+	public NegotiationSession updateSessionSettings(UUID sessionId, UpdateSessionSettingsCommand command) {
+		NegotiationSession session = sessionRepository.findDetailedByIdForUpdate(sessionId)
+			.orElseThrow(() -> new EntityNotFoundException("Negotiation session not found: " + sessionId));
+		session.getOffers().size();
+		session.getDecisions().size();
+		session.getStrategyChanges().size();
+
+		if (session.isClosed()) {
+			throw new IllegalStateException("Negotiation session is closed: " + sessionId);
+		}
+
+		if (command.maxRounds() < session.getCurrentRound()) {
+			throw new IllegalArgumentException("maxRounds must be greater than or equal to the current round.");
+		}
+
+		sessionConfigurationValidator.validate(new StartSessionCommand(
+			command.strategy(),
+			command.maxRounds(),
+			command.riskOfWalkaway(),
+			command.buyerProfile(),
+			command.bounds(),
+			session.initialSupplierModel()));
+
+		if (!hasConfigurationChanges(session, command)) {
+			return session;
+		}
+
+		session.updateConfiguration(
+			command.maxRounds(),
+			command.riskOfWalkaway(),
+			BuyerProfileSnapshot.from(command.buyerProfile()),
+			NegotiationBoundsSnapshot.from(command.bounds()));
+
+		var previousStrategy = session.getStrategy();
+		String manualUpdateRationale = StrategyMetadata.manualChangeRationale(previousStrategy, command.strategy());
+
+		if (session.getStrategy() != command.strategy()) {
+			session.switchStrategy(
+				command.strategy(),
+				session.getCurrentRound(),
+				NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION,
+				manualUpdateRationale);
+		} else {
+			session.addStrategyChange(new NegotiationStrategyChange(
+				session.getCurrentRound(),
+				previousStrategy,
+				previousStrategy,
+				NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION,
+				manualUpdateRationale));
+		}
+
+		return sessionRepository.saveAndFlush(session);
+	}
+
+	private boolean hasConfigurationChanges(NegotiationSession session, UpdateSessionSettingsCommand command) {
+		return session.getStrategy() != command.strategy()
+			|| session.getMaxRounds() != command.maxRounds()
+			|| session.getRiskOfWalkaway().compareTo(command.riskOfWalkaway()) != 0
+			|| !sameBuyerProfile(session.toBuyerProfile(), command.buyerProfile())
+			|| !sameBounds(session.toNegotiationBounds(), command.bounds());
+	}
+
+	private boolean sameBuyerProfile(BuyerProfile left, BuyerProfile right) {
+		return sameOffer(left.idealOffer(), right.idealOffer())
+			&& sameOffer(left.reservationOffer(), right.reservationOffer())
+			&& left.reservationUtility().compareTo(right.reservationUtility()) == 0
+			&& left.weights().price().compareTo(right.weights().price()) == 0
+			&& left.weights().paymentDays().compareTo(right.weights().paymentDays()) == 0
+			&& left.weights().deliveryDays().compareTo(right.weights().deliveryDays()) == 0
+			&& left.weights().contractMonths().compareTo(right.weights().contractMonths()) == 0;
+	}
+
+	private boolean sameBounds(NegotiationBounds left, NegotiationBounds right) {
+		return left.minPrice().compareTo(right.minPrice()) == 0
+			&& left.maxPrice().compareTo(right.maxPrice()) == 0
+			&& left.minPaymentDays() == right.minPaymentDays()
+			&& left.maxPaymentDays() == right.maxPaymentDays()
+			&& left.minDeliveryDays() == right.minDeliveryDays()
+			&& left.maxDeliveryDays() == right.maxDeliveryDays()
+			&& left.minContractMonths() == right.minContractMonths()
+			&& left.maxContractMonths() == right.maxContractMonths();
+	}
+
+	private boolean sameOffer(OfferVector left, OfferVector right) {
+		return left.price().compareTo(right.price()) == 0
+			&& left.paymentDays() == right.paymentDays()
+			&& left.deliveryDays() == right.deliveryDays()
+			&& left.contractMonths() == right.contractMonths();
 	}
 
 	public NegotiationSession submitSupplierOffer(UUID sessionId, OfferVector supplierOfferTerms) {
@@ -117,7 +217,8 @@ public class NegotiationApplicationService {
 				session.toNegotiationContext(),
 				session.toBuyerProfile(),
 				session.currentSupplierModel(),
-				session.toNegotiationBounds()));
+				session.toNegotiationBounds(),
+				toEngineSupplierConstraints(activeConstraints)));
 
 		if (acceptedBuyerOffer != null
 			&& response.decision() != NegotiationEngine.Decision.REJECT
@@ -169,6 +270,21 @@ public class NegotiationApplicationService {
 			session.addOffer(buyerCounterOffer);
 		}
 
+		String buyerMessage = aiNegotiationMessageService.composeBuyerReply(new BuyerReplyMessageRequest(
+			supplierOffer.getRoundNumber(),
+			session.getMaxRounds(),
+			NegotiationDecisionType.from(response.decision()).name(),
+			NegotiationSessionStatus.from(response.nextState()).name(),
+			supplierMessage,
+			supplierOfferTerms,
+			counterOffer == null ? null : counterOffer.toOfferVector(),
+			buyerCounterOffers.stream().map(NegotiationOffer::toOfferVector).toList(),
+			response.reasonCode(),
+			response.focusIssue(),
+			session.getStrategy(),
+			StrategyMetadata.rationaleFor(session.getStrategy()),
+			response.evaluation()));
+
 		session.addDecision(new NegotiationDecision(
 			supplierOffer.getRoundNumber(),
 			NegotiationDecisionType.from(response.decision()),
@@ -180,8 +296,8 @@ public class NegotiationApplicationService {
 			response.reasonCode(),
 			response.focusIssue(),
 			session.getStrategy(),
-			"Baseline policy remained active for this round.",
-			response.explanation()));
+			StrategyMetadata.rationaleFor(session.getStrategy()),
+			buyerMessage));
 		session.moveTo(NegotiationSessionStatus.from(response.nextState()));
 
 		return sessionRepository.saveAndFlush(session);
@@ -213,6 +329,20 @@ public class NegotiationApplicationService {
 		return feasibleOffers;
 	}
 
+	private NegotiationEngine.SupplierConstraints toEngineSupplierConstraints(
+		SupplierConstraintsSnapshot supplierConstraints
+	) {
+		if (supplierConstraints == null || supplierConstraints.isEmpty()) {
+			return null;
+		}
+
+		return new NegotiationEngine.SupplierConstraints(
+			supplierConstraints.getPriceFloor(),
+			supplierConstraints.getPaymentDaysCeiling(),
+			supplierConstraints.getDeliveryDaysFloor(),
+			supplierConstraints.getContractMonthsFloor());
+	}
+
 	private NegotiationOffer matchingActiveBuyerOffer(
 		NegotiationSession session,
 		OfferVector supplierOfferTerms,
@@ -222,7 +352,7 @@ public class NegotiationApplicationService {
 			return null;
 		}
 
-		if (!isExplicitAcceptanceMessage(supplierMessage)) {
+		if (!isExplicitAcceptanceMessage(supplierMessage) && !isBuyerOfferSelectionMessage(supplierMessage)) {
 			return null;
 		}
 
@@ -261,6 +391,27 @@ public class NegotiationApplicationService {
 			|| normalized.contains("we have a deal");
 	}
 
+	private boolean isBuyerOfferSelectionMessage(String supplierMessage) {
+		if (supplierMessage == null || supplierMessage.isBlank()) {
+			return false;
+		}
+
+		String normalized = supplierMessage.toLowerCase(java.util.Locale.ROOT);
+		if (normalized.contains("counter")
+			|| normalized.contains("i propose")
+			|| normalized.contains("i offer")
+			|| normalized.contains("final offer")
+			|| normalized.contains("if you accept")
+			|| normalized.contains("cannot")
+			|| normalized.contains("can't")
+			|| normalized.contains("not settling")) {
+			return false;
+		}
+
+		return OPTION_SELECTION_PATTERN.matcher(supplierMessage).find()
+			|| BUYER_SELECTION_PATTERN.matcher(supplierMessage).find();
+	}
+
 	public record StartSessionCommand(
 		NegotiationStrategy strategy,
 		int maxRounds,
@@ -268,6 +419,15 @@ public class NegotiationApplicationService {
 		BuyerProfile buyerProfile,
 		NegotiationBounds bounds,
 		SupplierModel supplierModel
+	) {
+	}
+
+	public record UpdateSessionSettingsCommand(
+		NegotiationStrategy strategy,
+		int maxRounds,
+		BigDecimal riskOfWalkaway,
+		BuyerProfile buyerProfile,
+		NegotiationBounds bounds
 	) {
 	}
 }

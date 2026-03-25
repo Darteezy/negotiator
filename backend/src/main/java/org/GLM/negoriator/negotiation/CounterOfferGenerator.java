@@ -25,15 +25,16 @@ public class CounterOfferGenerator {
             NegotiationEngine.NegotiationContext context,
             NegotiationEngine.NegotiationBounds bounds,
             NegotiationEngine.OfferVector supplierOffer) {
-        return counterProposal(profile, context, bounds, supplierOffer).offer();
+        return counterProposal(profile, context, bounds, null, supplierOffer).offer();
     }
 
     CounterProposal counterProposal(
             NegotiationEngine.BuyerProfile profile,
             NegotiationEngine.NegotiationContext context,
             NegotiationEngine.NegotiationBounds bounds,
+            NegotiationEngine.SupplierConstraints supplierConstraints,
             NegotiationEngine.OfferVector supplierOffer) {
-        NegotiationIssue issueToImprove = issueToImprove(profile, context, bounds, supplierOffer);
+        NegotiationIssue issueToImprove = issueToImprove(profile, context, bounds, supplierConstraints, supplierOffer);
         return new CounterProposal(issueToImprove, counterOfferForIssue(profile, bounds, supplierOffer, issueToImprove));
         }
 
@@ -80,41 +81,68 @@ public class CounterOfferGenerator {
             NegotiationEngine.BuyerProfile profile,
             NegotiationEngine.NegotiationContext context,
             NegotiationEngine.NegotiationBounds bounds,
+            NegotiationEngine.SupplierConstraints supplierConstraints,
             NegotiationEngine.OfferVector supplierOffer
     ) {
-            return rankedIssues(profile, context, bounds, supplierOffer).getFirst();
+            return rankedIssues(profile, context, bounds, supplierConstraints, supplierOffer).getFirst();
             }
 
             List<NegotiationIssue> rankedIssues(
                 NegotiationEngine.BuyerProfile profile,
                 NegotiationEngine.NegotiationContext context,
                 NegotiationEngine.NegotiationBounds bounds,
+                NegotiationEngine.SupplierConstraints supplierConstraints,
                 NegotiationEngine.OfferVector supplierOffer
             ) {
         NegotiationEngine.OfferVector ideal = profile.idealOffer();
         NegotiationEngine.IssueWeights weights = profile.weights().normalized();
 
+        boolean priceBlocked = supplierConstraints != null
+            && supplierConstraints.priceFloor() != null
+            && supplierOffer.price().compareTo(supplierConstraints.priceFloor()) <= 0;
+        boolean paymentBlocked = supplierConstraints != null
+            && supplierConstraints.paymentDaysCeiling() != null
+            && supplierOffer.paymentDays() >= supplierConstraints.paymentDaysCeiling();
+        boolean deliveryBlocked = supplierConstraints != null
+            && supplierConstraints.deliveryDaysFloor() != null
+            && supplierOffer.deliveryDays() <= supplierConstraints.deliveryDaysFloor();
+        boolean contractBlocked = supplierConstraints != null
+            && supplierConstraints.contractMonthsFloor() != null
+            && supplierOffer.contractMonths() <= supplierConstraints.contractMonthsFloor();
+
         Map<NegotiationIssue, BigDecimal> gapByIssue = new LinkedHashMap<>();
         gapByIssue.put(
                 NegotiationIssue.PRICE,
+                priceBlocked
+                    ? BigDecimal.ZERO
+                    :
                 weightedGap(
                         positiveGap(supplierOffer.price(), ideal.price()),
                         BuyerPreferenceScoring.priceSpan(profile),
                         weights.price()));
         gapByIssue.put(
                 NegotiationIssue.PAYMENT_DAYS,
+                paymentBlocked
+                    ? BigDecimal.ZERO
+                    :
                 weightedGap(
                         BigDecimal.valueOf(Math.max(0, ideal.paymentDays() - supplierOffer.paymentDays())),
                         BuyerPreferenceScoring.paymentSpan(profile),
                         weights.paymentDays()));
         gapByIssue.put(
                 NegotiationIssue.DELIVERY_DAYS,
+                deliveryBlocked
+                    ? BigDecimal.ZERO
+                    :
                 weightedGap(
                         BigDecimal.valueOf(Math.max(0, supplierOffer.deliveryDays() - ideal.deliveryDays())),
                         BuyerPreferenceScoring.deliverySpan(profile),
                         weights.deliveryDays()));
         gapByIssue.put(
                 NegotiationIssue.CONTRACT_MONTHS,
+                contractBlocked
+                    ? BigDecimal.ZERO
+                    :
                 weightedGap(
                         BigDecimal.valueOf(Math.max(0, supplierOffer.contractMonths() - ideal.contractMonths())),
                         BuyerPreferenceScoring.contractSpan(profile),

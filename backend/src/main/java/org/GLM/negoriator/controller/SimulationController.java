@@ -24,7 +24,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,7 +46,6 @@ public class SimulationController {
 	);
 
 	private final NegotiationSimulationService simulationService;
-	private final AdminApiGuard adminApiGuard;
 	private final ExecutorService streamExecutor;
 	private final Semaphore activeStreams;
 	private final long streamTimeoutMs;
@@ -55,13 +53,11 @@ public class SimulationController {
 
 	public SimulationController(
 		NegotiationSimulationService simulationService,
-		AdminApiGuard adminApiGuard,
 		@Value("${negotiator.simulations.max-concurrent-streams:4}") int maxConcurrentStreams,
 		@Value("${negotiator.simulations.stream-timeout-ms:60000}") long streamTimeoutMs,
 		@Value("${negotiator.simulations.max-batch-size:6}") int maxBatchSize
 	) {
 		this.simulationService = simulationService;
-		this.adminApiGuard = adminApiGuard;
 		int boundedConcurrency = Math.max(1, maxConcurrentStreams);
 		this.streamExecutor = Executors.newFixedThreadPool(boundedConcurrency);
 		this.activeStreams = new Semaphore(boundedConcurrency);
@@ -76,11 +72,8 @@ public class SimulationController {
 
 	@PostMapping
 	public ResponseEntity<SimulationResult> runSimulation(
-		@RequestHeader(name = AdminApiGuard.ADMIN_TOKEN_HEADER, required = false) String adminToken,
 		@RequestBody(required = false) SimulationRequest request
 	) {
-		adminApiGuard.assertAuthorized(adminToken);
-
 		NegotiationStrategy strategy = null;
 		String personality = null;
 
@@ -105,13 +98,10 @@ public class SimulationController {
 
 	@GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
 	public SseEmitter streamSimulation(
-		@RequestParam(name = "token", required = false) String adminToken,
 		@RequestParam(required = false) String strategy,
 		@RequestParam(required = false) String supplierPersonality,
 		@RequestParam(required = false) Integer maxRounds
 	) {
-		adminApiGuard.assertAuthorized(adminToken);
-
 		if (!activeStreams.tryAcquire()) {
 			throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "Too many simulation streams are already active.");
 		}
@@ -157,11 +147,8 @@ public class SimulationController {
 
 	@PostMapping("/batch")
 	public ResponseEntity<BatchResult> runBatch(
-		@RequestHeader(name = AdminApiGuard.ADMIN_TOKEN_HEADER, required = false) String adminToken,
 		@RequestBody(required = false) BatchRequest request
 	) {
-		adminApiGuard.assertAuthorized(adminToken);
-
 		NegotiationStrategy strategy = request != null && request.strategy() != null && !request.strategy().isBlank()
 			? NegotiationStrategy.valueOf(request.strategy().toUpperCase())
 			: null;

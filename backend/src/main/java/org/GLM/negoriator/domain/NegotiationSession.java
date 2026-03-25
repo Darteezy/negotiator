@@ -64,6 +64,9 @@ public class NegotiationSession {
 	@Column(name = "session_token", nullable = false, unique = true, length = 64)
 	private String sessionToken;
 
+	@Column(name = "opening_message", length = 1000)
+	private String openingMessage;
+
 	@Embedded
 	private BuyerProfileSnapshot buyerProfileSnapshot;
 
@@ -221,6 +224,22 @@ public class NegotiationSession {
 		addStrategyChange(new NegotiationStrategyChange(roundNumber, previousStrategy, nextStrategy, trigger, rationale));
 	}
 
+	public void updateConfiguration(
+		Integer maxRounds,
+		BigDecimal riskOfWalkaway,
+		BuyerProfileSnapshot buyerProfileSnapshot,
+		NegotiationBoundsSnapshot boundsSnapshot
+	) {
+		this.maxRounds = maxRounds;
+		this.riskOfWalkaway = riskOfWalkaway;
+		this.buyerProfileSnapshot = buyerProfileSnapshot;
+		this.boundsSnapshot = boundsSnapshot;
+	}
+
+	public void updateOpeningMessage(String openingMessage) {
+		this.openingMessage = openingMessage;
+	}
+
 	public boolean isClosed() {
 		return status == NegotiationSessionStatus.ACCEPTED
 			|| status == NegotiationSessionStatus.REJECTED
@@ -232,6 +251,9 @@ public class NegotiationSession {
 		Instant now = Instant.now();
 		if (sessionToken == null || sessionToken.isBlank()) {
 			sessionToken = UUID.randomUUID().toString();
+		}
+		if (openingMessage == null || openingMessage.isBlank()) {
+			openingMessage = "Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.";
 		}
 		createdAt = now;
 		updatedAt = now;
@@ -268,6 +290,12 @@ public class NegotiationSession {
 
 	public String getSessionToken() {
 		return sessionToken;
+	}
+
+	public String getOpeningMessage() {
+		return openingMessage == null || openingMessage.isBlank()
+			? "Please send your opening offer with price, payment days, delivery days, and contract length."
+			: openingMessage;
 	}
 
 	public BuyerProfileSnapshot getBuyerProfileSnapshot() {

@@ -25,7 +25,9 @@ public final class NegotiationDefaults {
 	}
 
 	public static int maxRounds(NegotiationStrategy strategy) {
-		return 8;
+		return switch (strategy) {
+			case BASELINE, MESO, BOULWARE, CONCEDER, TIT_FOR_TAT -> 8;
+		};
 	}
 
 	public static BigDecimal riskOfWalkaway() {

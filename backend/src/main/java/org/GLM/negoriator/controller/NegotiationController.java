@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import org.GLM.negoriator.application.NegotiationApplicationService;
 import org.GLM.negoriator.application.NegotiationDefaults;
+import org.GLM.negoriator.application.StrategyMetadata;
 import org.GLM.negoriator.domain.NegotiationDecision;
 import org.GLM.negoriator.domain.NegotiationParty;
 import org.GLM.negoriator.domain.NegotiationSession;
@@ -29,8 +30,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -39,14 +40,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class NegotiationController {
 
 	private final NegotiationApplicationService negotiationApplicationService;
-	private final SessionAccessGuard sessionAccessGuard;
 
 	public NegotiationController(
-		NegotiationApplicationService negotiationApplicationService,
-		SessionAccessGuard sessionAccessGuard
+		NegotiationApplicationService negotiationApplicationService
 	) {
 		this.negotiationApplicationService = negotiationApplicationService;
-		this.sessionAccessGuard = sessionAccessGuard;
 	}
 
 	@GetMapping("/config/defaults")
@@ -75,26 +73,36 @@ public class NegotiationController {
 
 	@GetMapping("/sessions/{sessionId}")
 	public NegotiationSessionResponse getSession(
-		@PathVariable UUID sessionId,
-		@RequestHeader(name = SessionAccessGuard.SESSION_TOKEN_HEADER, required = false) String sessionToken
+		@PathVariable UUID sessionId
 	) {
 		NegotiationSession session = negotiationApplicationService.getSession(sessionId);
-		sessionAccessGuard.assertAuthorized(session, sessionToken);
 		return NegotiationSessionResponse.from(session);
+	}
+
+	@PutMapping("/sessions/{sessionId}/settings")
+	public NegotiationSessionResponse updateSessionSettings(
+		@PathVariable UUID sessionId,
+		@RequestBody UpdateSessionSettingsRequest request
+	) {
+		if (request == null) {
+			throw new IllegalArgumentException("Session settings payload is required.");
+		}
+
+		NegotiationSession updatedSession = negotiationApplicationService.updateSessionSettings(
+			sessionId,
+			request.toCommand());
+
+		return NegotiationSessionResponse.from(negotiationApplicationService.getSession(updatedSession.getId()));
 	}
 
 	@PostMapping("/sessions/{sessionId}/offers")
 	public NegotiationSessionResponse submitSupplierOffer(
 		@PathVariable UUID sessionId,
-		@RequestHeader(name = SessionAccessGuard.SESSION_TOKEN_HEADER, required = false) String sessionToken,
 		@RequestBody SubmitSupplierOfferRequest request
 	) {
 		if (request == null) {
 			throw new IllegalArgumentException("Supplier offer payload is required.");
 		}
-
-		NegotiationSession session = negotiationApplicationService.getSession(sessionId);
-		sessionAccessGuard.assertAuthorized(session, sessionToken);
 
 		NegotiationSession updatedSession = negotiationApplicationService.submitSupplierOffer(
 			sessionId,
@@ -108,6 +116,7 @@ public class NegotiationController {
 	public record SessionDefaultsResponse(
 		String defaultStrategy,
 		List<String> availableStrategies,
+		List<StrategyDetailsResponse> strategyDetails,
 		int maxRounds,
 		BigDecimal riskOfWalkaway,
 		BuyerProfileResponse buyerProfile,
@@ -125,6 +134,7 @@ public class NegotiationController {
 			return new SessionDefaultsResponse(
 				defaultStrategy.name(),
 				Arrays.stream(NegotiationStrategy.values()).map(Enum::name).toList(),
+				StrategyMetadata.all().stream().map(StrategyDetailsResponse::from).toList(),
 				maxRounds,
 				riskOfWalkaway,
 				BuyerProfileResponse.from(buyerProfile),
@@ -153,6 +163,23 @@ public class NegotiationController {
 				buyerProfile == null ? NegotiationDefaults.buyerProfile() : buyerProfile.toBuyerProfile(),
 				bounds == null ? NegotiationDefaults.bounds() : bounds.toBounds(),
 				supplierModel == null ? NegotiationDefaults.supplierModel() : supplierModel.toSupplierModel());
+		}
+	}
+
+	public record UpdateSessionSettingsRequest(
+		String strategy,
+		Integer maxRounds,
+		BigDecimal riskOfWalkaway,
+		BuyerProfileRequest buyerProfile,
+		BoundsResponse bounds
+	) {
+		NegotiationApplicationService.UpdateSessionSettingsCommand toCommand() {
+			return new NegotiationApplicationService.UpdateSessionSettingsCommand(
+				NegotiationStrategy.valueOf(require(strategy, "strategy").trim().toUpperCase(Locale.ROOT)),
+				require(maxRounds, "maxRounds"),
+				require(riskOfWalkaway, "riskOfWalkaway"),
+				require(buyerProfile, "buyerProfile").toBuyerProfile(),
+				require(bounds, "bounds").toBounds());
 		}
 	}
 
@@ -191,6 +218,7 @@ public class NegotiationController {
 		SupplierModelResponse supplierModel,
 		List<NegotiationRoundResponse> rounds,
 		List<StrategyHistoryResponse> strategyHistory,
+		List<StrategyDetailsResponse> strategyDetails,
 		List<ConversationEventResponse> conversation
 	) {
 			static NegotiationSessionResponse from(NegotiationSession session) {
@@ -219,9 +247,27 @@ public class NegotiationController {
 					SupplierModelResponse.from(session.initialSupplierModel()),
 					rounds,
 					strategyHistory,
+					StrategyMetadata.all().stream().map(StrategyDetailsResponse::from).toList(),
 					conversation);
 			}
 		}
+
+	public record StrategyDetailsResponse(
+		String name,
+		String label,
+		String summary,
+		String concessionStyle,
+		String boundaryStyle
+	) {
+		static StrategyDetailsResponse from(StrategyMetadata.StrategyDescriptor descriptor) {
+			return new StrategyDetailsResponse(
+				descriptor.name(),
+				descriptor.label(),
+				descriptor.summary(),
+				descriptor.concessionStyle(),
+				descriptor.boundaryStyle());
+		}
+	}
 
 	public record StrategyHistoryResponse(
 		int roundNumber,
@@ -321,13 +367,20 @@ public class NegotiationController {
 			List<StrategyHistoryResponse> strategyHistory
 		) {
 			List<ConversationEventResponse> events = new java.util.ArrayList<>();
+			java.util.Map<Integer, List<StrategyHistoryResponse>> nonInitialChangesByRound = strategyHistory.stream()
+				.filter(change -> !"INITIAL_SELECTION".equals(change.trigger()))
+				.collect(java.util.stream.Collectors.groupingBy(
+					StrategyHistoryResponse::roundNumber,
+					java.util.LinkedHashMap::new,
+					java.util.stream.Collectors.toList()));
+			java.util.Set<Integer> renderedChangeRounds = new java.util.HashSet<>();
 
 			for (StrategyHistoryResponse change : strategyHistory) {
 				if ("INITIAL_SELECTION".equals(change.trigger())) {
 					events.add(new ConversationEventResponse(
 						"STRATEGY_CHANGE",
 						"system",
-						"Opening strategy selected",
+						"Session started",
 						change.rationale(),
 						change.at(),
 						null,
@@ -343,7 +396,22 @@ public class NegotiationController {
 				}
 			}
 
+			events.add(new ConversationEventResponse(
+				"BUYER_OPENING",
+				"buyer",
+				"Buyer opening request",
+				session.getOpeningMessage(),
+				session.getCreatedAt(),
+				null,
+				List.of(),
+				null));
+
 			for (NegotiationRoundResponse round : rounds) {
+				appendStrategyChanges(
+					events,
+					nonInitialChangesByRound.get(round.roundNumber()));
+				renderedChangeRounds.add(round.roundNumber());
+
 				events.add(new ConversationEventResponse(
 					"SUPPLIER_OFFER",
 					"supplier",
@@ -372,31 +440,50 @@ public class NegotiationController {
 						round.buyerReply().focusIssue(),
 						round.buyerReply().evaluation(),
 						counterOfferSummaries(round.buyerReply().counterOffers()))));
-
-				strategyHistory.stream()
-					.filter(change -> !"INITIAL_SELECTION".equals(change.trigger()))
-					.filter(change -> change.roundNumber() == round.roundNumber())
-					.forEach(change -> events.add(new ConversationEventResponse(
-						"STRATEGY_CHANGE",
-						"system",
-						"Strategy switch",
-						change.rationale(),
-						change.at(),
-						null,
-						List.of(),
-						new ConversationDebugResponse(
-							change.nextStrategy(),
-							change.rationale(),
-							change.trigger(),
-							null,
-							null,
-							null,
-							List.of()))));
 			}
 
-			return events.stream()
-				.sorted(Comparator.comparing(ConversationEventResponse::at))
-				.toList();
+			nonInitialChangesByRound.entrySet().stream()
+				.filter(entry -> !renderedChangeRounds.contains(entry.getKey()))
+				.forEach(entry -> appendStrategyChanges(events, entry.getValue()));
+
+			return events;
+		}
+
+		private static void appendStrategyChanges(
+			List<ConversationEventResponse> events,
+			List<StrategyHistoryResponse> changes
+		) {
+			if (changes == null || changes.isEmpty()) {
+				return;
+			}
+
+			for (StrategyHistoryResponse change : changes) {
+				String title;
+				if ("MANUAL_CONFIGURATION".equals(change.trigger())) {
+					title = java.util.Objects.equals(change.previousStrategy(), change.nextStrategy())
+						? "Settings updated"
+						: "Strategy updated";
+				} else {
+					title = "Strategy switch";
+				}
+
+				events.add(new ConversationEventResponse(
+					"STRATEGY_CHANGE",
+					"system",
+					title,
+					change.rationale(),
+					change.at(),
+					null,
+					List.of(),
+					new ConversationDebugResponse(
+						change.nextStrategy(),
+						change.rationale(),
+						change.trigger(),
+						null,
+						null,
+						null,
+						List.of())));
+			}
 		}
 	}
 

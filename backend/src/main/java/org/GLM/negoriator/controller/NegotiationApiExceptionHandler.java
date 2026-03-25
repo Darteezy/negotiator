@@ -27,18 +27,6 @@ public class NegotiationApiExceptionHandler {
 			.body(new ApiError(exception.getMessage()));
 	}
 
-	@ExceptionHandler(ApiAccessDeniedException.class)
-	public ResponseEntity<ApiError> handleApiAccessDenied(ApiAccessDeniedException exception) {
-		return ResponseEntity.status(HttpStatus.FORBIDDEN)
-			.body(new ApiError(exception.getMessage()));
-	}
-
-	@ExceptionHandler(AdminApiDisabledException.class)
-	public ResponseEntity<ApiError> handleAdminApiDisabled(AdminApiDisabledException exception) {
-		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-			.body(new ApiError(exception.getMessage()));
-	}
-
 	@ExceptionHandler(IllegalArgumentException.class)
 	public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException exception) {
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST)

@@ -1,0 +1,30 @@
+# Documentation
+
+Use the root [README.md](../README.md) for setup and first run. Use the pages here when you want the details behind the product flow.
+
+## Reading order
+
+| Document                                       | When to read it                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [architecture.md](architecture.md)             | You want the full system picture from React UI to Spring Boot, database, and AI provider                     |
+| [negotiation-engine.md](negotiation-engine.md) | You want to understand how the backend scores offers, applies limits, and decides accept, counter, or reject |
+| [strategies.md](strategies.md)                 | You want to compare the supported buyer strategies and see how they differ in practice                       |
+| [api.md](api.md)                               | You want the REST endpoints, payloads, and concrete request examples                                         |
+| [../TASK.md](../TASK.md)                       | You want the original challenge brief and evaluation context                                                 |
+
+## Current documentation scope
+
+- Root setup and quick start live in [../README.md](../README.md)
+- System structure lives in [architecture.md](architecture.md)
+- Negotiation mechanics live in [negotiation-engine.md](negotiation-engine.md)
+- Strategy behavior lives in [strategies.md](strategies.md)
+- API surface and examples live in [api.md](api.md)
+
+## Notes
+
+- The backend represents the buyer.
+- The frontend is the current supplier-facing demo interface.
+- The current web UI exists for demonstration and testing of the negotiation flow.
+- Future product work could reuse the same buyer engine behind email or chat communication with suppliers.
+- AI helps parse supplier messages and generate wording, but the final negotiation decision remains rule-based.
+- Strategy changes are manual today. Automatic switching is still future work.
