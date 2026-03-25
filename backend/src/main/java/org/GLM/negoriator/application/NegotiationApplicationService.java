@@ -114,21 +114,71 @@ public class NegotiationApplicationService {
 			command.bounds(),
 			session.initialSupplierModel()));
 
+		if (!hasConfigurationChanges(session, command)) {
+			return session;
+		}
+
 		session.updateConfiguration(
 			command.maxRounds(),
 			command.riskOfWalkaway(),
 			BuyerProfileSnapshot.from(command.buyerProfile()),
 			NegotiationBoundsSnapshot.from(command.bounds()));
 
+		var previousStrategy = session.getStrategy();
+		String manualUpdateRationale = StrategyMetadata.manualChangeRationale(previousStrategy, command.strategy());
+
 		if (session.getStrategy() != command.strategy()) {
 			session.switchStrategy(
 				command.strategy(),
 				session.getCurrentRound(),
 				NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION,
-				StrategyMetadata.manualChangeRationale(command.strategy()));
+				manualUpdateRationale);
+		} else {
+			session.addStrategyChange(new NegotiationStrategyChange(
+				session.getCurrentRound(),
+				previousStrategy,
+				previousStrategy,
+				NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION,
+				manualUpdateRationale));
 		}
 
 		return sessionRepository.saveAndFlush(session);
+	}
+
+	private boolean hasConfigurationChanges(NegotiationSession session, UpdateSessionSettingsCommand command) {
+		return session.getStrategy() != command.strategy()
+			|| session.getMaxRounds() != command.maxRounds()
+			|| session.getRiskOfWalkaway().compareTo(command.riskOfWalkaway()) != 0
+			|| !sameBuyerProfile(session.toBuyerProfile(), command.buyerProfile())
+			|| !sameBounds(session.toNegotiationBounds(), command.bounds());
+	}
+
+	private boolean sameBuyerProfile(BuyerProfile left, BuyerProfile right) {
+		return sameOffer(left.idealOffer(), right.idealOffer())
+			&& sameOffer(left.reservationOffer(), right.reservationOffer())
+			&& left.reservationUtility().compareTo(right.reservationUtility()) == 0
+			&& left.weights().price().compareTo(right.weights().price()) == 0
+			&& left.weights().paymentDays().compareTo(right.weights().paymentDays()) == 0
+			&& left.weights().deliveryDays().compareTo(right.weights().deliveryDays()) == 0
+			&& left.weights().contractMonths().compareTo(right.weights().contractMonths()) == 0;
+	}
+
+	private boolean sameBounds(NegotiationBounds left, NegotiationBounds right) {
+		return left.minPrice().compareTo(right.minPrice()) == 0
+			&& left.maxPrice().compareTo(right.maxPrice()) == 0
+			&& left.minPaymentDays() == right.minPaymentDays()
+			&& left.maxPaymentDays() == right.maxPaymentDays()
+			&& left.minDeliveryDays() == right.minDeliveryDays()
+			&& left.maxDeliveryDays() == right.maxDeliveryDays()
+			&& left.minContractMonths() == right.minContractMonths()
+			&& left.maxContractMonths() == right.maxContractMonths();
+	}
+
+	private boolean sameOffer(OfferVector left, OfferVector right) {
+		return left.price().compareTo(right.price()) == 0
+			&& left.paymentDays() == right.paymentDays()
+			&& left.deliveryDays() == right.deliveryDays()
+			&& left.contractMonths() == right.contractMonths();
 	}
 
 	public NegotiationSession submitSupplierOffer(UUID sessionId, OfferVector supplierOfferTerms) {

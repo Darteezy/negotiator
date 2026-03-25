@@ -458,10 +458,19 @@ public class NegotiationController {
 			}
 
 			for (StrategyHistoryResponse change : changes) {
+				String title;
+				if ("MANUAL_CONFIGURATION".equals(change.trigger())) {
+					title = java.util.Objects.equals(change.previousStrategy(), change.nextStrategy())
+						? "Settings updated"
+						: "Strategy updated";
+				} else {
+					title = "Strategy switch";
+				}
+
 				events.add(new ConversationEventResponse(
 					"STRATEGY_CHANGE",
 					"system",
-					"Strategy switch",
+					title,
 					change.rationale(),
 					change.at(),
 					null,

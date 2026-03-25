@@ -139,6 +139,11 @@ export function NegotiationPage({ initialSession, onReset, onRestart }: Props) {
       return;
     }
 
+    if (!hasSettingsChanges(session, parsed)) {
+      setSettingsError("Change at least one setting before applying.");
+      return;
+    }
+
     setSettingsError("");
 
     try {
@@ -669,6 +674,58 @@ function parseOfferTerms(terms: Record<keyof OfferTerms, string>): OfferTerms {
     deliveryDays: Number(terms.deliveryDays),
     contractMonths: Number(terms.contractMonths),
   };
+}
+
+function hasSettingsChanges(
+  session: ApiNegotiationSession,
+  next: AppliedSettings,
+) {
+  return (
+    session.strategy !== next.strategy ||
+    session.maxRounds !== next.maxRounds ||
+    Number(session.riskOfWalkaway) !== next.riskOfWalkaway ||
+    !sameOfferTerms(session.buyerProfile.idealOffer, next.idealOffer) ||
+    !sameOfferTerms(
+      session.buyerProfile.reservationOffer,
+      next.reservationOffer,
+    ) ||
+    !sameBounds(session.bounds, next.bounds) ||
+    !sameWeights(session.buyerProfile.weights, next.weights)
+  );
+}
+
+function sameOfferTerms(left: OfferTerms, right: OfferTerms) {
+  return (
+    left.price === right.price &&
+    left.paymentDays === right.paymentDays &&
+    left.deliveryDays === right.deliveryDays &&
+    left.contractMonths === right.contractMonths
+  );
+}
+
+function sameBounds(
+  left: ApiNegotiationSession["bounds"],
+  right: ApiNegotiationSession["bounds"],
+) {
+  return (
+    left.minPrice === right.minPrice &&
+    left.maxPrice === right.maxPrice &&
+    left.minPaymentDays === right.minPaymentDays &&
+    left.maxPaymentDays === right.maxPaymentDays &&
+    left.minDeliveryDays === right.minDeliveryDays &&
+    left.maxDeliveryDays === right.maxDeliveryDays &&
+    left.minContractMonths === right.minContractMonths &&
+    left.maxContractMonths === right.maxContractMonths
+  );
+}
+
+function sameWeights(left: IssueWeights, right: IssueWeights) {
+  return (
+    left.price === right.price &&
+    left.paymentDays === right.paymentDays &&
+    left.deliveryDays === right.deliveryDays &&
+    left.contractMonths === right.contractMonths
+  );
 }
 
 function findReferenceTerms(session: ApiNegotiationSession): OfferTerms {

@@ -75,7 +75,18 @@ public final class StrategyMetadata {
 	}
 
 	public static String manualChangeRationale(NegotiationStrategy strategy) {
-		return "Session settings updated manually. Upcoming rounds will use " + describe(strategy).label() + ".";
+		return "Session settings updated.";
+	}
+
+	public static String manualChangeRationale(
+		NegotiationStrategy previousStrategy,
+		NegotiationStrategy nextStrategy
+	) {
+		if (previousStrategy == nextStrategy) {
+			return manualChangeRationale(nextStrategy);
+		}
+
+		return "Session settings updated. Future rounds will use " + describe(nextStrategy).label() + ".";
 	}
 
 	public record StrategyDescriptor(

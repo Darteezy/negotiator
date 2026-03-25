@@ -130,7 +130,64 @@ class NegotiationApplicationServiceTest {
 		assertEquals(0, new BigDecimal("88.00").compareTo(reloadedSession.toBuyerProfile().idealOffer().price()));
 		assertEquals(0, new BigDecimal("130.00").compareTo(reloadedSession.toNegotiationBounds().maxPrice()));
 		assertTrue(reloadedSession.getStrategyChanges().stream()
-			.anyMatch(change -> change.getTrigger() == NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION));
+			.anyMatch(change -> change.getTrigger() == NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION
+				&& "Session settings updated. Future rounds will use Boulware.".equals(change.getRationale())));
+	}
+
+	@Test
+	void recordsManualConfigurationChangeEvenWhenStrategyDoesNotChange() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
+
+		NegotiationSession updatedSession = service.updateSessionSettings(
+			startedSession.getId(),
+			new NegotiationApplicationService.UpdateSessionSettingsCommand(
+				NegotiationStrategy.BASELINE,
+				9,
+				new BigDecimal("0.20"),
+				new BuyerProfile(
+					new OfferVector(new BigDecimal("95.00"), 65, 11, 8),
+					new OfferVector(new BigDecimal("126.00"), 35, 28, 24),
+					new IssueWeights(
+						new BigDecimal("0.50"),
+						new BigDecimal("0.20"),
+						new BigDecimal("0.20"),
+						new BigDecimal("0.10")),
+					BigDecimal.ZERO),
+				new NegotiationBounds(
+					new BigDecimal("80.00"),
+					new BigDecimal("130.00"),
+					30,
+					90,
+					7,
+					30,
+					3,
+					24)));
+
+		NegotiationSession reloadedSession = service.getSession(updatedSession.getId());
+
+		assertTrue(reloadedSession.getStrategyChanges().stream()
+			.anyMatch(change -> change.getTrigger() == NegotiationStrategyChangeTrigger.MANUAL_CONFIGURATION
+				&& change.getPreviousStrategy() == NegotiationStrategy.BASELINE
+				&& change.getNextStrategy() == NegotiationStrategy.BASELINE
+				&& "Session settings updated.".equals(change.getRationale())));
+	}
+
+	@Test
+	void doesNotRecordManualConfigurationChangeWhenNothingChanged() {
+		NegotiationSession startedSession = service.startSession(NegotiationDefaults.startSessionCommand());
+
+		NegotiationSession updatedSession = service.updateSessionSettings(
+			startedSession.getId(),
+			new NegotiationApplicationService.UpdateSessionSettingsCommand(
+				startedSession.getStrategy(),
+				startedSession.getMaxRounds(),
+				startedSession.getRiskOfWalkaway(),
+				startedSession.toBuyerProfile(),
+				startedSession.toNegotiationBounds()));
+
+		NegotiationSession reloadedSession = service.getSession(updatedSession.getId());
+
+		assertEquals(1, reloadedSession.getStrategyChanges().size());
 	}
 
 	@Test

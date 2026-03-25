@@ -78,9 +78,14 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function readErrorMessage(response: Response) {
   const fallback = `Request failed with status ${response.status}`;
+  const bodyText = await response.text();
+
+  if (!bodyText.trim()) {
+    return fallback;
+  }
 
   try {
-    const payload = await response.json();
+    const payload = JSON.parse(bodyText);
     if (typeof payload === "string" && payload.trim()) {
       return payload;
     }
@@ -92,8 +97,7 @@ async function readErrorMessage(response: Response) {
     }
     return fallback;
   } catch {
-    const text = await response.text();
-    return text.trim() || fallback;
+    return bodyText.trim() || fallback;
   }
 }
 
