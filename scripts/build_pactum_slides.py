@@ -531,75 +531,108 @@ def build_slide_6(prs):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, PAPER)
     add_backdrop(slide, BLUE_SOFT, ROSE_SOFT)
-    title_block(slide, "FIXED SUPPLIER FLOW", "Price Sensitivity", "PriceSensitivityTest holds the supplier script constant so buyer posture is easy to compare.")
+    title_block(slide, "FIXED SUPPLIER FLOW", "Price Sensitivity", "PriceSensitivityTest keeps supplier behavior constant so buyer posture is easy to compare.")
 
-    add_round_rect(slide, 0.74, 2.12, 12.00, 1.02, WHITE, SAND, 1.2)
-    add_textbox(slide, 1.02, 2.34, 2.96, 0.18, "Scripted supplier concessions", size=18, color=NAVY, bold=True)
-    x_positions = [1.02, 2.92, 4.82, 6.72, 8.62, 10.52]
-    colors = [(BLUE_SOFT, BLUE), (TEAL_SOFT, TEAL), (BLUE_SOFT, BLUE), (AMBER_SOFT, AMBER), (GREEN_SOFT, GREEN), (ROSE_SOFT, ROSE)]
-    for (turn, label, terms), x, (fill, accent) in zip(PRICE_SCRIPT, x_positions, colors):
-        add_round_rect(slide, x, 2.64, 1.56, 0.34, fill, accent, 1.2)
-        add_textbox(slide, x + 0.08, 2.72, 0.22, 0.10, turn, size=10.2, color=accent, bold=True)
-        add_textbox(slide, x + 0.34, 2.70, 0.86, 0.10, label, size=10.0, color=INK, bold=True)
-        add_textbox(slide, x + 0.12, 2.84, 1.24, 0.08, terms, size=8.8, color=MUTED, font_name=FONT_MONO)
-    for left_x, right_x in zip(x_positions, x_positions[1:]):
-        add_line(slide, left_x + 1.56, 2.82, right_x - 0.04, 2.82, STONE, 1.6)
+    add_round_rect(slide, 0.74, 2.06, 12.00, 1.34, WHITE, SAND, 1.2)
+    add_textbox(slide, 1.02, 2.28, 2.34, 0.18, "Supplier script", size=18, color=NAVY, bold=True)
+    add_pill(slide, 3.36, 2.24, 2.28, 0.28, "Price 120 fixed", BLUE_SOFT, BLUE, BLUE, 10.0)
+    add_pill(slide, 5.76, 2.24, 2.44, 0.28, "Payment 60 fixed", TEAL_SOFT, TEAL, TEAL, 10.0)
+    add_pill(slide, 8.34, 2.24, 3.02, 0.28, "Only delivery / contract move", AMBER_SOFT, AMBER, AMBER, 10.0)
 
-    add_round_rect(slide, 0.74, 3.66, 7.04, 2.84, WHITE, SAND, 1.2)
-    add_textbox(slide, 1.02, 3.92, 2.20, 0.18, "Observed closing price", size=18, color=NAVY, bold=True)
-    axis_left = 2.46
-    axis_right = 6.86
-    axis_y = 6.10
+    flow_y = 2.92
+    node_xs = [1.34, 3.16, 4.98, 6.80, 8.62, 10.44]
+    compact_steps = [
+        ("T1", "Anchor", "D30  C24"),
+        ("T2", "Delivery", "D21"),
+        ("T3", "Delivery", "D14"),
+        ("T4", "Contract", "C12"),
+        ("T5", "Delivery", "D7"),
+        ("T6", "Repeat", "No change"),
+    ]
+    for left_x, right_x in zip(node_xs, node_xs[1:]):
+        add_line(slide, left_x + 0.80, flow_y, right_x - 0.18, flow_y, STONE, 1.8)
+    for (turn, label, terms), x, (fill, accent) in zip(
+        compact_steps,
+        node_xs,
+        [(BLUE_SOFT, BLUE), (TEAL_SOFT, TEAL), (BLUE_SOFT, BLUE), (AMBER_SOFT, AMBER), (GREEN_SOFT, GREEN), (ROSE_SOFT, ROSE)],
+    ):
+        add_oval(slide, x, 2.74, 0.38, 0.38, accent, accent, 1)
+        add_textbox(slide, x + 0.08, 2.83, 0.22, 0.10, turn, size=9.4, color=WHITE, bold=True, align=PP_ALIGN.CENTER)
+        add_round_rect(slide, x + 0.48, 2.60, 1.16, 0.52, fill, accent, 1.2)
+        add_textbox(slide, x + 0.58, 2.69, 0.96, 0.10, label, size=10.2, color=INK, bold=True, align=PP_ALIGN.CENTER)
+        add_textbox(slide, x + 0.58, 2.85, 0.96, 0.10, terms, size=8.8, color=MUTED, align=PP_ALIGN.CENTER, font_name=FONT_MONO)
+
+    add_round_rect(slide, 0.74, 3.66, 7.20, 2.66, WHITE, SAND, 1.2)
+    add_textbox(slide, 1.02, 3.92, 2.50, 0.18, "Final price by strategy", size=18, color=NAVY, bold=True)
+    add_textbox(slide, 5.78, 3.92, 1.30, 0.12, "close | first", size=9.8, color=MUTED, align=PP_ALIGN.CENTER)
+
+    axis_left = 2.48
+    axis_right = 6.00
+    axis_y = 6.00
     add_line(slide, axis_left, axis_y, axis_right, axis_y, STONE, 1.6)
     for value in [100, 110, 120]:
         x = axis_left + (value - 100) / 20.0 * (axis_right - axis_left)
-        add_line(slide, x, 4.26, x, axis_y, GRID, 1)
-        add_textbox(slide, x - 0.14, axis_y + 0.04, 0.28, 0.10, str(value), size=9.6, color=MUTED, align=PP_ALIGN.CENTER)
+        add_line(slide, x, 4.30, x, axis_y, GRID, 1)
+        add_textbox(slide, x - 0.14, axis_y + 0.04, 0.28, 0.10, str(value), size=9.4, color=MUTED, align=PP_ALIGN.CENTER)
 
-    y = 4.34
+    y = 4.36
     for label, value, round_hit, note, color in PRICE_RESULTS:
-        add_textbox(slide, 1.00, y + 0.02, 1.10, 0.12, label, size=11.0, color=color, bold=True)
+        add_oval(slide, 1.00, y + 0.03, 0.14, 0.14, color, color, 1)
+        add_textbox(slide, 1.20, y + 0.01, 1.18, 0.14, label, size=10.0, color=color, bold=True)
         if value is None:
-            add_round_rect(slide, axis_left, y, 1.18, 0.24, PAPER, color, 1.4)
-            add_textbox(slide, axis_left + 0.20, y + 0.05, 0.78, 0.10, "No deal", size=10.2, color=color, bold=True, align=PP_ALIGN.CENTER)
+            add_round_rect(slide, axis_left, y, 0.96, 0.22, PAPER, color, 1.4)
+            add_textbox(slide, axis_left + 0.10, y + 0.05, 0.76, 0.10, "No deal", size=9.8, color=color, bold=True, align=PP_ALIGN.CENTER)
+            note_text = "no deal"
         else:
-            width = max(0.26, (value - 100.0) / 20.0 * (axis_right - axis_left))
-            add_round_rect(slide, axis_left, y, width, 0.24, color, color, 1)
-            add_textbox(slide, axis_left + width + 0.06, y + 0.03, 0.48, 0.10, f"{value:.2f}", size=10.0, color=INK)
-        add_textbox(slide, 6.22, y + 0.03, 0.42, 0.10, round_hit, size=9.8, color=MUTED, align=PP_ALIGN.CENTER)
-        add_textbox(slide, 6.62, y + 0.03, 0.82, 0.10, note, size=9.8, color=MUTED)
-        y += 0.38
+            width = max(0.24, (value - 100.0) / 20.0 * (axis_right - axis_left))
+            add_round_rect(slide, axis_left, y, width, 0.22, color, color, 1)
+            add_textbox(slide, axis_left + width + 0.06, y + 0.03, 0.46, 0.10, f"{value:.2f}", size=9.8, color=INK)
+            note_text = f"{round_hit} | {note.replace('offer ', '')}"
+        add_textbox(slide, 5.72, y + 0.03, 1.56, 0.10, note_text, size=9.4, color=MUTED, align=PP_ALIGN.CENTER)
+        y += 0.35
 
     add_textbox(
         slide,
         1.02,
-        6.28,
-        6.20,
+        6.16,
+        6.56,
         0.12,
-        "Price stayed flat at 120 while delivery and contract improved, so the strategy posture becomes easy to see.",
-        size=10.6,
+        "Lower price means stronger buyer value. Since supplier price never moved, the differences come from buyer strategy.",
+        size=10.0,
         color=MUTED,
     )
 
-    add_round_rect(slide, 8.06, 3.66, 4.68, 2.84, NAVY, NAVY, 1)
-    add_textbox(slide, 8.36, 3.92, 2.42, 0.18, "Readout", size=18, color=WHITE, bold=True)
+    add_round_rect(slide, 8.16, 3.66, 4.58, 2.66, NAVY, NAVY, 1)
+    add_textbox(slide, 8.44, 3.92, 2.10, 0.18, "Readout", size=18, color=WHITE, bold=True)
+    add_round_rect(slide, 8.44, 4.26, 3.98, 0.34, rgb("233244"), rgb("233244"), 1)
+    add_textbox(
+        slide,
+        8.58,
+        4.34,
+        3.72,
+        0.10,
+        "The same supplier path creates very different price outcomes.",
+        size=10.0,
+        color=WHITE,
+        align=PP_ALIGN.CENTER,
+    )
     notes = [
-        ("Boulware", "held price hardest and still closed", GREEN),
-        ("Baseline", "gave some price to keep momentum", BLUE),
-        ("Tit for Tat", "stayed close to baseline", TEAL),
-        ("Conceder", "closed at the ceiling", ROSE),
+        ("Boulware", "best price while still closing", GREEN),
+        ("Baseline", "moderate concession for closure", BLUE),
+        ("Tit for Tat", "lands close to baseline", TEAL),
+        ("Conceder", "closes at the ceiling", ROSE),
     ]
-    y = 4.30
+    y = 4.78
     for label, body, color in notes:
-        add_round_rect(slide, 8.32, y, 4.14, 0.38, WHITE, WHITE, 1)
-        add_round_rect(slide, 8.48, y + 0.10, 0.16, 0.16, color, color, 1)
-        add_textbox(slide, 8.74, y + 0.08, 0.96, 0.10, label, size=10.8, color=color, bold=True)
-        add_textbox(slide, 9.66, y + 0.08, 2.58, 0.10, body, size=10.0, color=INK)
-        y += 0.44
+        add_round_rect(slide, 8.40, y, 4.04, 0.34, WHITE, WHITE, 1)
+        add_oval(slide, 8.56, y + 0.10, 0.12, 0.12, color, color, 1)
+        add_textbox(slide, 8.78, y + 0.07, 1.28, 0.10, label, size=10.0, color=color, bold=True)
+        add_textbox(slide, 10.02, y + 0.07, 2.10, 0.10, body, size=9.6, color=INK)
+        y += 0.39
 
-    add_round_rect(slide, 8.32, 6.00, 4.14, 0.28, rgb("233244"), rgb("233244"), 1)
-    add_textbox(slide, 8.50, 6.07, 3.78, 0.10, "Meso: no deal in this branch", size=9.8, color=WHITE, align=PP_ALIGN.CENTER)
-    add_textbox(slide, 8.22, 6.34, 4.32, 0.10, "Sources: PriceSensitivityTest and StrategySimulationMatrixTest", size=9.0, color=rgb("DCE5F3"), align=PP_ALIGN.CENTER)
+    add_round_rect(slide, 8.40, 5.96, 4.04, 0.26, rgb("233244"), rgb("233244"), 1)
+    add_textbox(slide, 8.58, 6.02, 3.68, 0.10, "Meso: no deal in this branch", size=9.6, color=WHITE, align=PP_ALIGN.CENTER)
+    add_textbox(slide, 8.26, 6.34, 4.38, 0.10, "Sources: PriceSensitivityTest and StrategySimulationMatrixTest", size=8.8, color=rgb("DCE5F3"), align=PP_ALIGN.CENTER)
 
 
 def build_presentation():
