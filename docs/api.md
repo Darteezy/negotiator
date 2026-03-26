@@ -88,7 +88,7 @@ Response highlights:
 
 ### `GET /api/negotiations/sessions/{sessionId}`
 
-Returns the full current session state.
+Returns the full session state.
 
 Use it for:
 
@@ -106,6 +106,7 @@ curl http://localhost:8080/api/negotiations/sessions/SESSION_ID
 Important response sections:
 
 - `rounds`
+- each round may include `supplierParseDebug` with supplier intent metadata
 - `conversation`
 - `strategyHistory`
 - `closed`
@@ -188,11 +189,19 @@ curl -X POST http://localhost:8080/api/negotiations/sessions/SESSION_ID/offers \
 
 Response highlights:
 
-- updated `status`
-- updated `currentRound`
-- `rounds` with buyer reply details
+- `status`
+- `currentRound`
+- `rounds` with buyer reply details and `supplierParseDebug`
 - `conversation` with rendered supplier and buyer events
+- supplier conversation `debug` includes `supplierIntentType`, `supplierIntentSource`, `supplierSelectedBuyerOfferIndex`, and `supplierIntentDetails`
 - buyer `reasonCode`, `focusIssue`, `evaluation`, and any `counterOffers`
+
+The supplier parse debug object uses the same field names in both `rounds[].supplierParseDebug` and `conversation[].debug`, including `supplierSelectedBuyerOfferIndex`.
+
+Supported `supplierIntentSource` values:
+
+- `DETERMINISTIC`
+- `AI_FALLBACK`
 
 ## AI parsing endpoint
 
@@ -211,7 +220,22 @@ If you use Ollama:
 - `AI_BASE_URL` must point to that server
 - `AI_CHAT_MODEL` must exist in that Ollama instance
 
-The backend also applies heuristics for option selection and fallback handling, so this is not just a raw model passthrough.
+The backend also applies deterministic option-selection and fallback handling rules, so this is not just a raw model passthrough.
+
+Supplier-message handling is layered:
+
+- this endpoint extracts structured terms and hard constraints
+- the negotiation submission flow then resolves supplier intent deterministically
+- only unresolved `UNCLEAR` intent cases may trigger AI fallback classification
+- if ambiguity remains, the backend asks for clarification instead of auto-closing the deal
+
+Supported supplier intent types in the submission flow:
+
+- `ACCEPT_ACTIVE_OFFER`
+- `SELECT_COUNTER_OPTION`
+- `PROPOSE_NEW_TERMS`
+- `REJECT_OR_DECLINE`
+- `UNCLEAR`
 
 Example:
 
@@ -259,6 +283,11 @@ Typical response:
   }
 }
 ```
+
+Important note:
+
+- this endpoint returns structured terms, not the final supplier intent classification shown in session conversation debug
+- supplier intent debug is attached to negotiation session responses after `POST /api/negotiations/sessions/{sessionId}/offers`
 
 ## Simulation endpoints
 

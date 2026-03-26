@@ -25,6 +25,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
     private final BuyerUtilityCalculator utilityCalculator;
     private final DecisionMaker decisionMaker;
     private final CounterOfferGenerator counterOfferGenerator;
+    private final StrategySettlementPolicy settlementPolicy;
 
     public NegotiationEngineImpl() {
         this(new BuyerUtilityCalculator(), new DecisionMaker(), new CounterOfferGenerator());
@@ -38,6 +39,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         this.utilityCalculator = utilityCalculator;
         this.decisionMaker = decisionMaker;
         this.counterOfferGenerator = counterOfferGenerator;
+        this.settlementPolicy = new StrategySettlementPolicy(utilityCalculator);
     }
 
     @Override
@@ -53,6 +55,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         BigDecimal estimatedSupplierUtility = estimateSupplierUtility(supplierOffer, request);
         BigDecimal continuationValue = calculateContinuationValue(targetUtility, context);
         BigDecimal nashProduct = calculateNashProduct(buyerUtility, buyerProfile, estimatedSupplierUtility, request.supplierModel());
+        StrategySettlementPolicy.SettlementThresholds settlementThresholds = settlementPolicy.thresholds(request);
 
         OfferEvaluation evaluation = new OfferEvaluation(
                 buyerUtility,
@@ -90,10 +93,21 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             reasonCode = DecisionReason.OUTSIDE_RESERVATION_LIMITS;
         }
 
+        if (!outsideReservation
+            && decision == Decision.ACCEPT
+            && !settlementPolicy.allowsAcceptance(supplierOffer, buyerUtility, settlementThresholds)) {
+            if (context.round() >= context.maxRounds()) {
+                decision = Decision.REJECT;
+            } else {
+                decision = Decision.COUNTER;
+            }
+            reasonCode = DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY;
+        }
+
         NegotiationState nextState = nextState(decision);
 
         if (decision == Decision.COUNTER) {
-            CounterGeneration counterGeneration = generateCounterOffers(request, supplierOffer, buyerUtility);
+            CounterGeneration counterGeneration = generateCounterOffers(request, supplierOffer, buyerUtility, settlementThresholds);
             List<OfferVector> counterOffers = counterGeneration.offers();
             NegotiationIssue focusIssue = counterGeneration.focusIssue();
 
@@ -108,7 +122,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                     null,
                     outsideReservation
                         ? reservationLimitExplanation(supplierOffer, buyerProfile.reservationOffer())
-                        : rejectionExplanation(buyerUtility));
+                        : rejectionExplanation(buyerUtility, supplierOffer, settlementThresholds, reasonCode));
             }
 
             return new NegotiationResponse(
@@ -119,7 +133,16 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                     request.supplierModel().archetypeBeliefs(),
                     reasonCode,
                     focusIssue,
-                    counterExplanation(buyerUtility, targetUtility, focusIssue, outsideReservation, context.strategy(), counterOffers));
+                    counterExplanation(
+                        buyerUtility,
+                        targetUtility,
+                        supplierOffer,
+                        settlementThresholds,
+                        focusIssue,
+                        outsideReservation,
+                        context.strategy(),
+                        reasonCode,
+                        counterOffers));
         }
 
         return new NegotiationResponse(
@@ -134,13 +157,14 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                 ? acceptanceExplanation(buyerUtility, targetUtility, decisionOutcome.reasonCode())
                 : outsideReservation
                     ? reservationLimitExplanation(supplierOffer, buyerProfile.reservationOffer())
-                    : rejectionExplanation(buyerUtility));
+                    : rejectionExplanation(buyerUtility, supplierOffer, settlementThresholds, reasonCode));
     }
 
     private CounterGeneration generateCounterOffers(
             NegotiationRequest request,
             OfferVector supplierOffer,
-            BigDecimal supplierOfferUtility
+            BigDecimal supplierOfferUtility,
+            StrategySettlementPolicy.SettlementThresholds settlementThresholds
     ) {
         CounterProposal primaryProposal = counterOfferGenerator.counterProposal(
             request.buyerProfile(),
@@ -167,7 +191,7 @@ public class NegotiationEngineImpl implements NegotiationEngine {
                 request.bounds(),
                 supplierOffer,
                 issue);
-            OfferVector tuned = tuneCounterOffer(candidate, supplierOffer, request, supplierOfferUtility);
+            OfferVector tuned = tuneCounterOffer(candidate, supplierOffer, request, supplierOfferUtility, settlementThresholds);
 
             if (isViableCounterOffer(tuned, supplierOffer, request.buyerProfile(), request.bounds(), supplierOfferUtility)
                 && !tuned.matches(supplierOffer)) {
@@ -179,7 +203,12 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         if (offers.isEmpty()) {
-            OfferVector safeFallback = tuneCounterOffer(primaryProposal.offer(), supplierOffer, request, supplierOfferUtility);
+            OfferVector safeFallback = tuneCounterOffer(
+                primaryProposal.offer(),
+                supplierOffer,
+                request,
+                supplierOfferUtility,
+                settlementThresholds);
             if (isViableCounterOffer(safeFallback, supplierOffer, request.buyerProfile(), request.bounds(), supplierOfferUtility)
                 && !safeFallback.matches(supplierOffer)) {
                 offers.add(safeFallback);
@@ -187,7 +216,9 @@ public class NegotiationEngineImpl implements NegotiationEngine {
         }
 
         if (offers.isEmpty() && violatesBuyerReservation(supplierOffer, request.buyerProfile().reservationOffer())) {
-            OfferVector boundaryFallback = clampToReservation(supplierOffer, request.buyerProfile().reservationOffer());
+            OfferVector boundaryFallback = settlementPolicy.clampCounterOffer(
+                clampToReservation(supplierOffer, request.buyerProfile().reservationOffer()),
+                settlementThresholds);
             BigDecimal boundaryUtility = utilityCalculator.calculate(boundaryFallback, request.buyerProfile(), request.bounds());
             if (boundaryUtility.compareTo(supplierOfferUtility) >= 0
                 && !boundaryFallback.matches(supplierOffer)
@@ -367,17 +398,38 @@ public class NegotiationEngineImpl implements NegotiationEngine {
     private String counterExplanation(
             BigDecimal buyerUtility,
             BigDecimal targetUtility,
+            OfferVector supplierOffer,
+            StrategySettlementPolicy.SettlementThresholds settlementThresholds,
             NegotiationIssue issue,
             boolean outsideReservation,
             NegotiationStrategy strategy,
+            DecisionReason reasonCode,
             List<OfferVector> counterOffers
     ) {
             int counterOfferCount = counterOffers == null ? 0 : counterOffers.size();
-            StringBuilder explanation = new StringBuilder("Countered because the offer is still below the current target. Buyer utility is ")
+            StringBuilder explanation = new StringBuilder();
+
+            if (reasonCode == DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY) {
+                explanation.append("Countered because the offer remains outside the active strategy settlement posture. Buyer utility is ")
+                    .append(buyerUtility)
+                    .append(", the minimum settlement utility is ")
+                    .append(settlementThresholds.minimumUtility())
+                    .append(", and supplier price ")
+                    .append(supplierOffer.price())
+                    .append(" stays above the current strategy ceiling of ")
+                    .append(settlementThresholds.maximumPrice())
+                    .append(".");
+            } else if (reasonCode == DecisionReason.BELOW_HARD_REJECT_THRESHOLD) {
+                explanation.append("Countered because the current terms are too weak to keep open indefinitely. Buyer utility is ")
+                    .append(buyerUtility)
+                    .append(". Material movement will be needed to avoid rejection in later rounds.");
+            } else {
+                explanation.append("Countered because the offer is still below the current target. Buyer utility is ")
                     .append(buyerUtility)
                     .append(" versus a target of ")
                     .append(targetUtility)
                     .append(".");
+            }
 
             if (outsideReservation) {
                 explanation.append(" The supplier offer is outside the buyer reservation range, but it is still close enough to continue negotiating.");
@@ -402,7 +454,30 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             return explanation.toString();
 	    }
 
-	    private String rejectionExplanation(BigDecimal buyerUtility) {
+	    private String rejectionExplanation(
+            BigDecimal buyerUtility,
+            OfferVector supplierOffer,
+            StrategySettlementPolicy.SettlementThresholds settlementThresholds,
+            DecisionReason reasonCode
+    ) {
+            if (reasonCode == DecisionReason.BELOW_HARD_REJECT_THRESHOLD) {
+                return "Rejected because the offer remained too weak to keep negotiating. Buyer utility "
+                    + buyerUtility
+                    + " stayed below the warning floor required to continue on these terms.";
+            }
+
+            if (reasonCode == DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY) {
+                return "Rejected because the offer remains outside the strategy settlement posture. Buyer utility "
+                    + buyerUtility
+                    + " did not clear the minimum settlement utility of "
+                    + settlementThresholds.minimumUtility()
+                    + ", and supplier price "
+                    + supplierOffer.price()
+                    + " stays above the strategy ceiling of "
+                    + settlementThresholds.maximumPrice()
+                    + ".";
+            }
+
 	        return "Rejected because the offer only reached buyer utility "
 	                + buyerUtility
 	                + ", which remains below the buyer's reservation floor.";
@@ -419,7 +494,8 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             OfferVector counterOffer,
             OfferVector supplierOffer,
             NegotiationRequest request,
-            BigDecimal supplierOfferUtility
+            BigDecimal supplierOfferUtility,
+            StrategySettlementPolicy.SettlementThresholds settlementThresholds
     ) {
         OfferVector rebalanced = rebalancePriceForTradeoffs(
             counterOffer,
@@ -430,17 +506,82 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             rebalanced,
             supplierOffer,
             request);
+        OfferVector strategySafe = settlementPolicy.clampCounterOffer(ratcheted, settlementThresholds);
+        OfferVector settlementAnchored = anchorSettlementCounterOffer(
+            strategySafe,
+            supplierOffer,
+            request,
+            supplierOfferUtility,
+            settlementThresholds);
+        OfferVector feasible = respectSupplierPriceFloor(settlementAnchored, request);
 
         BigDecimal reservationPrice = request.buyerProfile().reservationOffer().price();
-        if (ratcheted.price().compareTo(reservationPrice) > 0) {
+        if (feasible.price().compareTo(reservationPrice) > 0) {
             return new OfferVector(
                 reservationPrice,
-                ratcheted.paymentDays(),
-                ratcheted.deliveryDays(),
-                ratcheted.contractMonths());
+                feasible.paymentDays(),
+                feasible.deliveryDays(),
+                feasible.contractMonths());
         }
 
-        return ratcheted;
+        return feasible;
+    }
+
+    private OfferVector anchorSettlementCounterOffer(
+            OfferVector counterOffer,
+            OfferVector supplierOffer,
+            NegotiationRequest request,
+            BigDecimal supplierOfferUtility,
+            StrategySettlementPolicy.SettlementThresholds settlementThresholds
+    ) {
+        if (!isClosingStage(request.context())) {
+            return counterOffer;
+        }
+
+        if (supplierOffer.price().compareTo(settlementThresholds.maximumPrice()) <= 0) {
+            return counterOffer;
+        }
+
+        OfferVector anchoredOffer = new OfferVector(
+            settlementThresholds.maximumPrice(),
+            Math.max(counterOffer.paymentDays(), supplierOffer.paymentDays()),
+            Math.min(counterOffer.deliveryDays(), supplierOffer.deliveryDays()),
+            Math.min(counterOffer.contractMonths(), supplierOffer.contractMonths()));
+        BigDecimal anchoredUtility = utilityCalculator.calculate(anchoredOffer, request.buyerProfile(), request.bounds());
+
+        if (anchoredUtility.compareTo(settlementThresholds.minimumUtility()) < 0
+            || anchoredUtility.compareTo(supplierOfferUtility) <= 0
+            || anchoredOffer.price().compareTo(counterOffer.price()) <= 0) {
+            return counterOffer;
+        }
+
+        return anchoredOffer;
+    }
+
+    private boolean isClosingStage(NegotiationContext context) {
+        return context.round() >= Math.max(2, context.maxRounds() - 2);
+    }
+
+    private OfferVector respectSupplierPriceFloor(
+            OfferVector counterOffer,
+            NegotiationRequest request
+    ) {
+        if (request.supplierConstraints() == null || request.supplierConstraints().priceFloor() == null) {
+            return counterOffer;
+        }
+
+        BigDecimal feasiblePrice = request.supplierConstraints().priceFloor()
+            .min(request.bounds().maxPrice())
+            .setScale(2, RoundingMode.HALF_UP);
+        if (counterOffer.price().compareTo(feasiblePrice) >= 0) {
+            return counterOffer;
+        }
+
+        return new OfferVector(
+            feasiblePrice,
+            counterOffer.paymentDays(),
+            counterOffer.deliveryDays(),
+            counterOffer.contractMonths());
     }
 
     private OfferVector rebalancePriceForTradeoffs(
@@ -495,6 +636,10 @@ public class NegotiationEngineImpl implements NegotiationEngine {
             OfferVector currentSupplierOffer,
             NegotiationRequest request
     ) {
+        if (request.context().strategy() == NegotiationStrategy.MESO) {
+            return counterOffer;
+        }
+
         BigDecimal priceFloor = historicalPriceFloor(
             request.context(),
             currentSupplierOffer,

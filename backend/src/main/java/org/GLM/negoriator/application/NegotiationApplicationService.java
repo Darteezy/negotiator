@@ -36,27 +36,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class NegotiationApplicationService {
 
-	private static final java.util.regex.Pattern OPTION_SELECTION_PATTERN = java.util.regex.Pattern.compile(
-		"\\b(option|offer)\\s*(\\d+|one|two|three|first|second|third)\\b",
-		java.util.regex.Pattern.CASE_INSENSITIVE);
-	private static final java.util.regex.Pattern BUYER_SELECTION_PATTERN = java.util.regex.Pattern.compile(
-		"\\b(original offer|same terms|your offer|your terms|that option|that offer)\\b",
-		java.util.regex.Pattern.CASE_INSENSITIVE);
-
 	private final NegotiationSessionRepository sessionRepository;
 	private final NegotiationEngine negotiationEngine;
 	private final SessionConfigurationValidator sessionConfigurationValidator;
 	private final AiNegotiationMessageService aiNegotiationMessageService;
+	private final SupplierMessageIntentParser supplierMessageIntentParser;
+	private final SupplierMessageIntentAiFallbackService supplierMessageIntentAiFallbackService;
 
 	public NegotiationApplicationService(
 		NegotiationSessionRepository sessionRepository,
 		NegotiationEngine negotiationEngine,
-		AiNegotiationMessageService aiNegotiationMessageService
+		AiNegotiationMessageService aiNegotiationMessageService,
+		SupplierMessageIntentAiFallbackService supplierMessageIntentAiFallbackService
 	) {
 		this.sessionRepository = sessionRepository;
 		this.negotiationEngine = negotiationEngine;
 		this.sessionConfigurationValidator = new SessionConfigurationValidator();
 		this.aiNegotiationMessageService = aiNegotiationMessageService;
+		this.supplierMessageIntentParser = new SupplierMessageIntentParser();
+		this.supplierMessageIntentAiFallbackService = supplierMessageIntentAiFallbackService;
 	}
 
 	public NegotiationSession startSession(StartSessionCommand command) {
@@ -203,13 +201,23 @@ public class NegotiationApplicationService {
 
 		session.mergeSupplierConstraints(supplierConstraints);
 		SupplierConstraintsSnapshot activeConstraints = session.getSupplierConstraintsSnapshot();
+		java.util.List<NegotiationOffer> activeBuyerOffers = activeBuyerOffers(session);
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent = resolveSupplierIntent(
+			supplierMessage,
+			supplierOfferTerms,
+			activeBuyerOffers);
 
 		NegotiationOffer supplierOffer = new NegotiationOffer(
 			session.getCurrentRound(),
 			NegotiationParty.SUPPLIER,
 			OfferTermsSnapshot.from(supplierOfferTerms),
 			supplierMessage);
-		NegotiationOffer acceptedBuyerOffer = matchingActiveBuyerOffer(session, supplierOfferTerms, supplierMessage);
+		NegotiationOffer acceptedBuyerOffer = matchingActiveBuyerOffer(
+			session,
+			supplierOfferTerms,
+			supplierMessage,
+			supplierIntent,
+			activeBuyerOffers);
 
 		NegotiationEngine.NegotiationResponse response = negotiationEngine.negotiate(
 			new NegotiationEngine.NegotiationRequest(
@@ -248,9 +256,19 @@ public class NegotiationApplicationService {
 				"Buyer is ready to close on these terms. Reply with accept to finalize the deal.");
 		}
 
+		ClarificationDirective clarificationDirective = clarificationDirective(
+			session,
+			supplierOfferTerms,
+			supplierMessage,
+			supplierIntent,
+			activeBuyerOffers,
+			acceptedBuyerOffer);
+
 		session.addOffer(supplierOffer);
 
-		var buyerCounterOffers = requiresExplicitSupplierAcceptance
+		var buyerCounterOffers = clarificationDirective != null
+			? clarificationDirective.counterOffers()
+			: requiresExplicitSupplierAcceptance
 			? java.util.List.of(new NegotiationOffer(
 				session.getCurrentRound(),
 				NegotiationParty.BUYER,
@@ -264,43 +282,183 @@ public class NegotiationApplicationService {
 
 		NegotiationOffer counterOffer = buyerCounterOffers.stream()
 			.findFirst()
-			.orElse(null);
+			.orElse(acceptedBuyerOffer);
+		Integer resolvedSelectedBuyerOfferIndex = resolvedSelectedOfferIndex(activeBuyerOffers, supplierMessage, supplierIntent);
+		String supplierIntentDetails = supplierIntentDetails(
+			supplierIntent,
+			acceptedBuyerOffer,
+			clarificationDirective,
+			activeBuyerOffers,
+			resolvedSelectedBuyerOfferIndex);
 
 		for (NegotiationOffer buyerCounterOffer : buyerCounterOffers) {
 			session.addOffer(buyerCounterOffer);
 		}
 
-		String buyerMessage = aiNegotiationMessageService.composeBuyerReply(new BuyerReplyMessageRequest(
-			supplierOffer.getRoundNumber(),
-			session.getMaxRounds(),
-			NegotiationDecisionType.from(response.decision()).name(),
-			NegotiationSessionStatus.from(response.nextState()).name(),
-			supplierMessage,
-			supplierOfferTerms,
-			counterOffer == null ? null : counterOffer.toOfferVector(),
-			buyerCounterOffers.stream().map(NegotiationOffer::toOfferVector).toList(),
-			response.reasonCode(),
-			response.focusIssue(),
-			session.getStrategy(),
-			StrategyMetadata.rationaleFor(session.getStrategy()),
-			response.evaluation()));
+		NegotiationDecisionType decisionType = clarificationDirective != null
+			? NegotiationDecisionType.COUNTER
+			: NegotiationDecisionType.from(response.decision());
+		NegotiationSessionStatus resultingStatus = clarificationDirective != null
+			? NegotiationSessionStatus.COUNTERED
+			: NegotiationSessionStatus.from(response.nextState());
+		String buyerMessage = clarificationDirective != null
+			? clarificationDirective.message()
+			: aiNegotiationMessageService.composeBuyerReply(new BuyerReplyMessageRequest(
+				supplierOffer.getRoundNumber(),
+				session.getMaxRounds(),
+				decisionType.name(),
+				resultingStatus.name(),
+				supplierMessage,
+				supplierOfferTerms,
+				counterOffer == null ? null : counterOffer.toOfferVector(),
+				buyerCounterOffers.stream().map(NegotiationOffer::toOfferVector).toList(),
+				response.reasonCode(),
+				response.focusIssue(),
+				session.getStrategy(),
+				StrategyMetadata.rationaleFor(session.getStrategy()),
+				response.evaluation()));
 
 		session.addDecision(new NegotiationDecision(
 			supplierOffer.getRoundNumber(),
-			NegotiationDecisionType.from(response.decision()),
-			NegotiationSessionStatus.from(response.nextState()),
+			decisionType,
+			resultingStatus,
 			supplierOffer,
 			counterOffer,
 			OfferEvaluationSnapshot.from(response.evaluation()),
 			SupplierBeliefSnapshot.from(response.updatedSupplierBeliefs()),
-			response.reasonCode(),
-			response.focusIssue(),
+			clarificationDirective != null ? NegotiationEngine.DecisionReason.COUNTER_TO_CLOSE_GAP : response.reasonCode(),
+			clarificationDirective != null ? null : response.focusIssue(),
 			session.getStrategy(),
 			StrategyMetadata.rationaleFor(session.getStrategy()),
-			buyerMessage));
-		session.moveTo(NegotiationSessionStatus.from(response.nextState()));
+			buyerMessage,
+			supplierIntent.type().name(),
+			supplierIntent.source().name(),
+			resolvedSelectedBuyerOfferIndex,
+			supplierIntentDetails));
+		session.moveTo(resultingStatus);
 
 		return sessionRepository.saveAndFlush(session);
+	}
+
+	private String supplierIntentDetails(
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent,
+		NegotiationOffer acceptedBuyerOffer,
+		ClarificationDirective clarificationDirective,
+		java.util.List<NegotiationOffer> activeBuyerOffers,
+		Integer resolvedSelectedBuyerOfferIndex
+	) {
+		if (clarificationDirective != null) {
+			return "Supplier message remained unresolved after deterministic parsing"
+				+ (supplierIntent.source() == SupplierMessageIntentParser.SupplierIntentSource.AI_FALLBACK
+					? " and AI fallback"
+					: "")
+				+ ", so the backend requested clarification against the current buyer offer context.";
+		}
+
+		if (acceptedBuyerOffer != null && supplierIntent.type() == SupplierMessageIntentParser.SupplierIntentType.UNCLEAR) {
+			return "Supplier terms exactly matched an active buyer offer, so the round was treated as acceptance even though the message text itself remained unclear.";
+		}
+
+		return switch (supplierIntent.type()) {
+			case ACCEPT_ACTIVE_OFFER -> resolvedSelectedBuyerOfferIndex == null
+				? activeBuyerOffers.size() == 1
+					? "Supplier message was interpreted as accepting the active buyer offer."
+					: "Supplier message was interpreted as accepting the buyer's active offer context."
+				: "Supplier message was interpreted as accepting buyer option " + resolvedSelectedBuyerOfferIndex + ".";
+			case SELECT_COUNTER_OPTION -> resolvedSelectedBuyerOfferIndex == null
+				? "Supplier message referenced one of the buyer's active options without final acceptance."
+				: "Supplier message was interpreted as selecting buyer option " + resolvedSelectedBuyerOfferIndex + " without final acceptance.";
+			case PROPOSE_NEW_TERMS -> "Supplier message was interpreted as a fresh supplier counterproposal.";
+			case REJECT_OR_DECLINE -> "Supplier message was interpreted as declining the buyer's current position.";
+			case UNCLEAR -> "Supplier message remained unresolved by deterministic parsing.";
+		};
+	}
+
+	private SupplierMessageIntentParser.SupplierMessageIntent resolveSupplierIntent(
+		String supplierMessage,
+		OfferVector supplierOfferTerms,
+		java.util.List<NegotiationOffer> activeBuyerOffers
+	) {
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent = supplierMessageIntentParser.parse(supplierMessage);
+		if (supplierIntent.type() != SupplierMessageIntentParser.SupplierIntentType.UNCLEAR || activeBuyerOffers.isEmpty()) {
+			return supplierIntent;
+		}
+
+		return supplierMessageIntentAiFallbackService.resolve(
+			supplierMessage,
+			supplierOfferTerms,
+			activeBuyerOffers.stream().map(NegotiationOffer::toOfferVector).toList())
+			.orElse(supplierIntent);
+	}
+
+	private java.util.List<NegotiationOffer> activeBuyerOffers(NegotiationSession session) {
+		if (session.getCurrentRound() <= 1) {
+			return java.util.List.of();
+		}
+
+		int activeBuyerRound = session.getCurrentRound() - 1;
+		return session.getOffers().stream()
+			.filter(offer -> offer.getParty() == NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == activeBuyerRound)
+			.sorted(java.util.Comparator.comparing(NegotiationOffer::getCreatedAt))
+			.toList();
+	}
+
+	private ClarificationDirective clarificationDirective(
+		NegotiationSession session,
+		OfferVector supplierOfferTerms,
+		String supplierMessage,
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent,
+		java.util.List<NegotiationOffer> activeBuyerOffers,
+		NegotiationOffer acceptedBuyerOffer
+	) {
+		if (supplierIntent.type() != SupplierMessageIntentParser.SupplierIntentType.UNCLEAR
+			|| acceptedBuyerOffer != null
+			|| activeBuyerOffers.isEmpty()) {
+			return null;
+		}
+
+		java.util.List<NegotiationOffer> repeatedBuyerOffers = activeBuyerOffers.stream()
+			.map(offer -> new NegotiationOffer(
+				session.getCurrentRound(),
+				NegotiationParty.BUYER,
+				OfferTermsSnapshot.from(offer.toOfferVector())))
+			.toList();
+
+		String message = repeatedBuyerOffers.size() > 1
+			? buildMultiOptionClarificationMessage(repeatedBuyerOffers)
+			: buildSingleOfferClarificationMessage(repeatedBuyerOffers.getFirst().toOfferVector(), supplierMessage, supplierOfferTerms);
+
+		return new ClarificationDirective(repeatedBuyerOffers, message);
+	}
+
+	private String buildMultiOptionClarificationMessage(java.util.List<NegotiationOffer> repeatedBuyerOffers) {
+		StringBuilder sb = new StringBuilder("Thank you for the update. Please confirm which buyer option is closest on your side:\n");
+		for (int index = 0; index < repeatedBuyerOffers.size(); index++) {
+			sb.append("- Option ").append(index + 1).append(": ")
+				.append(formatOfferForClarification(repeatedBuyerOffers.get(index).toOfferVector()));
+			if (index + 1 < repeatedBuyerOffers.size()) {
+				sb.append('\n');
+			}
+		}
+		return sb.toString();
+	}
+
+	private String buildSingleOfferClarificationMessage(
+		OfferVector activeBuyerOffer,
+		String supplierMessage,
+		OfferVector supplierOfferTerms
+	) {
+		return "Thank you for the update. Please confirm whether you accept our current terms of "
+			+ formatOfferForClarification(activeBuyerOffer)
+			+ " or specify which commercial point you want to revise.";
+	}
+
+	private String formatOfferForClarification(OfferVector offer) {
+		return "price " + offer.price()
+			+ ", payment " + offer.paymentDays() + " days"
+			+ ", delivery " + offer.deliveryDays() + " days"
+			+ ", contract " + offer.contractMonths() + " months";
 	}
 
 	private java.util.List<OfferVector> applySupplierConstraints(
@@ -346,70 +504,156 @@ public class NegotiationApplicationService {
 	private NegotiationOffer matchingActiveBuyerOffer(
 		NegotiationSession session,
 		OfferVector supplierOfferTerms,
-		String supplierMessage
+		String supplierMessage,
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent,
+		java.util.List<NegotiationOffer> activeBuyerOffers
 	) {
-		if (session.getCurrentRound() <= 1) {
+		if (session.getCurrentRound() <= 1 || activeBuyerOffers.isEmpty()) {
 			return null;
 		}
 
-		if (!isExplicitAcceptanceMessage(supplierMessage) && !isBuyerOfferSelectionMessage(supplierMessage)) {
+		if (session.getStrategy() == NegotiationStrategy.MESO && supplierIntent.selectsCounterOption()) {
 			return null;
 		}
 
-		int activeBuyerRound = session.getCurrentRound() - 1;
-
-		return session.getOffers().stream()
-			.filter(offer -> offer.getParty() == NegotiationParty.BUYER)
-			.filter(offer -> offer.getRoundNumber() == activeBuyerRound)
+		NegotiationOffer exactMatch = activeBuyerOffers.stream()
 			.filter(offer -> offer.toOfferVector().matches(supplierOfferTerms))
 			.findFirst()
 			.orElse(null);
+		if (supplierIntent.proposesNewTerms() || supplierIntent.rejectsOrDeclines()) {
+			return null;
+		}
+
+		if (exactMatch != null) {
+			return exactMatch;
+		}
+
+		if (supplierIntent.selectsCounterOption()) {
+			return null;
+		}
+
+		Integer selectedOfferIndex = resolvedSelectedOfferIndex(activeBuyerOffers, supplierMessage, supplierIntent);
+		if (selectedOfferIndex != null
+			&& selectedOfferIndex >= 1
+			&& selectedOfferIndex <= activeBuyerOffers.size()) {
+			if (supplierIntent.acceptsBuyerOffer()) {
+				return activeBuyerOffers.get(selectedOfferIndex - 1);
+			}
+			return activeBuyerOffers.get(selectedOfferIndex - 1);
+		}
+
+		if (supplierIntent.acceptsBuyerOffer() && activeBuyerOffers.size() == 1) {
+			return activeBuyerOffers.getFirst();
+		}
+
+		return null;
 	}
 
-	private boolean isExplicitAcceptanceMessage(String supplierMessage) {
-		if (supplierMessage == null || supplierMessage.isBlank()) {
-			return true;
+	private Integer resolvedSelectedOfferIndex(
+		java.util.List<NegotiationOffer> activeBuyerOffers,
+		String supplierMessage,
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent
+	) {
+		if (supplierIntent.selectedBuyerOfferIndex() != null) {
+			return supplierIntent.selectedBuyerOfferIndex();
+		}
+
+		return descriptiveOfferIndex(activeBuyerOffers, supplierMessage);
+	}
+
+	private Integer descriptiveOfferIndex(
+		java.util.List<NegotiationOffer> activeBuyerOffers,
+		String supplierMessage
+	) {
+		if (supplierMessage == null || supplierMessage.isBlank() || activeBuyerOffers.isEmpty()) {
+			return null;
 		}
 
 		String normalized = supplierMessage.toLowerCase(java.util.Locale.ROOT);
-		if (normalized.contains("counter")
-			|| normalized.contains("i propose")
-			|| normalized.contains("i offer")
-			|| normalized.contains("final offer")
-			|| normalized.contains("if you accept")
-			|| normalized.contains("cannot")
-			|| normalized.contains("can't")
-			|| normalized.contains("not settling")) {
-			return false;
+		if (referencesPriceDescriptor(normalized)) {
+			return uniqueExtremumIndex(
+				activeBuyerOffers,
+				java.util.Comparator.comparing((NegotiationOffer offer) -> offer.toOfferVector().price()));
 		}
 
-		return normalized.contains("accept")
-			|| normalized.contains("agreed")
-			|| normalized.contains("confirm")
-			|| normalized.contains("works for us")
-			|| normalized.contains("we can proceed")
-			|| normalized.contains("we have a deal");
+		if (referencesPaymentDescriptor(normalized)) {
+			return uniqueExtremumIndex(
+				activeBuyerOffers,
+				java.util.Comparator.comparingInt((NegotiationOffer offer) -> offer.toOfferVector().paymentDays()).reversed());
+		}
+
+		if (referencesDeliveryDescriptor(normalized)) {
+			return uniqueExtremumIndex(
+				activeBuyerOffers,
+				java.util.Comparator.comparingInt((NegotiationOffer offer) -> offer.toOfferVector().deliveryDays()));
+		}
+
+		if (referencesContractDescriptor(normalized)) {
+			return uniqueExtremumIndex(
+				activeBuyerOffers,
+				java.util.Comparator.comparingInt((NegotiationOffer offer) -> offer.toOfferVector().contractMonths()));
+		}
+
+		return null;
 	}
 
-	private boolean isBuyerOfferSelectionMessage(String supplierMessage) {
-		if (supplierMessage == null || supplierMessage.isBlank()) {
-			return false;
+	private boolean referencesPriceDescriptor(String normalized) {
+		return (normalized.contains("lower price") || normalized.contains("lowest price")
+			|| normalized.contains("cheaper price") || normalized.contains("cheapest price")
+			|| normalized.contains("higher price") || normalized.contains("highest price"))
+			&& containsOfferReferenceWord(normalized);
+	}
+
+	private boolean referencesPaymentDescriptor(String normalized) {
+		return (normalized.contains("longer payment") || normalized.contains("longest payment")
+			|| normalized.contains("higher payment"))
+			&& containsOfferReferenceWord(normalized);
+	}
+
+	private boolean referencesDeliveryDescriptor(String normalized) {
+		return (normalized.contains("faster delivery") || normalized.contains("fastest delivery")
+			|| normalized.contains("quicker delivery") || normalized.contains("quickest delivery")
+			|| normalized.contains("earlier delivery") || normalized.contains("shorter delivery"))
+			&& containsOfferReferenceWord(normalized);
+	}
+
+	private boolean referencesContractDescriptor(String normalized) {
+		return (normalized.contains("shorter contract") || normalized.contains("shortest contract")
+			|| normalized.contains("longer contract") || normalized.contains("longest contract"))
+			&& containsOfferReferenceWord(normalized);
+	}
+
+	private boolean containsOfferReferenceWord(String normalized) {
+		return normalized.contains("option")
+			|| normalized.contains("offer")
+			|| normalized.contains("package")
+			|| normalized.contains("structure")
+			|| normalized.contains("version");
+	}
+
+	private Integer uniqueExtremumIndex(
+		java.util.List<NegotiationOffer> activeBuyerOffers,
+		java.util.Comparator<NegotiationOffer> comparator
+	) {
+		java.util.List<NegotiationOffer> sortedOffers = activeBuyerOffers.stream()
+			.sorted(comparator)
+			.toList();
+		if (sortedOffers.isEmpty()) {
+			return null;
 		}
 
-		String normalized = supplierMessage.toLowerCase(java.util.Locale.ROOT);
-		if (normalized.contains("counter")
-			|| normalized.contains("i propose")
-			|| normalized.contains("i offer")
-			|| normalized.contains("final offer")
-			|| normalized.contains("if you accept")
-			|| normalized.contains("cannot")
-			|| normalized.contains("can't")
-			|| normalized.contains("not settling")) {
-			return false;
+		NegotiationOffer bestOffer = sortedOffers.getFirst();
+		if (sortedOffers.size() > 1 && comparator.compare(bestOffer, sortedOffers.get(1)) == 0) {
+			return null;
 		}
 
-		return OPTION_SELECTION_PATTERN.matcher(supplierMessage).find()
-			|| BUYER_SELECTION_PATTERN.matcher(supplierMessage).find();
+		return activeBuyerOffers.indexOf(bestOffer) + 1;
+	}
+
+	private record ClarificationDirective(
+		java.util.List<NegotiationOffer> counterOffers,
+		String message
+	) {
 	}
 
 	public record StartSessionCommand(

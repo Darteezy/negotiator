@@ -124,6 +124,39 @@ class AiNegotiationMessageServiceTest {
 		assertFalse(response.contains("target"));
 	}
 
+	@Test
+	void composeBuyerReplyUsesFallbackWhenAiReturnsMetaAssistantResponse() {
+		CapturingAiGatewayService gateway = new CapturingAiGatewayService(
+			"I notice you've provided detailed context for a procurement negotiation scenario, but you haven't included the actual question or problem that needs solving."
+		);
+		AiNegotiationMessageService service = new AiNegotiationMessageService(gateway);
+
+		String response = service.composeBuyerReply(new AiNegotiationMessageService.BuyerReplyMessageRequest(
+			2,
+			6,
+			"COUNTER",
+			"COUNTERED",
+			"We agree with option 1",
+			new OfferVector(new BigDecimal("100.00"), 50, 14, 10),
+			new OfferVector(new BigDecimal("95.00"), 50, 14, 10),
+			List.of(new OfferVector(new BigDecimal("95.00"), 50, 14, 10)),
+			DecisionReason.COUNTER_TO_CLOSE_GAP,
+			NegotiationIssue.PRICE,
+			NegotiationStrategy.MESO,
+			"Meso is active with multiple structured options.",
+			new OfferEvaluation(
+				new BigDecimal("0.7000"),
+				new BigDecimal("0.4200"),
+				new BigDecimal("0.7600"),
+				new BigDecimal("0.3500"),
+				new BigDecimal("0.1100"))
+		));
+
+		assertEquals(
+			"Thank you for the update. To keep this moving, we would need price 95.00, payment in 50 days, delivery in 14 days, and a 10 month contract. Let me know if you can work on that basis.",
+			response);
+	}
+
 	private final class CapturingAiGatewayService extends AiGatewayService {
 
 		private final String response;

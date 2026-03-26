@@ -225,6 +225,56 @@ class NegotiationEngineImplTest {
 	}
 
 	@Test
+	void warnsWithCounterBeforeRejectingVeryWeakOfferWhenRoundsRemain() {
+		OfferVector weakButInsideReservation = buyerProfile.reservationOffer();
+		NegotiationContext earlyContext = new NegotiationContext(
+			1,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.PENDING,
+			new BigDecimal("0.15"),
+			List.of());
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			weakButInsideReservation,
+			earlyContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertEquals(NegotiationEngine.DecisionReason.BELOW_HARD_REJECT_THRESHOLD, response.reasonCode());
+		assertTrue(response.explanation().contains("Material movement will be needed to avoid rejection"));
+		assertTrue(!response.counterOffers().isEmpty());
+	}
+
+	@Test
+	void rejectsVeryWeakOfferOnFinalRound() {
+		OfferVector weakButInsideReservation = buyerProfile.reservationOffer();
+		NegotiationContext finalContext = new NegotiationContext(
+			8,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			weakButInsideReservation,
+			finalContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.REJECT, response.decision());
+		assertTrue(response.reasonCode() == NegotiationEngine.DecisionReason.FINAL_ROUND_BELOW_RESERVATION
+			|| response.reasonCode() == NegotiationEngine.DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY);
+		assertTrue(response.explanation() != null && !response.explanation().isBlank());
+	}
+
+	@Test
 	void distinguishesStrategyTargetCurves() {
 		DecisionMaker decisionMaker = new DecisionMaker();
 		NegotiationContext baselineContext = new NegotiationContext(
@@ -280,6 +330,33 @@ class NegotiationEngineImplTest {
 	}
 
 	@Test
+	void mesoCanContinueNegotiatingAfterSupplierChoosesAnOptionBranch() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("102.00"), 55, 12, 12);
+		NegotiationContext context = new NegotiationContext(
+			2,
+			8,
+			NegotiationStrategy.MESO,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("102.00"), 50, 12, 12),
+				new OfferVector(new BigDecimal("102.00"), 55, 12, 12)));
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			context,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertTrue(!response.counterOffers().isEmpty());
+		assertTrue(response.counterOffers().stream()
+			.anyMatch(counterOffer -> counterOffer.price().compareTo(supplierOffer.price()) < 0));
+	}
+
+	@Test
 	void countersReservationEdgeOffersBeforeRejectingThem() {
 		OfferVector supplierOffer = new OfferVector(new BigDecimal("120.00"), 30, 30, 24);
 		NegotiationContext context = new NegotiationContext(
@@ -324,6 +401,69 @@ class NegotiationEngineImplTest {
 
 		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
 		assertEquals(NegotiationEngine.DecisionReason.COUNTER_TO_CLOSE_GAP, response.reasonCode());
+	}
+
+	@Test
+	void strategySettlementPolicyKeepsLateRoundBuyerOffersDistinct() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("120.00"), 60, 7, 12);
+		NegotiationContext lateRoundContext = new NegotiationContext(
+			6,
+			8,
+			NegotiationStrategy.BASELINE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("120.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("105.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 21, 24),
+				new OfferVector(new BigDecimal("107.57"), 60, 21, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 24),
+				new OfferVector(new BigDecimal("107.57"), 60, 14, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 12),
+				new OfferVector(new BigDecimal("107.63"), 60, 14, 12),
+				new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+				new OfferVector(new BigDecimal("111.00"), 60, 7, 12)));
+		NegotiationContext boulwareContext = new NegotiationContext(
+			6,
+			8,
+			NegotiationStrategy.BOULWARE,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of(
+				new OfferVector(new BigDecimal("120.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("105.00"), 60, 30, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 21, 24),
+				new OfferVector(new BigDecimal("106.50"), 60, 21, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 24),
+				new OfferVector(new BigDecimal("106.50"), 60, 14, 24),
+				new OfferVector(new BigDecimal("120.00"), 60, 14, 12),
+				new OfferVector(new BigDecimal("106.50"), 60, 14, 12),
+				new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+				new OfferVector(new BigDecimal("106.50"), 60, 7, 12)));
+
+		var baselineResponse = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			lateRoundContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+		var boulwareResponse = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			boulwareContext,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, baselineResponse.decision());
+		assertEquals(NegotiationEngine.Decision.COUNTER, boulwareResponse.decision());
+		assertTrue(baselineResponse.counterOffers().getFirst().price().compareTo(new BigDecimal("111.00")) <= 0);
+		assertTrue(boulwareResponse.counterOffers().getFirst().price().compareTo(new BigDecimal("106.50")) <= 0);
+		assertTrue(boulwareResponse.counterOffers().getFirst().price()
+			.compareTo(baselineResponse.counterOffers().getFirst().price()) < 0);
+		assertEquals(NegotiationEngine.DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY, baselineResponse.reasonCode());
+		assertEquals(NegotiationEngine.DecisionReason.BELOW_STRATEGY_SETTLEMENT_POLICY, boulwareResponse.reasonCode());
 	}
 
 	private OfferVector applyHistoricalConsistency(

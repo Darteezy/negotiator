@@ -60,12 +60,12 @@ public class AIController {
 
             JsonNode jsonNode = extractJson(content);
             OfferSnapshot baseOffer = resolveBaseOffer(request, jsonNode);
-            return mergeWithBase(baseOffer, new ParseOfferResponse(
+            return applySupplierConstraints(mergeWithBase(baseOffer, new ParseOfferResponse(
                 readDecimal(jsonNode, "price"),
                 readInteger(jsonNode, "paymentDays"),
                 readInteger(jsonNode, "deliveryDays"),
                 readInteger(jsonNode, "contractMonths"),
-                readSupplierConstraints(jsonNode)));
+                readSupplierConstraints(jsonNode))));
         } catch (JsonProcessingException exception) {
             throw new ResponseStatusException(
                 HttpStatus.BAD_GATEWAY,
@@ -111,6 +111,38 @@ public class AIController {
             parsed.deliveryDays() == null ? baseOffer.deliveryDays() : parsed.deliveryDays(),
             parsed.contractMonths() == null ? baseOffer.contractMonths() : parsed.contractMonths(),
             parsed.supplierConstraints());
+    }
+
+    private ParseOfferResponse applySupplierConstraints(ParseOfferResponse parsed) {
+        SupplierConstraintsResponse constraints = parsed.supplierConstraints();
+        if (constraints == null) {
+            return parsed;
+        }
+
+        Double price = parsed.price();
+        Integer paymentDays = parsed.paymentDays();
+        Integer deliveryDays = parsed.deliveryDays();
+        Integer contractMonths = parsed.contractMonths();
+
+        if (price != null && constraints.priceFloor() != null) {
+            price = Math.max(price, constraints.priceFloor());
+        }
+        if (paymentDays != null && constraints.paymentDaysCeiling() != null) {
+            paymentDays = Math.min(paymentDays, constraints.paymentDaysCeiling());
+        }
+        if (deliveryDays != null && constraints.deliveryDaysFloor() != null) {
+            deliveryDays = Math.max(deliveryDays, constraints.deliveryDaysFloor());
+        }
+        if (contractMonths != null && constraints.contractMonthsFloor() != null) {
+            contractMonths = Math.max(contractMonths, constraints.contractMonthsFloor());
+        }
+
+        return new ParseOfferResponse(
+            price,
+            paymentDays,
+            deliveryDays,
+            contractMonths,
+            constraints);
     }
 
     private SupplierConstraintsResponse readSupplierConstraints(JsonNode jsonNode) {

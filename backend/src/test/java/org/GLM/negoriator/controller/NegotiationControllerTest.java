@@ -279,4 +279,61 @@ class NegotiationControllerTest {
 			.andExpect(jsonPath("$.strategyHistory.length()").value(1))
 			.andExpect(jsonPath("$.conversation.length()").value(2));
 	}
+
+	@Test
+	void returnsSupplierParseDebugInRoundsAndConversation() throws Exception {
+		MvcResult createResult = mockMvc.perform(post("/api/negotiations/sessions")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "strategy": "MESO"
+					}
+					"""))
+			.andExpect(status().isCreated())
+			.andReturn();
+
+		UUID sessionId = UUID.fromString(
+			objectMapper.readTree(createResult.getResponse().getContentAsString()).get("id").asText());
+
+		MvcResult firstRoundResult = mockMvc.perform(post("/api/negotiations/sessions/{sessionId}/offers", sessionId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "price": 100.00,
+					  "paymentDays": 50,
+					  "deliveryDays": 20,
+					  "contractMonths": 10,
+					  "supplierMessage": "Price 100, payment 50, delivery 20, contract 10"
+					}
+					"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.rounds[0].supplierParseDebug.supplierIntentType").value("PROPOSE_NEW_TERMS"))
+			.andExpect(jsonPath("$.rounds[0].supplierParseDebug.supplierIntentSource").value("DETERMINISTIC"))
+			.andExpect(jsonPath("$.rounds[0].supplierParseDebug.supplierIntentDetails").value("Supplier message was interpreted as a fresh supplier counterproposal."))
+			.andExpect(jsonPath("$.conversation[2].actor").value("supplier"))
+			.andExpect(jsonPath("$.conversation[2].debug.supplierIntentType").value("PROPOSE_NEW_TERMS"))
+			.andExpect(jsonPath("$.conversation[2].debug.supplierIntentSource").value("DETERMINISTIC"))
+			.andReturn();
+
+		JsonNode firstRoundJson = objectMapper.readTree(firstRoundResult.getResponse().getContentAsString());
+		JsonNode optionTwo = firstRoundJson.at("/rounds/0/buyerReply/counterOffers/1");
+
+		mockMvc.perform(post("/api/negotiations/sessions/{sessionId}/offers", sessionId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(objectMapper.writeValueAsString(java.util.Map.of(
+					"price", optionTwo.get("price").decimalValue(),
+					"paymentDays", optionTwo.get("paymentDays").asInt(),
+					"deliveryDays", optionTwo.get("deliveryDays").asInt(),
+					"contractMonths", optionTwo.get("contractMonths").asInt(),
+					"supplierMessage", "option 2"))))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierIntentType").value("SELECT_COUNTER_OPTION"))
+			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierIntentSource").value("DETERMINISTIC"))
+			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierSelectedBuyerOfferIndex").value(2))
+			.andExpect(jsonPath("$.rounds[1].supplierParseDebug.supplierIntentDetails").value("Supplier message was interpreted as selecting buyer option 2 without final acceptance."))
+			.andExpect(jsonPath("$.conversation[4].actor").value("supplier"))
+			.andExpect(jsonPath("$.conversation[4].debug.supplierIntentType").value("SELECT_COUNTER_OPTION"))
+			.andExpect(jsonPath("$.conversation[4].debug.supplierIntentSource").value("DETERMINISTIC"))
+			.andExpect(jsonPath("$.conversation[4].debug.supplierSelectedBuyerOfferIndex").value(2));
+	}
 }

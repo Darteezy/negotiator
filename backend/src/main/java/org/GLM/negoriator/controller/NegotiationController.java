@@ -291,6 +291,7 @@ public class NegotiationController {
 	public record NegotiationRoundResponse(
 		int roundNumber,
 		OfferMessageResponse supplierOffer,
+		SupplierParseDebugResponse supplierParseDebug,
 		BuyerReplyResponse buyerReply
 	) {
 		static NegotiationRoundResponse from(NegotiationSession session, NegotiationDecision decision) {
@@ -300,7 +301,23 @@ public class NegotiationController {
 					decision.getSupplierOffer().toOfferVector(),
 					decision.getSupplierOffer().getCreatedAt(),
 					decision.getSupplierOffer().getSupplierMessage()),
+				SupplierParseDebugResponse.from(decision),
 				BuyerReplyResponse.from(session, decision));
+		}
+	}
+
+	public record SupplierParseDebugResponse(
+		String supplierIntentType,
+		String supplierIntentSource,
+		Integer supplierSelectedBuyerOfferIndex,
+		String supplierIntentDetails
+	) {
+		static SupplierParseDebugResponse from(NegotiationDecision decision) {
+			return new SupplierParseDebugResponse(
+				decision.getSupplierIntentType(),
+				decision.getSupplierIntentSource(),
+				decision.getSupplierSelectedBuyerOfferIndex(),
+				decision.getSupplierIntentDetails());
 		}
 	}
 
@@ -392,7 +409,11 @@ public class NegotiationController {
 							null,
 							null,
 							null,
-							List.of())));
+							List.of(),
+							null,
+							null,
+							null,
+							null)));
 				}
 			}
 
@@ -422,7 +443,18 @@ public class NegotiationController {
 					round.supplierOffer().at(),
 					round.supplierOffer().terms(),
 					List.of(),
-					null));
+					new ConversationDebugResponse(
+						null,
+						null,
+						null,
+						null,
+						null,
+						null,
+						List.of(),
+						round.supplierParseDebug().supplierIntentType(),
+						round.supplierParseDebug().supplierIntentSource(),
+						round.supplierParseDebug().supplierSelectedBuyerOfferIndex(),
+						round.supplierParseDebug().supplierIntentDetails())));
 
 				events.add(new ConversationEventResponse(
 					"BUYER_REPLY",
@@ -439,7 +471,11 @@ public class NegotiationController {
 						round.buyerReply().reasonCode(),
 						round.buyerReply().focusIssue(),
 						round.buyerReply().evaluation(),
-						counterOfferSummaries(round.buyerReply().counterOffers()))));
+						counterOfferSummaries(round.buyerReply().counterOffers()),
+						null,
+						null,
+						null,
+						null)));
 			}
 
 			nonInitialChangesByRound.entrySet().stream()
@@ -482,7 +518,11 @@ public class NegotiationController {
 						null,
 						null,
 						null,
-						List.of())));
+						List.of(),
+						null,
+						null,
+						null,
+						null)));
 			}
 		}
 	}
@@ -494,7 +534,11 @@ public class NegotiationController {
 		String reasonCode,
 		String focusIssue,
 		EvaluationResponse evaluation,
-		List<String> counterOfferSummary
+		List<String> counterOfferSummary,
+		String supplierIntentType,
+		String supplierIntentSource,
+		Integer supplierSelectedBuyerOfferIndex,
+		String supplierIntentDetails
 	) {
 	}
 

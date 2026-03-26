@@ -79,6 +79,31 @@ class AIControllerTest {
 	}
 
 	@Test
+	void parseOfferAppliesSupplierConstraintsToSelectedCounterOfferBase() {
+		AiGatewayService gateway = new StubAiGatewayService("""
+			{"selectedCounterOfferIndex":3,"price":null,"paymentDays":null,"deliveryDays":null,"contractMonths":null,"supplierConstraints":{"priceFloor":null,"paymentDaysCeiling":null,"deliveryDaysFloor":12,"contractMonthsFloor":null}}
+			""");
+
+		AIController controller = new AIController(gateway, objectMapper);
+
+		AIController.ParseOfferResponse response = controller.parseOffer(new AIController.ParseOfferRequest(
+			"We want to proceed with option 3, but keep delivery at least 12 days.",
+			new Terms(120.0, 30, 14, 12),
+			java.util.List.of(
+				new Terms(112.0, 30, 20, 12),
+				new Terms(108.0, 45, 14, 10),
+				new Terms(100.0, 50, 10, 8)
+			)
+		));
+
+		assertEquals(100.0, response.price());
+		assertEquals(50, response.paymentDays());
+		assertEquals(12, response.deliveryDays());
+		assertEquals(8, response.contractMonths());
+		assertEquals(12, response.supplierConstraints().deliveryDaysFloor());
+	}
+
+	@Test
 	void parseOfferReturnsServiceUnavailableWhenAiModelIsUnavailable() {
 		AiGatewayService failingGateway = new AiGatewayService(
 			RestClient.builder(),

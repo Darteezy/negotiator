@@ -35,16 +35,16 @@ public class DecisionMaker {
 	        BigDecimal targetUtility = targetUtility(profile, context).max(reservationUtility);
             BigDecimal hardRejectThreshold = hardRejectThreshold(context);
 
+            if (utility.compareTo(targetUtility) >= 0) {
+                return new DecisionOutcome(Decision.ACCEPT, targetUtility, hardRejectThreshold, DecisionReason.TARGET_UTILITY_MET);
+            }
+
+            if (context.round() >= context.maxRounds()) {
+                return new DecisionOutcome(Decision.REJECT, targetUtility, hardRejectThreshold, DecisionReason.FINAL_ROUND_BELOW_RESERVATION);
+            }
+
 	        if (utility.compareTo(hardRejectThreshold) < 0) {
-	            return new DecisionOutcome(Decision.REJECT, targetUtility, hardRejectThreshold, DecisionReason.BELOW_HARD_REJECT_THRESHOLD);
-	        }
-
-	        if (utility.compareTo(targetUtility) >= 0) {
-	            return new DecisionOutcome(Decision.ACCEPT, targetUtility, hardRejectThreshold, DecisionReason.TARGET_UTILITY_MET);
-	        }
-
-	        if (context.round() >= context.maxRounds()) {
-	            return new DecisionOutcome(Decision.REJECT, targetUtility, hardRejectThreshold, DecisionReason.FINAL_ROUND_BELOW_RESERVATION);
+                return new DecisionOutcome(Decision.COUNTER, targetUtility, hardRejectThreshold, DecisionReason.BELOW_HARD_REJECT_THRESHOLD);
 	        }
 
 	        return new DecisionOutcome(Decision.COUNTER, targetUtility, hardRejectThreshold, DecisionReason.COUNTER_TO_CLOSE_GAP);
@@ -72,10 +72,10 @@ public class DecisionMaker {
 
         private BigDecimal hardRejectThreshold(NegotiationEngine.NegotiationContext context) {
             double threshold = switch (context.strategy()) {
-                case BASELINE -> -0.0500d;
-                case MESO -> -0.0600d;
-                case BOULWARE -> -0.0350d;
-                case CONCEDER -> -0.0800d;
+                case BASELINE -> 0.1200d;
+                case MESO -> 0.1000d;
+                case BOULWARE -> 0.1500d;
+                case CONCEDER -> 0.0800d;
                 case TIT_FOR_TAT -> titForTatRejectThreshold(context);
             };
 
@@ -95,7 +95,7 @@ public class DecisionMaker {
 
         private double titForTatRejectThreshold(NegotiationEngine.NegotiationContext context) {
             double reciprocityBonus = recentSupplierConcessionScore(context);
-            return reciprocityBonus > 0.0d ? -0.0650d : -0.0400d;
+            return reciprocityBonus > 0.0d ? 0.1000d : 0.1300d;
         }
 
         private double recentSupplierConcessionScore(NegotiationEngine.NegotiationContext context) {

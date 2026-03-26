@@ -87,6 +87,18 @@ public class NegotiationDecision {
 	@Column(name = "explanation", nullable = false, length = 1000)
 	private String explanation;
 
+	@Column(name = "supplier_intent_type", length = 40)
+	private String supplierIntentType;
+
+	@Column(name = "supplier_intent_source", length = 24)
+	private String supplierIntentSource;
+
+	@Column(name = "supplier_selected_buyer_offer_index")
+	private Integer supplierSelectedBuyerOfferIndex;
+
+	@Column(name = "supplier_intent_details", length = 1000)
+	private String supplierIntentDetails;
+
 	@Column(name = "decided_at", nullable = false)
 	private Instant decidedAt;
 
@@ -105,7 +117,11 @@ public class NegotiationDecision {
 		NegotiationIssue focusIssue,
 		NegotiationStrategy strategyUsed,
 		String strategyRationale,
-		String explanation
+		String explanation,
+		String supplierIntentType,
+		String supplierIntentSource,
+		Integer supplierSelectedBuyerOfferIndex,
+		String supplierIntentDetails
 	) {
 		this.roundNumber = roundNumber;
 		this.decision = decision;
@@ -119,6 +135,10 @@ public class NegotiationDecision {
 		this.strategyUsed = strategyUsed;
 		this.strategyRationale = strategyRationale;
 		this.explanation = explanation;
+		this.supplierIntentType = supplierIntentType;
+		this.supplierIntentSource = supplierIntentSource;
+		this.supplierSelectedBuyerOfferIndex = supplierSelectedBuyerOfferIndex;
+		this.supplierIntentDetails = supplierIntentDetails;
 	}
 
 	void attachTo(NegotiationSession session) {
@@ -194,6 +214,22 @@ public class NegotiationDecision {
 
 	public String getExplanation() {
 		return explanation;
+	}
+
+	public String getSupplierIntentType() {
+		return supplierIntentType;
+	}
+
+	public String getSupplierIntentSource() {
+		return supplierIntentSource;
+	}
+
+	public Integer getSupplierSelectedBuyerOfferIndex() {
+		return supplierSelectedBuyerOfferIndex;
+	}
+
+	public String getSupplierIntentDetails() {
+		return supplierIntentDetails;
 	}
 
 	public Instant getDecidedAt() {

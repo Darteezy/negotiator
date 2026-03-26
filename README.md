@@ -1,10 +1,10 @@
 # Negotiator
 
-Buyer-side autonomous negotiation agent built for the Pactum technical challenge.
+Buyer-side negotiation system built for the Pactum technical challenge.
 
 The backend acts as the buyer. It evaluates supplier offers across price, payment days, delivery days, and contract length, then accepts, counters, or rejects based on the buyer's goals and limits. The frontend gives a human supplier a live interface to configure a session, negotiate round by round, and inspect the latest buyer response.
 
-The current frontend is a demo and testing surface for the buyer engine. The same backend logic could later be used behind richer supplier-facing channels such as email or chat-based communication.
+The frontend provides a supplier-facing interface for running the negotiation flow. The same backend logic can also support other supplier-facing channels.
 
 ## What is in the app
 
@@ -13,7 +13,7 @@ The current frontend is a demo and testing surface for the buyer engine. The sam
 - Five manual strategies: Baseline, Meso, Boulware, Conceder, and Tit-for-Tat
 - Session history with structured buyer reasoning and utility snapshots
 - AI-assisted supplier message parsing and buyer message generation
-- Demo frontend for product demonstration and testing of the buyer workflow
+- Supplier-facing frontend for session setup and live negotiation
 
 ## Prerequisites
 
@@ -59,7 +59,7 @@ Notes:
 - When the backend runs outside Docker and Ollama runs locally, `http://localhost:11434` is the default.
 - For OpenAI-compatible setups, point `AI_BASE_URL` to the `/v1` root and set `AI_API_KEY` if the provider requires bearer auth.
 - `VITE_API_BASE_URL` is only needed when the frontend runs outside Docker.
-- The negotiation engine is rule-based, but the current supplier-message flow still calls `/api/ai/parse-offer`, so the app needs a configured and reachable AI model during normal UI use.
+- The negotiation engine is rule-based, but the supplier-message flow calls `/api/ai/parse-offer`, so the app needs a configured and reachable AI model during normal UI use.
 
 ### 2. Start the stack
 
@@ -129,7 +129,7 @@ AI is present, but it does not decide the deal.
 - AI can generate buyer-facing negotiation text.
 - The accept, counter, and reject decision stays rule-based in the backend.
 
-Today that parsing flow combines the model response with backend heuristics for things like option selection and fallback handling. It is not a free-form agent deciding the negotiation.
+That parsing flow combines the model response with backend heuristics for option selection and fallback handling. It is not a free-form system deciding the negotiation.
 
 ## Strategies
 
@@ -143,14 +143,16 @@ Manual strategy changes are supported from session settings.
 
 ## Docs
 
-| Document                                                 | Focus                                                           |
-| -------------------------------------------------------- | --------------------------------------------------------------- |
-| [docs/README.md](docs/README.md)                         | Docs index and suggested reading order                          |
-| [docs/architecture.md](docs/architecture.md)             | Frontend, backend, database, and AI flow in one place           |
-| [docs/negotiation-engine.md](docs/negotiation-engine.md) | Scoring, decision rules, issue tradeoffs, and counteroffer flow |
-| [docs/strategies.md](docs/strategies.md)                 | Current strategy behavior and intent                            |
-| [docs/api.md](docs/api.md)                               | REST endpoints, payloads, and example requests                  |
-| [TASK.md](TASK.md)                                       | Original challenge brief                                        |
+| Document                                                 | Focus                                                                   |
+| -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [docs/README.md](docs/README.md)                         | Docs index and suggested reading order                                  |
+| [docs/architecture.md](docs/architecture.md)             | Frontend, backend, database, and AI flow in one place                   |
+| [docs/negotiation-engine.md](docs/negotiation-engine.md) | Scoring, decision rules, issue tradeoffs, and counteroffer flow         |
+| [docs/parsing.md](docs/parsing.md)                       | Supplier-message parsing rules, intent examples, and fallback behavior  |
+| [docs/testing.md](docs/testing.md)                       | Test strategy, suite structure, matrix interpretation, and testing gaps |
+| [docs/strategies.md](docs/strategies.md)                 | Strategy behavior and intent                                            |
+| [docs/api.md](docs/api.md)                               | REST endpoints, payloads, and example requests                          |
+| [TASK.md](TASK.md)                                       | Original challenge brief                                                |
 
 ## Project layout
 
@@ -168,6 +170,7 @@ negotiator/
 │   ├── architecture.md
 │   ├── api.md
 │   ├── negotiation-engine.md
+│   ├── parsing.md
 │   ├── README.md
 │   └── strategies.md
 ├── frontend/
@@ -185,8 +188,8 @@ negotiator/
 - New sessions start from the configuration page, not directly in the chat.
 - Strategy selection is manual. The system does not auto-switch strategies during a live negotiation.
 - The frontend is supplier-facing. The backend represents the buyer.
-- The current web UI is a demonstration layer, not the final required product channel.
-- In future work, the same buyer engine could be exposed through supplier email or chat workflows instead of this demo-only interface.
+- The web UI is one supplier-facing interface for the negotiation flow.
+- The same buyer engine can be used through other supplier-facing channels if needed.
 - If you want the deeper algorithm details, use the docs above instead of making the root README longer.
 
 ## Roadmap

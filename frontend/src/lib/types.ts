@@ -55,6 +55,10 @@ export interface ApiConversationDebug {
   focusIssue?: string | null;
   evaluation?: ApiEvaluation | null;
   counterOfferSummary: string[];
+  supplierIntentType?: string | null;
+  supplierIntentSource?: string | null;
+  supplierSelectedBuyerOfferIndex?: number | null;
+  supplierIntentDetails?: string | null;
 }
 
 export interface ApiConversationEvent {
