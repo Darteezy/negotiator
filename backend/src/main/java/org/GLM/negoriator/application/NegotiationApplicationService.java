@@ -542,8 +542,14 @@ public class NegotiationApplicationService {
 			return activeBuyerOffers.get(selectedOfferIndex - 1);
 		}
 
-		if (supplierIntent.acceptsBuyerOffer() && activeBuyerOffers.size() == 1) {
-			return activeBuyerOffers.getFirst();
+		if (supplierIntent.acceptsBuyerOffer()) {
+			if (activeBuyerOffers.size() == 1) {
+				return activeBuyerOffers.getFirst();
+			}
+			if (session.getStrategy() == NegotiationStrategy.MESO) {
+				// Meso may keep several live options, but the first buyer offer remains the primary settlement path.
+				return activeBuyerOffers.getFirst();
+			}
 		}
 
 		return null;
