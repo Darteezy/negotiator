@@ -453,6 +453,42 @@ class NegotiationApplicationServiceTest {
 	}
 
 	@Test
+	void explicitAcceptCanCloseOnPrimaryMesoOfferWithoutRepeatingBuyerTerms() {
+		NegotiationSession startedSession = service.startSession(
+			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
+
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 30, 24), "Price 120, payment 60, delivery 30, contract 24");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 21, 24), "Price 120, payment 60, delivery 21, contract 24");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 14, 24), "Price 120, payment 60, delivery 14, contract 24");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 14, 12), "Price 120, payment 60, delivery 14, contract 12");
+		submit(startedSession, new OfferVector(new BigDecimal("120.00"), 60, 7, 12), "Price 120, payment 60, delivery 7, contract 12");
+		NegotiationSession pendingAcceptanceSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+			"Price 120, payment 60, delivery 7, contract 12");
+
+		NegotiationOffer primaryBuyerOffer = pendingAcceptanceSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == 6)
+			.sorted(Comparator.comparing(org.GLM.negoriator.domain.NegotiationOffer::getCreatedAt))
+			.findFirst()
+			.orElseThrow();
+		assertEquals(0, primaryBuyerOffer.toOfferVector().price().compareTo(new BigDecimal("113.40")));
+		assertEquals(12, primaryBuyerOffer.toOfferVector().contractMonths());
+
+		NegotiationSession acceptedSession = submit(
+			pendingAcceptanceSession,
+			new OfferVector(new BigDecimal("120.00"), 60, 7, 12),
+			"accept");
+		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
+
+		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
+		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
+		assertNotNull(acceptedDecision.getCounterOffer());
+		assertTrue(acceptedDecision.getCounterOffer().toOfferVector().matches(primaryBuyerOffer.toOfferVector()));
+	}
+
+	@Test
 	void exactBuyerOfferMatchCanCloseEvenWhenSupplierMessageIsUnclear() {
 		NegotiationSession startedSession = service.startSession(
 			NegotiationDefaults.startSessionCommand(NegotiationStrategy.BOULWARE));
