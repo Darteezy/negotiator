@@ -147,6 +147,7 @@ Manual strategy changes are supported from session settings.
 | -------------------------------------------------------- | ----------------------------------------------------------------------- |
 | [docs/README.md](docs/README.md)                         | Docs index and suggested reading order                                  |
 | [docs/architecture.md](docs/architecture.md)             | Frontend, backend, database, and AI flow in one place                   |
+| [docs/MATH.md](docs/MATH.md)                             | Equations, utility math, decision curves, and code-level engine logic   |
 | [docs/negotiation-engine.md](docs/negotiation-engine.md) | Scoring, decision rules, issue tradeoffs, and counteroffer flow         |
 | [docs/parsing.md](docs/parsing.md)                       | Supplier-message parsing rules, intent examples, and fallback behavior  |
 | [docs/testing.md](docs/testing.md)                       | Test strategy, suite structure, matrix interpretation, and testing gaps |
