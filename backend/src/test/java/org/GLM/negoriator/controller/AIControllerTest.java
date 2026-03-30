@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.GLM.negoriator.ai.AiGatewayService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 class AIControllerTest {
@@ -79,6 +78,47 @@ class AIControllerTest {
 	}
 
 	@Test
+	void parseOfferIgnoresAiConstraintsWhenMessageOnlyStatesCurrentTerms() {
+		AiGatewayService gateway = new StubAiGatewayService("""
+			{"price":120,"paymentDays":50,"deliveryDays":30,"contractMonths":12,"selectedCounterOfferIndex":null,"agreesToBuyerTerms":false,"supplierConstraints":{"priceFloor":120,"paymentDaysCeiling":50,"deliveryDaysFloor":30,"contractMonthsFloor":12}}
+			""");
+
+		AIController controller = new AIController(gateway, objectMapper);
+
+		AIController.ParseOfferResponse response = controller.parseOffer(new AIController.ParseOfferRequest(
+			"Hi Price 120 delivery 30, payment 50, contract 12",
+			new Terms(90.0, 60, 7, 6),
+			java.util.List.of()
+		));
+
+		assertEquals(120.0, response.price());
+		assertEquals(50, response.paymentDays());
+		assertEquals(30, response.deliveryDays());
+		assertEquals(12, response.contractMonths());
+		assertEquals(null, response.supplierConstraints());
+	}
+
+	@Test
+	void parseOfferKeepsExplicitConstraintPhrasesAcrossAllDimensions() {
+		AiGatewayService gateway = new StubAiGatewayService("""
+			{"price":120,"paymentDays":50,"deliveryDays":30,"contractMonths":12,"selectedCounterOfferIndex":null,"agreesToBuyerTerms":false,"supplierConstraints":{"priceFloor":120,"paymentDaysCeiling":50,"deliveryDaysFloor":30,"contractMonthsFloor":12}}
+			""");
+
+		AIController controller = new AIController(gateway, objectMapper);
+
+		AIController.ParseOfferResponse response = controller.parseOffer(new AIController.ParseOfferRequest(
+			"The lowest price is 120, maximum payment is 50 days, the fastest delivery we can do is 30 days, and the minimum contract is 12 months.",
+			new Terms(90.0, 60, 7, 6),
+			java.util.List.of()
+		));
+
+		assertEquals(120.0, response.supplierConstraints().priceFloor());
+		assertEquals(50, response.supplierConstraints().paymentDaysCeiling());
+		assertEquals(30, response.supplierConstraints().deliveryDaysFloor());
+		assertEquals(12, response.supplierConstraints().contractMonthsFloor());
+	}
+
+	@Test
 	void parseOfferAppliesSupplierConstraintsToSelectedCounterOfferBase() {
 		AiGatewayService gateway = new StubAiGatewayService("""
 			{"selectedCounterOfferIndex":3,"price":null,"paymentDays":null,"deliveryDays":null,"contractMonths":null,"supplierConstraints":{"priceFloor":null,"paymentDaysCeiling":null,"deliveryDaysFloor":12,"contractMonthsFloor":null}}
@@ -105,16 +145,13 @@ class AIControllerTest {
 
 	@Test
 	void parseOfferReturnsServiceUnavailableWhenAiModelIsUnavailable() {
-		AiGatewayService failingGateway = new AiGatewayService(
-			RestClient.builder(),
-			objectMapper,
-			"ollama",
-			"http://localhost:11434",
-			"test-model",
-			""
-		) {
+		AiGatewayService failingGateway = new AiGatewayService("ollama", "test-model", null) {
 			@Override
-			public String completeJson(String systemPrompt, String userPrompt) {
+			public <T> T completeStructured(
+				String systemPrompt,
+				String userPrompt,
+				org.springframework.ai.converter.StructuredOutputConverter<T> outputConverter
+			) {
 				throw new IllegalArgumentException("AI provider returned an empty response.");
 			}
 		};
@@ -143,20 +180,17 @@ class AIControllerTest {
 		private final String response;
 
 		private StubAiGatewayService(String response) {
-			super(
-				RestClient.builder(),
-				objectMapper,
-				"ollama",
-				"http://localhost:11434",
-				"test-model",
-				""
-			);
+			super("ollama", "test-model", null);
 			this.response = response;
 		}
 
 		@Override
-		public String completeJson(String systemPrompt, String userPrompt) {
-			return response;
+		public <T> T completeStructured(
+			String systemPrompt,
+			String userPrompt,
+			org.springframework.ai.converter.StructuredOutputConverter<T> outputConverter
+		) {
+			return outputConverter.convert(response);
 		}
 	}
 

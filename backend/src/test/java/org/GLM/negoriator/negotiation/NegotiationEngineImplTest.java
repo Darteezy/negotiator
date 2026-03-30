@@ -325,8 +325,9 @@ class NegotiationEngineImplTest {
 			null));
 
 		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
-		assertTrue(response.counterOffers().size() > 1);
+		assertEquals(3, response.counterOffers().size());
 		assertTrue(response.explanation().contains("Option 1: Price 104.00, payment 35 days, delivery 20 days, contract 18 months"));
+		assertTrue(response.explanation().contains("Option 3:"));
 	}
 
 	@Test

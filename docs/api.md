@@ -209,10 +209,14 @@ Supported `supplierIntentSource` values:
 
 Parses a supplier message into structured terms.
 
-This endpoint supports two providers:
+This endpoint uses the single active provider configured for the backend.
+
+Supported provider families:
 
 - `ollama`
-- `openai`
+- `openai-compatible`
+
+`openai-compatible` covers OpenAI and OpenAI-compatible endpoints such as OpenRouter.
 
 If you use Ollama:
 
@@ -220,7 +224,15 @@ If you use Ollama:
 - `AI_BASE_URL` must point to that server
 - `AI_CHAT_MODEL` must exist in that Ollama instance
 
+If you use `openai-compatible`:
+
+- `AI_BASE_URL` should point to the provider root
+- `AI_API_KEY` must match that provider
+- `AI_CHAT_MODEL` must be a model name accepted by that provider
+
 The backend also applies deterministic option-selection and fallback handling rules, so this is not just a raw model passthrough.
+
+Internally the backend uses Spring AI for chat calls and structured output parsing, but the REST contract of this endpoint stays the same.
 
 Supplier-message handling is layered:
 

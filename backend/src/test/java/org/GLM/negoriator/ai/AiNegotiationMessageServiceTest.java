@@ -22,11 +22,8 @@ import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationStrategy;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferEvaluation;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 
 class AiNegotiationMessageServiceTest {
-
-	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	@Test
 	void composeOpeningMessageBuildsFormalOfficialPrompt() {
@@ -88,6 +85,47 @@ class AiNegotiationMessageServiceTest {
 		assertFalse(gateway.userPrompt.contains("Focus issue"));
 		assertTrue(gateway.userPrompt.contains("Supplier-facing guidance:"));
 		assertTrue(gateway.userPrompt.contains("The main open point is price."));
+	}
+
+	@Test
+	void composeBuyerReplyKeepsAllMesoOptionsInSupplierMessage() {
+		CapturingAiGatewayService gateway = new CapturingAiGatewayService(
+			"We can continue with a couple of options."
+		);
+		AiNegotiationMessageService service = new AiNegotiationMessageService(gateway);
+
+		String response = service.composeBuyerReply(new AiNegotiationMessageService.BuyerReplyMessageRequest(
+			2,
+			6,
+			"COUNTER",
+			"COUNTERED",
+			"We can adjust if one structure works.",
+			new OfferVector(new BigDecimal("108.00"), 30, 15, 12),
+			new OfferVector(new BigDecimal("102.00"), 45, 15, 12),
+			List.of(
+				new OfferVector(new BigDecimal("102.00"), 45, 15, 12),
+				new OfferVector(new BigDecimal("101.00"), 40, 14, 12),
+				new OfferVector(new BigDecimal("100.00"), 35, 15, 10)),
+			DecisionReason.COUNTER_TO_CLOSE_GAP,
+			NegotiationIssue.PRICE,
+			NegotiationStrategy.MESO,
+			"Meso is active with multiple structured options.",
+			new OfferEvaluation(
+				new BigDecimal("0.6200"),
+				new BigDecimal("0.4100"),
+				new BigDecimal("0.7800"),
+				new BigDecimal("0.3500"),
+				new BigDecimal("0.1200"))
+		));
+
+		assertEquals(
+			"Thank you for the update. We can continue on one of the following structures:\n"
+				+ "- Option 1: price 102.00, payment in 45 days, delivery in 15 days, and a 12 month contract\n"
+				+ "- Option 2: price 101.00, payment in 40 days, delivery in 14 days, and a 12 month contract\n"
+				+ "- Option 3: price 100.00, payment in 35 days, delivery in 15 days, and a 10 month contract\n"
+				+ "Please let me know which option is closest on your side.",
+			response);
+		assertFalse(gateway.called);
 	}
 
 	@Test
@@ -160,23 +198,18 @@ class AiNegotiationMessageServiceTest {
 	private final class CapturingAiGatewayService extends AiGatewayService {
 
 		private final String response;
+		private boolean called;
 		private String systemPrompt;
 		private String userPrompt;
 
 		private CapturingAiGatewayService(String response) {
-			super(
-				RestClient.builder(),
-				objectMapper,
-				"ollama",
-				"http://localhost:11434",
-				"test-model",
-				""
-			);
+			super("ollama", "test-model", null);
 			this.response = response;
 		}
 
 		@Override
 		public String complete(String systemPrompt, String userPrompt) {
+			this.called = true;
 			this.systemPrompt = systemPrompt;
 			this.userPrompt = userPrompt;
 			return response;

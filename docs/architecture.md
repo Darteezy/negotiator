@@ -105,12 +105,14 @@ The repository uses pessimistic write locking for live session updates so concur
 
 ### AI provider
 
-The backend supports two provider modes:
+The backend supports two provider families through Spring AI:
 
 - `ollama`
-- `openai`
+- `openai-compatible`
 
-The provider is configured through environment variables.
+Only one provider is active at a time, selected through environment variables.
+
+The `openai-compatible` family covers OpenAI and OpenAI-compatible endpoints such as OpenRouter.
 
 AI is used for:
 
@@ -124,6 +126,12 @@ AI is not used for:
 - reservation checks
 - strategy selection
 - accept, counter, reject decisions
+
+Implementation notes:
+
+- `ChatClient` is the main Spring AI entry point for model calls
+- prompt text is externalized in backend resource templates
+- structured AI responses are converted into typed backend objects before negotiation logic continues
 
 ## Request flow
 

@@ -1,4 +1,5 @@
 import botAvatar from "@/assets/robot.svg";
+import type { OfferTerms } from "@/lib/types";
 
 interface Props {
   title: string;
@@ -7,6 +8,7 @@ interface Props {
   align?: "left" | "right";
   highlight?: boolean;
   mesoLabel?: string;
+  counterOffers?: OfferTerms[];
   detailRows?: Array<{ label: string; value: string }>;
 }
 
@@ -17,9 +19,12 @@ export function OfferCard({
   align = "left",
   highlight = false,
   mesoLabel,
+  counterOffers = [],
   detailRows = [],
 }: Props) {
   const isBuyer = actor === "buyer";
+  const visibleMessage =
+    counterOffers.length > 1 ? stripCounterOfferLines(message) : message;
   const alignment =
     align === "right" ? "items-end text-right" : "items-start text-left";
   const detailsSummaryAlignment =
@@ -56,8 +61,27 @@ export function OfferCard({
       <div
         className={`w-full max-w-3xl rounded-2xl border border-[var(--line)] px-4 py-3 shadow-sm shadow-black/10 ${bubble} ${highlight ? "ring-2 ring-[var(--accent)]" : ""}`}
       >
-        {message ? (
-          <p className="text-[13px] leading-6 whitespace-pre-wrap">{message}</p>
+        {visibleMessage ? (
+          <p className="text-[13px] leading-6 whitespace-pre-wrap">
+            {visibleMessage}
+          </p>
+        ) : null}
+        {counterOffers.length > 1 ? (
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {counterOffers.map((offer, index) => (
+              <div
+                key={`${index + 1}-${offer.price}-${offer.paymentDays}-${offer.deliveryDays}-${offer.contractMonths}`}
+                className="rounded-xl border border-[var(--line)] bg-black/10 px-3 py-2"
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+                  Option {index + 1}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-[12px] leading-5 text-[var(--ink-strong)]">
+                  {formatOfferTerms(offer)}
+                </p>
+              </div>
+            ))}
+          </div>
         ) : null}
         {detailRows.length > 0 ? (
           <details className="mt-3 rounded-xl border border-[var(--line)] bg-black/10 px-3 py-2 text-[12px] text-[var(--ink-soft)]">
@@ -86,4 +110,21 @@ export function OfferCard({
       </div>
     </div>
   );
+}
+
+function stripCounterOfferLines(message?: string) {
+  if (!message) {
+    return message;
+  }
+
+  const visibleLines = message
+    .split("\n")
+    .filter((line) => !/^\s*-\s*Option\s+\d+:/i.test(line.trim()));
+  const visibleMessage = visibleLines.join("\n").trim();
+
+  return visibleMessage || undefined;
+}
+
+function formatOfferTerms(offer: OfferTerms) {
+  return `Price €${offer.price.toFixed(2)}\nPayment ${offer.paymentDays} days\nDelivery ${offer.deliveryDays} days\nContract ${offer.contractMonths} months`;
 }

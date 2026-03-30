@@ -3,11 +3,16 @@ package org.GLM.negoriator.controller;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.GLM.negoriator.ai.AiGatewayService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,21 +25,26 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api")
 public class AIController {
 
-    private static final String OFFER_PARSE_PROMPT = "You extract the supplier's final intended negotiation terms from a natural-language message. "
-        + "Return JSON only with keys price, paymentDays, deliveryDays, contractMonths, selectedCounterOfferIndex, agreesToBuyerTerms, supplierConstraints. "
-        + "Use referenceTerms as the default supplier baseline when no buyer option is selected. "
-        + "counterOffers contains the latest buyer options, where counterOffers[0] is option 1. "
-        + "Infer intent from meaning, not exact keywords. Suppliers may agree with varied wording such as saying a proposal works, choosing an option indirectly, referring to the faster-delivery option, the longer-payment option, the original buyer option, the same terms, or saying they are ready to proceed. "
-        + "If the supplier is clearly choosing one buyer option, set selectedCounterOfferIndex to the 1-based option number and use that option as the semantic base even if some fields are omitted. "
-        + "If the supplier is clearly agreeing to the buyer's terms and there is only one buyer option, set agreesToBuyerTerms to true. "
-        + "If the supplier states a hard limit, include it inside supplierConstraints. Examples: lowest price 110 means supplierConstraints.priceFloor=110; maximum payment 45 days means supplierConstraints.paymentDaysCeiling=45; fastest delivery 20 days means supplierConstraints.deliveryDaysFloor=20; minimum contract 12 months means supplierConstraints.contractMonthsFloor=12. "
-        + "If the supplier is making a fresh counteroffer instead of accepting, leave selectedCounterOfferIndex null and agreesToBuyerTerms false. "
-        + "Apply relative adjustments such as 5 euro higher or 10 days faster. Do not include markdown fences.";
+    private static final Logger log = LoggerFactory.getLogger(AIController.class);
+    private static final Resource OFFER_PARSE_PROMPT_TEMPLATE = new ClassPathResource("prompts/ai/parse-offer-system.st");
     private static final Pattern OPTION_PATTERN = Pattern.compile("\\b(?:option|offer)\\s*(\\d+|one|two|three|first|second|third)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern ORIGINAL_OPTION_PATTERN = Pattern.compile("\\b(original|first)\\s+(?:option|offer)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern ACCEPT_PATTERN = Pattern.compile("\\b(accept|accepted|agree|agreed|works for us|deal|ok|okay|confirmed)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PRICE_FLOOR_PATTERN = Pattern.compile(
+        "\\b(lowest|minimum|min|floor|cannot go below|can't go below|no lower than|not below|bottom price|final price|best price)\\b",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAYMENT_CEILING_PATTERN = Pattern.compile(
+        "\\b(max(?:imum)?|no more than|not more than|cannot do more than|can't do more than|up to)\\b.*\\bpayment|\\bpayment\\b.*\\b(max(?:imum)?|no more than|not more than|cannot do more than|can't do more than|up to)\\b",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern DELIVERY_FLOOR_PATTERN = Pattern.compile(
+        "\\b(fastest|earliest|soonest|min(?:imum)?|at least|no earlier than|cannot deliver before|can't deliver before)\\b.*\\b(delivery|deliver)|\\b(delivery|deliver)\\b.*\\b(fastest|earliest|soonest|min(?:imum)?|at least|no earlier than|cannot deliver before|can't deliver before)\\b",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern CONTRACT_FLOOR_PATTERN = Pattern.compile(
+        "\\b(min(?:imum)?|at least|no shorter than|cannot do shorter|can't do shorter)\\b.*\\b(contract|month)|\\b(contract|month)\\b.*\\b(min(?:imum)?|at least|no shorter than|cannot do shorter|can't do shorter)\\b",
+        Pattern.CASE_INSENSITIVE);
 
     private final AiGatewayService aiGatewayService;
+    private final BeanOutputConverter<AiParseOfferResult> outputConverter;
     private final ObjectMapper objectMapper;
 
     public AIController(
@@ -42,6 +52,7 @@ public class AIController {
         ObjectMapper objectMapper
     ) {
         this.aiGatewayService = aiGatewayService;
+        this.outputConverter = new BeanOutputConverter<>(AiParseOfferResult.class, objectMapper);
         this.objectMapper = objectMapper;
     }
 
@@ -54,24 +65,21 @@ public class AIController {
         }
 
         try {
-            String content = aiGatewayService.completeJson(
-                OFFER_PARSE_PROMPT,
-                objectMapper.writeValueAsString(request));
+            AiParseOfferResult aiResult = aiGatewayService.completeStructured(
+                renderPrompt(OFFER_PARSE_PROMPT_TEMPLATE),
+                objectMapper.writeValueAsString(request),
+                outputConverter);
 
-            JsonNode jsonNode = extractJson(content);
-            OfferSnapshot baseOffer = resolveBaseOffer(request, jsonNode);
+            OfferSnapshot baseOffer = resolveBaseOffer(request, aiResult);
             return applySupplierConstraints(mergeWithBase(baseOffer, new ParseOfferResponse(
-                readDecimal(jsonNode, "price"),
-                readInteger(jsonNode, "paymentDays"),
-                readInteger(jsonNode, "deliveryDays"),
-                readInteger(jsonNode, "contractMonths"),
-                readSupplierConstraints(jsonNode))));
-        } catch (JsonProcessingException exception) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_GATEWAY,
-                "AI parsing returned invalid JSON for the supplier message.",
-                exception);
+                aiResult.price(),
+                aiResult.paymentDays(),
+                aiResult.deliveryDays(),
+                aiResult.contractMonths(),
+                normalizeSupplierConstraints(request.supplierMessage(), aiResult.supplierConstraints()))));
         } catch (Exception exception) {
+            log.warn("AI parse-offer request failed: {}", exception.getMessage());
+            log.debug("AI parse-offer stack trace", exception);
             throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Supplier message parsing requires a configured and reachable AI model.",
@@ -79,29 +87,8 @@ public class AIController {
         }
     }
 
-    private JsonNode extractJson(String content) throws JsonProcessingException {
-        if (content == null) {
-            throw new IllegalArgumentException("AI parser returned no content.");
-        }
-
-        int start = content.indexOf('{');
-        int end = content.lastIndexOf('}');
-
-        if (start < 0 || end <= start) {
-            throw new IllegalArgumentException("AI parser did not return JSON.");
-        }
-
-        return objectMapper.readTree(content.substring(start, end + 1));
-    }
-
-    private Double readDecimal(JsonNode jsonNode, String fieldName) {
-        JsonNode value = jsonNode.get(fieldName);
-        return value == null || value.isNull() ? null : value.asDouble();
-    }
-
-    private Integer readInteger(JsonNode jsonNode, String fieldName) {
-        JsonNode value = jsonNode.get(fieldName);
-        return value == null || value.isNull() ? null : value.asInt();
+    private String renderPrompt(Resource resource) {
+        return new PromptTemplate(resource).render();
     }
 
     private ParseOfferResponse mergeWithBase(OfferSnapshot baseOffer, ParseOfferResponse parsed) {
@@ -145,22 +132,25 @@ public class AIController {
             constraints);
     }
 
-    private SupplierConstraintsResponse readSupplierConstraints(JsonNode jsonNode) {
-        JsonNode constraints = jsonNode.get("supplierConstraints");
-        if (constraints == null || constraints.isNull()) {
+    private SupplierConstraintsResponse normalizeSupplierConstraints(
+        String supplierMessage,
+        SupplierConstraintsResponse constraints
+    ) {
+        if (constraints == null || constraints.isEmpty()) {
             return null;
         }
 
-        SupplierConstraintsResponse response = new SupplierConstraintsResponse(
-            readDecimal(constraints, "priceFloor"),
-            readInteger(constraints, "paymentDaysCeiling"),
-            readInteger(constraints, "deliveryDaysFloor"),
-            readInteger(constraints, "contractMonthsFloor"));
+        String message = supplierMessage == null ? "" : supplierMessage;
+        SupplierConstraintsResponse filtered = new SupplierConstraintsResponse(
+            PRICE_FLOOR_PATTERN.matcher(message).find() ? constraints.priceFloor() : null,
+            PAYMENT_CEILING_PATTERN.matcher(message).find() ? constraints.paymentDaysCeiling() : null,
+            DELIVERY_FLOOR_PATTERN.matcher(message).find() ? constraints.deliveryDaysFloor() : null,
+            CONTRACT_FLOOR_PATTERN.matcher(message).find() ? constraints.contractMonthsFloor() : null);
 
-        return response.isEmpty() ? null : response;
+        return filtered.isEmpty() ? null : filtered;
     }
 
-    private OfferSnapshot resolveBaseOffer(ParseOfferRequest request, JsonNode aiResponse) {
+    private OfferSnapshot resolveBaseOffer(ParseOfferRequest request, AiParseOfferResult aiResponse) {
         int aiSelectedOptionIndex = selectedOptionIndex(aiResponse);
         if (aiSelectedOptionIndex >= 0) {
             return selectedCounterOffer(request, aiSelectedOptionIndex);
@@ -220,8 +210,8 @@ public class AIController {
         return optionNumber(matcher.group(1));
     }
 
-    private int selectedOptionIndex(JsonNode aiResponse) {
-        Integer selectedCounterOfferIndex = readInteger(aiResponse, "selectedCounterOfferIndex");
+    private int selectedOptionIndex(AiParseOfferResult aiResponse) {
+        Integer selectedCounterOfferIndex = aiResponse.selectedCounterOfferIndex();
         if (selectedCounterOfferIndex == null) {
             return -1;
         }
@@ -229,9 +219,8 @@ public class AIController {
         return Math.max(-1, selectedCounterOfferIndex - 1);
     }
 
-    private boolean agreesToBuyerTerms(JsonNode aiResponse) {
-        JsonNode value = aiResponse.get("agreesToBuyerTerms");
-        return value != null && !value.isNull() && value.asBoolean(false);
+    private boolean agreesToBuyerTerms(AiParseOfferResult aiResponse) {
+        return Boolean.TRUE.equals(aiResponse.agreesToBuyerTerms());
     }
 
     private int counterOfferCount(ParseOfferRequest request) {
@@ -317,6 +306,17 @@ public class AIController {
         Integer paymentDays,
         Integer deliveryDays,
         Integer contractMonths
+    ) {
+    }
+
+    private record AiParseOfferResult(
+        Double price,
+        Integer paymentDays,
+        Integer deliveryDays,
+        Integer contractMonths,
+        Integer selectedCounterOfferIndex,
+        Boolean agreesToBuyerTerms,
+        SupplierConstraintsResponse supplierConstraints
     ) {
     }
 }

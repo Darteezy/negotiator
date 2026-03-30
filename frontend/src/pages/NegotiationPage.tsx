@@ -264,6 +264,12 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
                   actor={event.actor === "buyer" ? "buyer" : "supplier"}
                   message={event.message}
                   align={event.actor === "supplier" ? "right" : "left"}
+                  mesoLabel={
+                    event.counterOffers.length > 1
+                      ? `${event.counterOffers.length} options`
+                      : undefined
+                  }
+                  counterOffers={event.counterOffers}
                   detailRows={buildDetailRows(event)}
                   highlight={
                     event.eventType === "BUYER_REPLY" &&
@@ -995,7 +1001,7 @@ function buildDetailRows(event: ApiConversationEvent) {
       ].join("\n"),
     });
   }
-  if (debug?.counterOfferSummary?.length) {
+  if (debug?.counterOfferSummary?.length && event.counterOffers.length <= 1) {
     rows.push({
       label: "Counteroffers",
       value: debug.counterOfferSummary.join("\n"),

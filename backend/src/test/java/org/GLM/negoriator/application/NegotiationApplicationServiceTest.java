@@ -543,6 +543,28 @@ class NegotiationApplicationServiceTest {
 		assertTrue(acceptedDecision.getCounterOffer().toOfferVector().matches(optionOne.toOfferVector()));
 	}
 
+	@Test
+	void mesoFirstRoundPersistsAndExplainsThreeOptionsForDefaultBoundaryOffer() {
+		NegotiationSession startedSession = service.startSession(
+			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
+
+		NegotiationSession counteredSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("120.00"), 50, 30, 12),
+			"Hi Price 120 delivery 30, payment 50, contract 12");
+		NegotiationDecision counterDecision = latestDecision(counteredSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, counteredSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, counterDecision.getDecision());
+		assertEquals(3, counteredSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == 1)
+			.count());
+		assertTrue(counterDecision.getExplanation().contains("Option 1:"));
+		assertTrue(counterDecision.getExplanation().contains("Option 2:"));
+		assertTrue(counterDecision.getExplanation().contains("Option 3:"));
+	}
+
 	private NegotiationSession submit(NegotiationSession session, OfferVector offer, String message) {
 		NegotiationSession updatedSession = service.submitSupplierOffer(session.getId(), offer, null, message);
 		return service.getSession(updatedSession.getId());
@@ -569,13 +591,7 @@ class NegotiationApplicationServiceTest {
 		private String jsonResponse;
 
 		ControlledAiGatewayService(ObjectMapper objectMapper) {
-			super(
-				RestClient.builder().requestFactory(new JdkClientHttpRequestFactory()),
-				objectMapper,
-				"ollama",
-				"http://localhost:11434",
-				"test-model",
-				"");
+			super("ollama", "test-model", null);
 		}
 
 		void setJsonResponse(String jsonResponse) {
@@ -592,11 +608,15 @@ class NegotiationApplicationServiceTest {
 		}
 
 		@Override
-		public String completeJson(String systemPrompt, String userPrompt) {
+		public <T> T completeStructured(
+			String systemPrompt,
+			String userPrompt,
+			org.springframework.ai.converter.StructuredOutputConverter<T> outputConverter
+		) {
 			if (jsonResponse == null) {
 				throw new IllegalArgumentException("AI fallback unavailable in tests.");
 			}
-			return jsonResponse;
+			return outputConverter.convert(jsonResponse);
 		}
 	}
 }

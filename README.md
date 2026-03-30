@@ -44,20 +44,32 @@ POSTGRES_DB=postgres
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=change-me
 
+# Ollama example
 AI_PROVIDER=ollama
 AI_BASE_URL=http://host.docker.internal:11434
-AI_API_KEY=
 AI_CHAT_MODEL=qwen3.5:9b
+```
+
+For `openai-compatible` providers such as OpenAI or OpenRouter:
+
+```env
+AI_PROVIDER=openai-compatible
+AI_BASE_URL=https://api.openai.com
+AI_API_KEY=your-api-key
+AI_CHAT_MODEL=gpt-4.1-mini
 ```
 
 Notes:
 
-- Supported AI providers are `ollama` and `openai`.
+- Supported AI provider families are `ollama` and `openai-compatible`.
+- Only one AI provider is active at a time. Select it through `AI_PROVIDER` in `.env`.
+- For pure Ollama usage, `AI_API_KEY` is not needed.
 - If you use Ollama, it must already be running and the model in `AI_CHAT_MODEL` must be available there.
+- `AI_CHAT_MODEL` is still needed for Ollama. The backend cannot safely infer which installed model you want to use.
 - Set both the AI server address and the model name in `.env` before starting the stack.
 - When the backend runs in Docker and Ollama runs on your host machine, use `http://host.docker.internal:11434`.
 - When the backend runs outside Docker and Ollama runs locally, `http://localhost:11434` is the default.
-- For OpenAI setups, point `AI_BASE_URL` to the server root, for example `https://api.openai.com`. Existing `/v1` values are normalized automatically.
+- For `openai-compatible`, point `AI_BASE_URL` to the provider root, for example `https://api.openai.com` or `https://openrouter.ai/api`. Existing `/v1` values are normalized automatically.
 - `VITE_API_BASE_URL` is only needed when the frontend runs outside Docker.
 - The negotiation engine is rule-based, but the supplier-message flow calls `/api/ai/parse-offer`, so the app needs a configured and reachable AI model during normal UI use.
 
@@ -129,7 +141,9 @@ AI is present, but it does not decide the deal.
 - AI can generate buyer-facing negotiation text.
 - The accept, counter, and reject decision stays rule-based in the backend.
 
-That parsing flow combines the model response with backend heuristics for option selection and fallback handling. It is not a free-form system deciding the negotiation.
+The backend uses Spring AI with one active chat provider configured at startup. The `openai-compatible` provider family covers OpenAI and OpenAI-compatible endpoints.
+
+That parsing flow combines structured model output with backend heuristics for option selection and fallback handling. It is not a free-form system deciding the negotiation.
 
 ## Strategies
 
