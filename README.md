@@ -57,7 +57,7 @@ Notes:
 - Set both the AI server address and the model name in `.env` before starting the stack.
 - When the backend runs in Docker and Ollama runs on your host machine, use `http://host.docker.internal:11434`.
 - When the backend runs outside Docker and Ollama runs locally, `http://localhost:11434` is the default.
-- For OpenAI-compatible setups, point `AI_BASE_URL` to the `/v1` root and set `AI_API_KEY` if the provider requires bearer auth.
+- For OpenAI setups, point `AI_BASE_URL` to the server root, for example `https://api.openai.com`. Existing `/v1` values are normalized automatically.
 - `VITE_API_BASE_URL` is only needed when the frontend runs outside Docker.
 - The negotiation engine is rule-based, but the supplier-message flow calls `/api/ai/parse-offer`, so the app needs a configured and reachable AI model during normal UI use.
 
