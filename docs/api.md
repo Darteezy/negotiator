@@ -12,7 +12,9 @@ http://localhost:8080
 
 ### `GET /api/negotiations/config/defaults`
 
-Returns the default session setup used by the frontend configuration page.
+Returns backend fallback session defaults together with strategy metadata.
+
+In the current web UI, this endpoint is mainly used for strategy metadata and reference values. The configuration screen keeps its own frontend-owned starting defaults instead of binding its numeric form fields directly to this response.
 
 Use it for:
 
@@ -41,7 +43,7 @@ Response highlights:
 
 Creates a new negotiation session.
 
-If you send no body, backend defaults are used. The frontend normally sends a full payload.
+If you send no body, backend fallback defaults are used. The frontend normally sends a full payload and should be treated as the source of truth for normal web-app sessions.
 
 Example:
 
@@ -85,6 +87,10 @@ Response highlights:
 - `buyerProfile`
 - `conversation`
 - `strategyDetails`
+
+Notes:
+
+- The frontend may normalize or widen submitted `bounds` so the supplied ideal and reservation terms remain inside the active negotiation range.
 
 ### `GET /api/negotiations/sessions/{sessionId}`
 
@@ -209,10 +215,14 @@ Supported `supplierIntentSource` values:
 
 Parses a supplier message into structured terms.
 
-This endpoint supports two providers:
+This endpoint uses the single active provider configured for the backend.
+
+Supported provider families:
 
 - `ollama`
-- `openai`
+- `openai-compatible`
+
+`openai-compatible` covers OpenAI and OpenAI-compatible endpoints such as OpenRouter.
 
 If you use Ollama:
 
@@ -220,7 +230,15 @@ If you use Ollama:
 - `AI_BASE_URL` must point to that server
 - `AI_CHAT_MODEL` must exist in that Ollama instance
 
+If you use `openai-compatible`:
+
+- `AI_BASE_URL` should point to the provider root
+- `AI_API_KEY` must match that provider
+- `AI_CHAT_MODEL` must be a model name accepted by that provider
+
 The backend also applies deterministic option-selection and fallback handling rules, so this is not just a raw model passthrough.
+
+Internally the backend uses Spring AI for chat calls and structured output parsing, but the REST contract of this endpoint stays the same.
 
 Supplier-message handling is layered:
 
@@ -228,6 +246,8 @@ Supplier-message handling is layered:
 - the negotiation submission flow then resolves supplier intent deterministically
 - only unresolved `UNCLEAR` intent cases may trigger AI fallback classification
 - if ambiguity remains, the backend asks for clarification instead of auto-closing the deal
+
+If the buyer is ready to close but the supplier message still does not provide a clear final acceptance, the backend returns a confirmation-style counter and waits for an explicit acceptance message.
 
 Supported supplier intent types in the submission flow:
 

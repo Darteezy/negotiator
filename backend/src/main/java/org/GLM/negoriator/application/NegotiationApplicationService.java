@@ -218,6 +218,10 @@ public class NegotiationApplicationService {
 			supplierMessage,
 			supplierIntent,
 			activeBuyerOffers);
+		NegotiationOffer pendingFinalConfirmationOffer = session.isAwaitingFinalConfirmation()
+			&& activeBuyerOffers.size() == 1
+			? activeBuyerOffers.getFirst()
+			: null;
 
 		NegotiationEngine.NegotiationResponse response = negotiationEngine.negotiate(
 			new NegotiationEngine.NegotiationRequest(
@@ -228,9 +232,18 @@ public class NegotiationApplicationService {
 				session.toNegotiationBounds(),
 				toEngineSupplierConstraints(activeConstraints)));
 
-		if (acceptedBuyerOffer != null
+		boolean matchedActiveBuyerOfferReadyToClose = acceptedBuyerOffer != null
 			&& response.decision() != NegotiationEngine.Decision.REJECT
-			&& response.evaluation().buyerUtility().compareTo(session.toBuyerProfile().reservationUtility()) >= 0) {
+			&& response.evaluation().buyerUtility().compareTo(session.toBuyerProfile().reservationUtility()) >= 0;
+		boolean clearSingleOfferAcceptance = activeBuyerOffers.size() == 1
+			&& supplierIntent.containsAcceptanceSignal()
+			&& !supplierIntent.proposesNewTerms()
+			&& !supplierIntent.rejectsOrDeclines();
+		boolean explicitSupplierFinalAcceptance = isExplicitFinalAcceptance(session, supplierIntent)
+			|| clearSingleOfferAcceptance;
+		NegotiationOffer finalizedBuyerOffer = acceptedBuyerOffer != null ? acceptedBuyerOffer : pendingFinalConfirmationOffer;
+
+		if (explicitSupplierFinalAcceptance && finalizedBuyerOffer != null) {
 			response = new NegotiationEngine.NegotiationResponse(
 				NegotiationEngine.Decision.ACCEPT,
 				NegotiationEngine.NegotiationState.ACCEPTED,
@@ -241,19 +254,22 @@ public class NegotiationApplicationService {
 				null,
 				"Accepted because the supplier agreed to the buyer's active offer from the previous round.");
 		}
-		boolean requiresExplicitSupplierAcceptance = acceptedBuyerOffer == null
-			&& response.decision() == NegotiationEngine.Decision.ACCEPT;
+		boolean requiresExplicitSupplierAcceptance = !explicitSupplierFinalAcceptance
+			&& (matchedActiveBuyerOfferReadyToClose || response.decision() == NegotiationEngine.Decision.ACCEPT);
 
 		if (requiresExplicitSupplierAcceptance) {
+			OfferVector confirmationTerms = finalizedBuyerOffer == null
+				? supplierOfferTerms
+				: finalizedBuyerOffer.toOfferVector();
 			response = new NegotiationEngine.NegotiationResponse(
 				NegotiationEngine.Decision.COUNTER,
 				NegotiationEngine.NegotiationState.COUNTERED,
-				java.util.List.of(supplierOfferTerms),
+				java.util.List.of(confirmationTerms),
 				response.evaluation(),
 				response.updatedSupplierBeliefs(),
-				response.reasonCode(),
+				NegotiationEngine.DecisionReason.FINAL_CONFIRMATION_REQUIRED,
 				null,
-				"Buyer is ready to close on these terms. Reply with accept to finalize the deal.");
+				"Buyer is ready to close on these terms. Please confirm with a clear accept to finalize the deal.");
 		}
 
 		ClarificationDirective clarificationDirective = clarificationDirective(
@@ -272,7 +288,7 @@ public class NegotiationApplicationService {
 			? java.util.List.of(new NegotiationOffer(
 				session.getCurrentRound(),
 				NegotiationParty.BUYER,
-				OfferTermsSnapshot.from(supplierOfferTerms)))
+				OfferTermsSnapshot.from(response.counterOffers().getFirst())))
 			: applySupplierConstraints(response.counterOffers(), supplierOfferTerms, activeConstraints).stream()
 				.map(offer -> new NegotiationOffer(
 					session.getCurrentRound(),
@@ -286,7 +302,6 @@ public class NegotiationApplicationService {
 		Integer resolvedSelectedBuyerOfferIndex = resolvedSelectedOfferIndex(activeBuyerOffers, supplierMessage, supplierIntent);
 		String supplierIntentDetails = supplierIntentDetails(
 			supplierIntent,
-			acceptedBuyerOffer,
 			clarificationDirective,
 			activeBuyerOffers,
 			resolvedSelectedBuyerOfferIndex);
@@ -294,6 +309,7 @@ public class NegotiationApplicationService {
 		for (NegotiationOffer buyerCounterOffer : buyerCounterOffers) {
 			session.addOffer(buyerCounterOffer);
 		}
+		session.setAwaitingFinalConfirmation(requiresExplicitSupplierAcceptance);
 
 		NegotiationDecisionType decisionType = clarificationDirective != null
 			? NegotiationDecisionType.COUNTER
@@ -342,7 +358,6 @@ public class NegotiationApplicationService {
 
 	private String supplierIntentDetails(
 		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent,
-		NegotiationOffer acceptedBuyerOffer,
 		ClarificationDirective clarificationDirective,
 		java.util.List<NegotiationOffer> activeBuyerOffers,
 		Integer resolvedSelectedBuyerOfferIndex
@@ -353,10 +368,6 @@ public class NegotiationApplicationService {
 					? " and AI fallback"
 					: "")
 				+ ", so the backend requested clarification against the current buyer offer context.";
-		}
-
-		if (acceptedBuyerOffer != null && supplierIntent.type() == SupplierMessageIntentParser.SupplierIntentType.UNCLEAR) {
-			return "Supplier terms exactly matched an active buyer offer, so the round was treated as acceptance even though the message text itself remained unclear.";
 		}
 
 		return switch (supplierIntent.type()) {
@@ -391,6 +402,19 @@ public class NegotiationApplicationService {
 			.orElse(supplierIntent);
 	}
 
+	private boolean isExplicitFinalAcceptance(
+		NegotiationSession session,
+		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent
+	) {
+		if (!supplierIntent.containsAcceptanceSignal()
+			|| supplierIntent.proposesNewTerms()
+			|| supplierIntent.rejectsOrDeclines()) {
+			return false;
+		}
+
+		return session.isAwaitingFinalConfirmation();
+	}
+
 	private java.util.List<NegotiationOffer> activeBuyerOffers(NegotiationSession session) {
 		if (session.getCurrentRound() <= 1) {
 			return java.util.List.of();
@@ -413,6 +437,7 @@ public class NegotiationApplicationService {
 		NegotiationOffer acceptedBuyerOffer
 	) {
 		if (supplierIntent.type() != SupplierMessageIntentParser.SupplierIntentType.UNCLEAR
+			|| session.isAwaitingFinalConfirmation()
 			|| acceptedBuyerOffer != null
 			|| activeBuyerOffers.isEmpty()) {
 			return null;
@@ -521,6 +546,10 @@ public class NegotiationApplicationService {
 			.findFirst()
 			.orElse(null);
 		if (supplierIntent.proposesNewTerms() || supplierIntent.rejectsOrDeclines()) {
+			return null;
+		}
+
+		if (supplierIntent.type() == SupplierMessageIntentParser.SupplierIntentType.UNCLEAR) {
 			return null;
 		}
 

@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS negotiation_sessions
+ADD COLUMN IF NOT EXISTS awaiting_final_confirmation BOOLEAN NOT NULL DEFAULT FALSE;

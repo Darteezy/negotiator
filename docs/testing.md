@@ -58,7 +58,7 @@ Coverage includes:
 
 - supplier messages are classified into the right intent types
 - MESO option selection stays open unless the supplier clearly accepts
-- exact buyer-offer matches can close even when wording is vague
+- exact buyer-offer matches no longer auto-close when wording is vague
 - ambiguous replies trigger clarification instead of accidental acceptance
 - AI fallback only affects unresolved `UNCLEAR` intent cases
 - buyer-acceptable supplier terms still require explicit supplier acceptance when needed

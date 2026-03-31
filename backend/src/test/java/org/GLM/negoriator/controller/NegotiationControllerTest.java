@@ -11,12 +11,16 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.GLM.negoriator.ai.AiGatewayService;
 import org.GLM.negoriator.domain.NegotiationSessionRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -335,5 +339,29 @@ class NegotiationControllerTest {
 			.andExpect(jsonPath("$.conversation[4].debug.supplierIntentType").value("SELECT_COUNTER_OPTION"))
 			.andExpect(jsonPath("$.conversation[4].debug.supplierIntentSource").value("DETERMINISTIC"))
 			.andExpect(jsonPath("$.conversation[4].debug.supplierSelectedBuyerOfferIndex").value(2));
+	}
+
+	@TestConfiguration
+	static class TestAiGatewayConfiguration {
+
+		@Bean
+		@Primary
+		AiGatewayService testAiGatewayService() {
+			return new AiGatewayService("ollama", "test-model", null) {
+				@Override
+				public String complete(String systemPrompt, String userPrompt) {
+					throw new IllegalArgumentException("AI generation disabled in controller tests.");
+				}
+
+				@Override
+				public <T> T completeStructured(
+					String systemPrompt,
+					String userPrompt,
+					org.springframework.ai.converter.StructuredOutputConverter<T> outputConverter
+				) {
+					throw new IllegalArgumentException("AI structured parsing disabled in controller tests.");
+				}
+			};
+		}
 	}
 }

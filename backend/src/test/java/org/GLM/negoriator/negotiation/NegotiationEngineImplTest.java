@@ -250,6 +250,33 @@ class NegotiationEngineImplTest {
 	}
 
 	@Test
+	void mesoCounterOffersRespectConfiguredPriceFloorEvenForExtremeLowSupplierPrice() {
+		OfferVector supplierOffer = new OfferVector(new BigDecimal("1.00"), 45, 25, 18);
+		NegotiationContext context = new NegotiationContext(
+			2,
+			8,
+			NegotiationStrategy.MESO,
+			NegotiationState.COUNTERED,
+			new BigDecimal("0.15"),
+			List.of());
+
+		var response = negotiationEngine.negotiate(new NegotiationRequest(
+			supplierOffer,
+			context,
+			buyerProfile,
+			NegotiationDefaults.supplierModel(),
+			testBounds,
+			null));
+
+		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
+		assertTrue(!response.counterOffers().isEmpty());
+		assertTrue(response.counterOffers().stream()
+			.allMatch(offer -> offer.price().compareTo(testBounds.minPrice()) >= 0));
+		assertTrue(response.counterOffers().stream()
+			.allMatch(offer -> offer.price().compareTo(testBounds.maxPrice()) <= 0));
+	}
+
+	@Test
 	void rejectsVeryWeakOfferOnFinalRound() {
 		OfferVector weakButInsideReservation = buyerProfile.reservationOffer();
 		NegotiationContext finalContext = new NegotiationContext(
@@ -325,8 +352,9 @@ class NegotiationEngineImplTest {
 			null));
 
 		assertEquals(NegotiationEngine.Decision.COUNTER, response.decision());
-		assertTrue(response.counterOffers().size() > 1);
+		assertEquals(3, response.counterOffers().size());
 		assertTrue(response.explanation().contains("Option 1: Price 104.00, payment 35 days, delivery 20 days, contract 18 months"));
+		assertTrue(response.explanation().contains("Option 3:"));
 	}
 
 	@Test

@@ -67,6 +67,9 @@ public class NegotiationSession {
 	@Column(name = "opening_message", length = 1000)
 	private String openingMessage;
 
+	@Column(name = "awaiting_final_confirmation", nullable = false, columnDefinition = "boolean not null default false")
+	private boolean awaitingFinalConfirmation;
+
 	@Embedded
 	private BuyerProfileSnapshot buyerProfileSnapshot;
 
@@ -120,6 +123,7 @@ public class NegotiationSession {
 		this.boundsSnapshot = boundsSnapshot;
 		this.supplierModelSnapshot = supplierModelSnapshot;
 		this.supplierConstraintsSnapshot = SupplierConstraintsSnapshot.empty();
+		this.awaitingFinalConfirmation = false;
 	}
 
 	public void addOffer(NegotiationOffer offer) {
@@ -238,6 +242,14 @@ public class NegotiationSession {
 
 	public void updateOpeningMessage(String openingMessage) {
 		this.openingMessage = openingMessage;
+	}
+
+	public boolean isAwaitingFinalConfirmation() {
+		return awaitingFinalConfirmation;
+	}
+
+	public void setAwaitingFinalConfirmation(boolean awaitingFinalConfirmation) {
+		this.awaitingFinalConfirmation = awaitingFinalConfirmation;
 	}
 
 	public boolean isClosed() {

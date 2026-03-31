@@ -35,6 +35,10 @@ final class SupplierMessageIntentParser {
 	private static final Pattern STRUCTURED_TERMS_PATTERN = Pattern.compile(
 		"\\bprice\\b.*\\d|\\bpayment\\b.*\\d|\\bdelivery\\b.*\\d|\\bcontract\\b.*\\d",
 		Pattern.CASE_INSENSITIVE);
+	private static final Pattern QUALIFIED_REVISION_PATTERN = Pattern.compile(
+		"\\b(but|however|instead|still)\\b.*\\b(price|payment|delivery|contract|terms?)\\b"
+			+ "|\\b(keep|lower|higher|increase|decrease|reduce|extend)\\b.*\\b(price|payment|delivery|contract)\\b",
+		Pattern.CASE_INSENSITIVE);
 
 	SupplierMessageIntent parse(String supplierMessage) {
 		if (supplierMessage == null || supplierMessage.isBlank()) {
@@ -42,7 +46,7 @@ final class SupplierMessageIntentParser {
 				SupplierIntentType.ACCEPT_ACTIVE_OFFER,
 				null,
 				false,
-				true,
+				false,
 				SupplierIntentSource.DETERMINISTIC);
 		}
 
@@ -53,11 +57,15 @@ final class SupplierMessageIntentParser {
 				|| BUYER_SELECTION_PATTERN.matcher(supplierMessage).find()
 				|| DESCRIPTIVE_BUYER_SELECTION_PATTERN.matcher(supplierMessage).find());
 		boolean containsAcceptanceSignal = containsAcceptanceSignal(supplierMessage, referencesBuyerOffer);
+		boolean containsQualifiedRevisionSignal = containsAcceptanceSignal
+			&& QUALIFIED_REVISION_PATTERN.matcher(supplierMessage).find();
 		boolean declineSignal = !containsCounterProposalSignal && DECLINE_PATTERN.matcher(supplierMessage).find();
 
 		SupplierIntentType type;
 		if (containsCounterProposalSignal) {
 			type = SupplierIntentType.PROPOSE_NEW_TERMS;
+		} else if (containsQualifiedRevisionSignal) {
+			type = SupplierIntentType.UNCLEAR;
 		} else if (declineSignal) {
 			type = SupplierIntentType.REJECT_OR_DECLINE;
 		} else if (containsAcceptanceSignal) {

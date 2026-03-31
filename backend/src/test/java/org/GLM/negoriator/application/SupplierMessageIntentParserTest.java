@@ -127,6 +127,18 @@ class SupplierMessageIntentParserTest {
 		assertEquals(SupplierMessageIntentParser.SupplierIntentType.ACCEPT_ACTIVE_OFFER, intent.type());
 		assertEquals(SupplierMessageIntentParser.SupplierIntentSource.DETERMINISTIC, intent.source());
 		assertFalse(intent.referencesBuyerOffer());
+		assertFalse(intent.containsAcceptanceSignal());
+		assertEquals(null, intent.selectedBuyerOfferIndex());
+	}
+
+	@Test
+	void treatsQualifiedAcceptanceWithFurtherRevisionAsUnclear() {
+		SupplierMessageIntentParser.SupplierMessageIntent intent = parser.parse(
+			"No we want to keep price lower, but we can accept other terms to be worse for us");
+
+		assertEquals(SupplierMessageIntentParser.SupplierIntentType.UNCLEAR, intent.type());
+		assertEquals(SupplierMessageIntentParser.SupplierIntentSource.DETERMINISTIC, intent.source());
+		assertFalse(intent.referencesBuyerOffer());
 		assertEquals(null, intent.selectedBuyerOfferIndex());
 	}
 }

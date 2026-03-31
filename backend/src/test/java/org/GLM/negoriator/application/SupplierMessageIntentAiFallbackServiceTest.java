@@ -11,8 +11,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.GLM.negoriator.ai.AiGatewayService;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.web.client.RestClient;
 
 class SupplierMessageIntentAiFallbackServiceTest {
 
@@ -69,19 +67,17 @@ class SupplierMessageIntentAiFallbackServiceTest {
 		private final String response;
 
 		private StubAiGatewayService(String response) {
-			super(
-				RestClient.builder().requestFactory(new JdkClientHttpRequestFactory()),
-				objectMapper,
-				"ollama",
-				"http://localhost:11434",
-				"test-model",
-				"");
+			super("ollama", "test-model", null);
 			this.response = response;
 		}
 
 		@Override
-		public String completeJson(String systemPrompt, String userPrompt) {
-			return response;
+		public <T> T completeStructured(
+			String systemPrompt,
+			String userPrompt,
+			org.springframework.ai.converter.StructuredOutputConverter<T> outputConverter
+		) {
+			return outputConverter.convert(response);
 		}
 	}
 }

@@ -4,31 +4,32 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.GLM.negoriator.ai.AiGatewayService;
 import org.GLM.negoriator.negotiation.NegotiationEngine.OfferVector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 class SupplierMessageIntentAiFallbackService {
 
-	private static final String INTENT_PROMPT = "You classify a supplier message in a commercial negotiation. "
-		+ "Return JSON only with keys intentType and selectedCounterOfferIndex. "
-		+ "Valid intentType values: ACCEPT_ACTIVE_OFFER, SELECT_COUNTER_OPTION, PROPOSE_NEW_TERMS, REJECT_OR_DECLINE, UNCLEAR. "
-		+ "Infer from meaning, not exact keywords. Use activeBuyerOffers as the current buyer options, where activeBuyerOffers[0] is option 1. "
-		+ "Only return ACCEPT_ACTIVE_OFFER or SELECT_COUNTER_OPTION when the supplier is clearly referring to one of the active buyer offers. "
-		+ "If the supplier is choosing or approving a described offer like the faster delivery option or the longer payment option, map it to the correct selectedCounterOfferIndex. "
-		+ "If there is not enough confidence, return UNCLEAR and selectedCounterOfferIndex null. "
-		+ "Do not include markdown fences or extra commentary.";
+	private static final Resource INTENT_PROMPT_TEMPLATE = new ClassPathResource("prompts/ai/intent-fallback-system.st");
+	private static final Logger log = LoggerFactory.getLogger(SupplierMessageIntentAiFallbackService.class);
 
 	private final AiGatewayService aiGatewayService;
+	private final BeanOutputConverter<AiIntentFallbackResponse> outputConverter;
 	private final ObjectMapper objectMapper;
 
 	SupplierMessageIntentAiFallbackService(AiGatewayService aiGatewayService, ObjectMapper objectMapper) {
 		this.aiGatewayService = aiGatewayService;
+		this.outputConverter = new BeanOutputConverter<>(AiIntentFallbackResponse.class, objectMapper);
 		this.objectMapper = objectMapper;
 	}
 
@@ -46,10 +47,12 @@ class SupplierMessageIntentAiFallbackService {
 				supplierMessage,
 				supplierTerms,
 				activeBuyerOffers));
-			String content = aiGatewayService.completeJson(INTENT_PROMPT, requestJson);
-			JsonNode json = extractJson(content);
-			SupplierMessageIntentParser.SupplierIntentType type = readIntentType(json);
-			Integer selectedCounterOfferIndex = readInteger(json, "selectedCounterOfferIndex");
+			AiIntentFallbackResponse aiResponse = aiGatewayService.completeStructured(
+				renderPrompt(INTENT_PROMPT_TEMPLATE),
+				requestJson,
+				outputConverter);
+			SupplierMessageIntentParser.SupplierIntentType type = readIntentType(aiResponse.intentType());
+			Integer selectedCounterOfferIndex = aiResponse.selectedCounterOfferIndex();
 
 			if (type == null || type == SupplierMessageIntentParser.SupplierIntentType.UNCLEAR) {
 				return Optional.empty();
@@ -78,46 +81,38 @@ class SupplierMessageIntentAiFallbackService {
 				containsAcceptanceSignal,
 				SupplierMessageIntentParser.SupplierIntentSource.AI_FALLBACK));
 		} catch (Exception exception) {
+			log.warn("AI fallback intent resolution failed: {}", exception.getMessage());
+			log.debug("AI fallback intent resolution stack trace", exception);
 			return Optional.empty();
 		}
 	}
 
-	private JsonNode extractJson(String content) throws Exception {
-		if (!StringUtils.hasText(content)) {
-			throw new IllegalArgumentException("AI parser returned no content.");
-		}
-
-		int start = content.indexOf('{');
-		int end = content.lastIndexOf('}');
-		if (start < 0 || end <= start) {
-			throw new IllegalArgumentException("AI parser did not return JSON.");
-		}
-
-		return objectMapper.readTree(content.substring(start, end + 1));
+	private String renderPrompt(Resource resource) {
+		return new PromptTemplate(resource).render();
 	}
 
-	private SupplierMessageIntentParser.SupplierIntentType readIntentType(JsonNode json) {
-		JsonNode value = json.get("intentType");
-		if (value == null || value.isNull() || !value.isTextual()) {
+	private SupplierMessageIntentParser.SupplierIntentType readIntentType(String value) {
+		if (!StringUtils.hasText(value)) {
 			return null;
 		}
 
 		try {
-			return SupplierMessageIntentParser.SupplierIntentType.valueOf(value.asText().trim().toUpperCase(Locale.ROOT));
+			return SupplierMessageIntentParser.SupplierIntentType.valueOf(value.trim().toUpperCase(Locale.ROOT));
 		} catch (IllegalArgumentException exception) {
 			return null;
 		}
-	}
-
-	private Integer readInteger(JsonNode json, String fieldName) {
-		JsonNode value = json.get(fieldName);
-		return value == null || value.isNull() ? null : value.asInt();
 	}
 
 	private record AiIntentFallbackRequest(
 		String supplierMessage,
 		OfferVector supplierTerms,
 		List<OfferVector> activeBuyerOffers
+	) {
+	}
+
+	private record AiIntentFallbackResponse(
+		String intentType,
+		Integer selectedCounterOfferIndex
 	) {
 	}
 }
