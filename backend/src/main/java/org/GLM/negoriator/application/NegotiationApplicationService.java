@@ -302,7 +302,6 @@ public class NegotiationApplicationService {
 		Integer resolvedSelectedBuyerOfferIndex = resolvedSelectedOfferIndex(activeBuyerOffers, supplierMessage, supplierIntent);
 		String supplierIntentDetails = supplierIntentDetails(
 			supplierIntent,
-			acceptedBuyerOffer,
 			clarificationDirective,
 			activeBuyerOffers,
 			resolvedSelectedBuyerOfferIndex);
@@ -359,7 +358,6 @@ public class NegotiationApplicationService {
 
 	private String supplierIntentDetails(
 		SupplierMessageIntentParser.SupplierMessageIntent supplierIntent,
-		NegotiationOffer acceptedBuyerOffer,
 		ClarificationDirective clarificationDirective,
 		java.util.List<NegotiationOffer> activeBuyerOffers,
 		Integer resolvedSelectedBuyerOfferIndex
@@ -370,10 +368,6 @@ public class NegotiationApplicationService {
 					? " and AI fallback"
 					: "")
 				+ ", so the backend requested clarification against the current buyer offer context.";
-		}
-
-		if (acceptedBuyerOffer != null && supplierIntent.type() == SupplierMessageIntentParser.SupplierIntentType.UNCLEAR) {
-			return "Supplier terms matched an active buyer offer, but the message text remained unclear, so the backend kept the deal open pending explicit confirmation.";
 		}
 
 		return switch (supplierIntent.type()) {
