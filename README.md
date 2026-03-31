@@ -73,6 +73,12 @@ Notes:
 - `VITE_API_BASE_URL` is only needed when the frontend runs outside Docker.
 - The negotiation engine is rule-based, but the supplier-message flow calls `/api/ai/parse-offer`, so the app needs a configured and reachable AI model during normal UI use.
 
+Session defaults:
+
+- The admin/configuration screen uses frontend-owned starting defaults.
+- The backend validates every submitted session payload.
+- Backend fallback defaults are only used when `POST /api/negotiations/sessions` is called without a request body.
+
 ### 2. Start the stack
 
 ```bash
@@ -93,6 +99,8 @@ Open:
 4. Start the session.
 5. Negotiate as the supplier from the main negotiation view.
 6. Adjust strategy or session settings during the session if needed.
+
+When the frontend submits session settings, it may widen the submitted bounds automatically so the chosen ideal and reservation terms remain inside the active negotiation range.
 
 > Screenshot placeholder: configuration screen
 
@@ -126,6 +134,8 @@ Each supplier message goes through the same flow:
 5. The active strategy shapes the buyer's concession curve and counter style.
 6. The backend accepts, counters, or rejects and stores the result in the session history.
 
+If the buyer is ready to close but the supplier wording is still ambiguous, the backend asks for an explicit final confirmation instead of silently closing the deal.
+
 The buyer does not negotiate on price alone. Every round can trade off:
 
 - price
@@ -144,6 +154,8 @@ AI is present, but it does not decide the deal.
 The backend uses Spring AI with one active chat provider configured at startup. The `openai-compatible` provider family covers OpenAI and OpenAI-compatible endpoints.
 
 That parsing flow combines structured model output with backend heuristics for option selection and fallback handling. It is not a free-form system deciding the negotiation.
+
+For persistent databases, the backend also applies a small startup schema patch for session-schema compatibility changes.
 
 ## Strategies
 

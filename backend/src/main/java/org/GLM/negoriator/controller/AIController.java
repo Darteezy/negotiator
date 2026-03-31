@@ -42,6 +42,10 @@ public class AIController {
     private static final Pattern CONTRACT_FLOOR_PATTERN = Pattern.compile(
         "\\b(min(?:imum)?|at least|no shorter than|cannot do shorter|can't do shorter)\\b.*\\b(contract|month)|\\b(contract|month)\\b.*\\b(min(?:imum)?|at least|no shorter than|cannot do shorter|can't do shorter)\\b",
         Pattern.CASE_INSENSITIVE);
+    private static final Pattern PRICE_TERM_PATTERN = Pattern.compile("\\b(price|€|eur|euro)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAYMENT_TERM_PATTERN = Pattern.compile("\\bpayment\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DELIVERY_TERM_PATTERN = Pattern.compile("\\b(delivery|deliver)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CONTRACT_TERM_PATTERN = Pattern.compile("\\b(contract|month|months)\\b", Pattern.CASE_INSENSITIVE);
 
     private final AiGatewayService aiGatewayService;
     private final BeanOutputConverter<AiParseOfferResult> outputConverter;
@@ -70,13 +74,19 @@ public class AIController {
                 objectMapper.writeValueAsString(request),
                 outputConverter);
 
-            OfferSnapshot baseOffer = resolveBaseOffer(request, aiResult);
-            return applySupplierConstraints(mergeWithBase(baseOffer, new ParseOfferResponse(
+            ResolvedBaseOffer resolvedBaseOffer = resolveBaseOffer(request, aiResult);
+            ParseOfferResponse parsedResponse = new ParseOfferResponse(
                 aiResult.price(),
                 aiResult.paymentDays(),
                 aiResult.deliveryDays(),
                 aiResult.contractMonths(),
-                normalizeSupplierConstraints(request.supplierMessage(), aiResult.supplierConstraints()))));
+                normalizeSupplierConstraints(request.supplierMessage(), aiResult.supplierConstraints()));
+            ParseOfferResponse sanitizedResponse = sanitizeParsedResponse(
+                request.supplierMessage(),
+                resolvedBaseOffer,
+                parsedResponse);
+
+            return applySupplierConstraints(mergeWithBase(resolvedBaseOffer.offer(), sanitizedResponse));
         } catch (Exception exception) {
             log.warn("AI parse-offer request failed: {}", exception.getMessage());
             log.debug("AI parse-offer stack trace", exception);
@@ -132,6 +142,27 @@ public class AIController {
             constraints);
     }
 
+    private ParseOfferResponse sanitizeParsedResponse(
+        String supplierMessage,
+        ResolvedBaseOffer resolvedBaseOffer,
+        ParseOfferResponse parsed
+    ) {
+        if (!resolvedBaseOffer.inheritsBuyerOfferTerms()) {
+            return parsed;
+        }
+
+        return new ParseOfferResponse(
+            fieldMentioned(supplierMessage, PRICE_TERM_PATTERN) ? parsed.price() : null,
+            fieldMentioned(supplierMessage, PAYMENT_TERM_PATTERN) ? parsed.paymentDays() : null,
+            fieldMentioned(supplierMessage, DELIVERY_TERM_PATTERN) ? parsed.deliveryDays() : null,
+            fieldMentioned(supplierMessage, CONTRACT_TERM_PATTERN) ? parsed.contractMonths() : null,
+            parsed.supplierConstraints());
+    }
+
+    private boolean fieldMentioned(String supplierMessage, Pattern pattern) {
+        return supplierMessage != null && pattern.matcher(supplierMessage).find();
+    }
+
     private SupplierConstraintsResponse normalizeSupplierConstraints(
         String supplierMessage,
         SupplierConstraintsResponse constraints
@@ -150,36 +181,36 @@ public class AIController {
         return filtered.isEmpty() ? null : filtered;
     }
 
-    private OfferSnapshot resolveBaseOffer(ParseOfferRequest request, AiParseOfferResult aiResponse) {
+    private ResolvedBaseOffer resolveBaseOffer(ParseOfferRequest request, AiParseOfferResult aiResponse) {
         int aiSelectedOptionIndex = selectedOptionIndex(aiResponse);
         if (aiSelectedOptionIndex >= 0) {
-            return selectedCounterOffer(request, aiSelectedOptionIndex);
+            return new ResolvedBaseOffer(selectedCounterOffer(request, aiSelectedOptionIndex), true);
         }
 
         if (agreesToBuyerTerms(aiResponse) && counterOfferCount(request) == 1) {
-            return selectedCounterOffer(request, 0);
+            return new ResolvedBaseOffer(selectedCounterOffer(request, 0), true);
         }
 
         return resolveHeuristicBaseOffer(request);
     }
 
-    private OfferSnapshot resolveHeuristicBaseOffer(ParseOfferRequest request) {
+    private ResolvedBaseOffer resolveHeuristicBaseOffer(ParseOfferRequest request) {
         JsonNode referenceTerms = objectMapper.valueToTree(request.referenceTerms());
         JsonNode counterOffers = objectMapper.valueToTree(request.counterOffers());
         int optionIndex = selectedOptionIndex(request.supplierMessage());
 
         if (optionIndex >= 0 && counterOffers.isArray() && optionIndex < counterOffers.size()) {
-            return offerSnapshot(counterOffers.get(optionIndex), referenceTerms);
+            return new ResolvedBaseOffer(offerSnapshot(counterOffers.get(optionIndex), referenceTerms), true);
         }
 
         if (request.supplierMessage() != null
             && ACCEPT_PATTERN.matcher(request.supplierMessage()).find()
             && counterOffers.isArray()
             && counterOffers.size() == 1) {
-            return offerSnapshot(counterOffers.get(0), referenceTerms);
+            return new ResolvedBaseOffer(offerSnapshot(counterOffers.get(0), referenceTerms), true);
         }
 
-        return offerSnapshot(referenceTerms, referenceTerms);
+        return new ResolvedBaseOffer(offerSnapshot(referenceTerms, referenceTerms), false);
     }
 
     private OfferSnapshot selectedCounterOffer(ParseOfferRequest request, int optionIndex) {
@@ -306,6 +337,12 @@ public class AIController {
         Integer paymentDays,
         Integer deliveryDays,
         Integer contractMonths
+    ) {
+    }
+
+    private record ResolvedBaseOffer(
+        OfferSnapshot offer,
+        boolean inheritsBuyerOfferTerms
     ) {
     }
 

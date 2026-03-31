@@ -43,6 +43,7 @@ Runtime behavior:
 What the frontend is responsible for:
 
 - collecting buyer setup values
+- owning the admin-screen default session values
 - sending supplier messages
 - rendering the conversation timeline
 - showing the supplier message immediately in the timeline while the backend reply is pending
@@ -85,6 +86,8 @@ What the backend is responsible for:
 - storing every round and decision
 - composing supplier-facing replies on behalf of the buyer
 
+The backend is not the source of truth for the admin screen's numeric starting defaults. It validates submitted values and keeps a small fallback default set only for direct or empty-body API callers.
+
 ### Database
 
 PostgreSQL stores the persistent session state.
@@ -102,6 +105,8 @@ Important stored records:
 - strategy change history
 
 The repository uses pessimistic write locking for live session updates so concurrent writes do not corrupt the round state.
+
+Small schema compatibility patches are applied at startup for existing databases when needed.
 
 ### AI provider
 
@@ -137,7 +142,7 @@ Implementation notes:
 
 ### Session creation
 
-1. The frontend loads defaults from the backend.
+1. The frontend starts from its own admin-screen defaults and fetches backend strategy metadata.
 2. The user configures buyer goals and strategy.
 3. The frontend posts the session payload.
 4. The backend validates the setup and stores a new session.
@@ -152,9 +157,10 @@ Implementation notes:
 5. During offer submission, the backend resolves supplier intent deterministically into one of the supported intent types.
 6. If intent is still `UNCLEAR`, the backend may call the configured AI provider for a structured fallback classification.
 7. If ambiguity still remains, the backend requests clarification instead of guessing agreement.
-8. Otherwise the backend runs the negotiation engine.
-9. The backend stores the round result together with supplier parsing metadata and returns the updated session state.
-10. The frontend shows the supplier message immediately, keeps a temporary buyer loading state visible, then re-renders the timeline with the latest buyer response and supplier-side parsing context.
+8. If the buyer is ready to close but the supplier has not given a clear final acceptance yet, the backend asks for explicit confirmation instead of silently closing.
+9. Otherwise the backend runs the negotiation engine.
+10. The backend stores the round result together with supplier parsing metadata and returns the updated session state.
+11. The frontend shows the supplier message immediately, keeps a temporary buyer loading state visible, then re-renders the timeline with the latest buyer response and supplier-side parsing context.
 
 Supported supplier intent types:
 

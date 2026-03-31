@@ -209,9 +209,9 @@ Examples:
 
 ## Important behaviors
 
-### Exact-offer match can close even if the wording is unclear
+### Exact-offer match is strong evidence, but unclear wording can still trigger confirmation
 
-If the supplier submits terms that exactly match one of the buyer's active offers, the backend can treat that as acceptance even when the text itself stayed unclear.
+If the supplier submits terms that exactly match one of the buyer's active offers, the backend treats that as strong agreement evidence. It still avoids closing automatically when the wording is too vague to confirm clear acceptance.
 
 Example context:
 
@@ -221,8 +221,8 @@ Example context:
 
 What happens:
 
-- the round can close as acceptance
-- debug details explain that the text was unclear but the terms matched an active buyer offer
+- the backend can ask for clarification or a final confirmation instead of closing immediately
+- debug details explain that the terms matched an active buyer offer, but the wording was not explicit enough to finalize safely
 
 ### Buyer-acceptable terms do not auto-close without explicit supplier acceptance
 
@@ -241,7 +241,7 @@ What happens:
 Typical reply shape:
 
 ```text
-Buyer is ready to close on these terms. Reply with accept to finalize the deal.
+Buyer is ready to close on these terms. Please reply with a clear accept to finalize the deal.
 ```
 
 ### Option selection is not the same as acceptance

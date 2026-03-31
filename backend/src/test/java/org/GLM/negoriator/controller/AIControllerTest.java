@@ -144,6 +144,30 @@ class AIControllerTest {
 	}
 
 	@Test
+	void parseOfferKeepsUnmentionedContractFromSelectedOptionWhenOnlyDeliveryChanges() {
+		AiGatewayService gateway = new StubAiGatewayService("""
+			{"selectedCounterOfferIndex":2,"price":120,"paymentDays":50,"deliveryDays":25,"contractMonths":12}
+			""");
+
+		AIController controller = new AIController(gateway, objectMapper);
+
+		AIController.ParseOfferResponse response = controller.parseOffer(new AIController.ParseOfferRequest(
+			"Hello! We would like option 2 but with delivery 25 days",
+			new Terms(110.0, 50, 30, 18),
+			java.util.List.of(
+				new Terms(110.0, 50, 30, 18),
+				new Terms(120.0, 50, 19, 18),
+				new Terms(120.0, 50, 30, 12)
+			)
+		));
+
+		assertEquals(120.0, response.price());
+		assertEquals(50, response.paymentDays());
+		assertEquals(25, response.deliveryDays());
+		assertEquals(18, response.contractMonths());
+	}
+
+	@Test
 	void parseOfferReturnsServiceUnavailableWhenAiModelIsUnavailable() {
 		AiGatewayService failingGateway = new AiGatewayService("ollama", "test-model", null) {
 			@Override
