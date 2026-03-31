@@ -23,7 +23,6 @@ import org.springframework.util.StringUtils;
 public class AiNegotiationMessageService {
 
 	private static final Logger log = LoggerFactory.getLogger(AiNegotiationMessageService.class);
-	private static final String OPENING_FALLBACK = "Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.";
 	private static final String MESO_MULTI_OPTION_INTRO = "Thank you for the update. We can continue on one of the following structures:";
 	private static final Resource OPENING_SYSTEM_TEMPLATE = new ClassPathResource("prompts/ai/opening-system.st");
 	private static final Resource OPENING_USER_TEMPLATE = new ClassPathResource("prompts/ai/opening-user.st");
@@ -44,7 +43,7 @@ public class AiNegotiationMessageService {
 			"currentRound", session.getCurrentRound(),
 			"maxRounds", session.getMaxRounds()));
 
-		return completeOrFallback(systemPrompt, userPrompt, OPENING_FALLBACK);
+		return completeOrFallback(systemPrompt, userPrompt, buildOpeningFallback(session.getStrategy()));
 	}
 
 	public String composeBuyerReply(BuyerReplyMessageRequest request) {
@@ -208,6 +207,16 @@ public class AiNegotiationMessageService {
 		return guidance.toString().trim();
 	}
 
+	private String buildOpeningFallback(NegotiationStrategy strategy) {
+		return switch (strategy) {
+			case BASELINE -> "Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.";
+			case MESO -> "Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term. If there are alternative workable structures on your side, feel free to outline them.";
+			case BOULWARE -> "Good day, please submit your best initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.";
+			case CONCEDER -> "Good day, please send your opening commercial proposal, including price, payment terms, delivery schedule, and proposed contract term, so we can work toward a practical agreement quickly.";
+			case TIT_FOR_TAT -> "Good day, please submit your initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term. We will respond directly to the movement shown in your offer.";
+		};
+	}
+
 	private String buildBuyerReplyFallback(BuyerReplyMessageRequest request, boolean allowMesoOptionList) {
 		if ("ACCEPT".equalsIgnoreCase(request.decision())) {
 			if (request.primaryBuyerTerms() == null) {
@@ -229,9 +238,23 @@ public class AiNegotiationMessageService {
 			return "Thank you for the update. Please send a revised offer if you would like to keep negotiating.";
 		}
 
-		return "Thank you for the update. To keep this moving, we would need "
-			+ formatTermsForMessage(request.primaryBuyerTerms())
-			+ ". Let me know if you can work on that basis.";
+		return switch (request.strategy()) {
+			case BASELINE -> "Thank you for the update. To keep this moving, we would need "
+				+ formatTermsForMessage(request.primaryBuyerTerms())
+				+ ". Let me know if you can work on that basis.";
+			case MESO -> "Thank you for the update. One workable structure on our side would be "
+				+ formatTermsForMessage(request.primaryBuyerTerms())
+				+ ". If that direction is close, let me know what still needs adjustment.";
+			case BOULWARE -> "Thank you for the proposal. We can continue if you can move to "
+				+ formatTermsForMessage(request.primaryBuyerTerms())
+				+ ". If that is achievable, send your confirmation on that basis.";
+			case CONCEDER -> "Thank you for the movement. To keep momentum and move this toward agreement, we could proceed on "
+				+ formatTermsForMessage(request.primaryBuyerTerms())
+				+ ". Let me know if you can close on that basis.";
+			case TIT_FOR_TAT -> "Thank you for the update. In response, we could continue on "
+				+ formatTermsForMessage(request.primaryBuyerTerms())
+				+ ". Let me know whether you can match that direction on your side.";
+		};
 	}
 
 	private String formatTermsForMessage(OfferVector terms) {

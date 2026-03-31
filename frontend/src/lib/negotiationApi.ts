@@ -1,4 +1,5 @@
 import type {
+  ApiBounds,
   ApiNegotiationSession,
   ApiSessionDefaults,
   OfferTerms,
@@ -14,6 +15,7 @@ interface StartSessionPayload {
   strategy: string;
   maxRounds: number;
   riskOfWalkaway: number;
+  bounds: ApiBounds;
   buyerProfile: {
     idealOffer: OfferTerms;
     reservationOffer: OfferTerms;
@@ -27,18 +29,7 @@ interface StartSessionPayload {
   };
 }
 
-interface UpdateSessionSettingsPayload extends StartSessionPayload {
-  bounds: {
-    minPrice: number;
-    maxPrice: number;
-    minPaymentDays: number;
-    maxPaymentDays: number;
-    minDeliveryDays: number;
-    maxDeliveryDays: number;
-    minContractMonths: number;
-    maxContractMonths: number;
-  };
-}
+type UpdateSessionSettingsPayload = StartSessionPayload;
 
 interface SubmitSupplierOfferPayload extends OfferTerms {
   supplierMessage?: string;

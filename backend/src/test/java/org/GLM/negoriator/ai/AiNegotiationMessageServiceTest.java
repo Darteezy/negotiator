@@ -44,6 +44,18 @@ class AiNegotiationMessageServiceTest {
 	}
 
 	@Test
+	void composeOpeningMessageUsesStrategyAwareFallbackWhenAiReturnsBlank() {
+		CapturingAiGatewayService gateway = new CapturingAiGatewayService("   ");
+		AiNegotiationMessageService service = new AiNegotiationMessageService(gateway);
+
+		String response = service.composeOpeningMessage(buildSession(NegotiationStrategy.BOULWARE));
+
+		assertEquals(
+			"Good day, please submit your best initial commercial proposal, including price, payment terms, delivery schedule, and proposed contract term.",
+			response);
+	}
+
+	@Test
 	void composeBuyerReplyBuildsHumanSupplierFacingPrompt() {
 		CapturingAiGatewayService gateway = new CapturingAiGatewayService(
 			"Thanks for the update. Moving delivery to 15 days helps. We still need a better price to proceed."
@@ -163,6 +175,58 @@ class AiNegotiationMessageServiceTest {
 	}
 
 	@Test
+	void composeBuyerReplyUsesStrategyAwareFallbackForFirmAndFlexibleStrategies() {
+		AiNegotiationMessageService boulwareService = new AiNegotiationMessageService(new CapturingAiGatewayService("   "));
+		String boulwareResponse = boulwareService.composeBuyerReply(new AiNegotiationMessageService.BuyerReplyMessageRequest(
+			3,
+			6,
+			"COUNTER",
+			"COUNTERED",
+			"108 is our best price.",
+			new OfferVector(new BigDecimal("108.00"), 30, 15, 12),
+			new OfferVector(new BigDecimal("102.00"), 45, 14, 12),
+			List.of(new OfferVector(new BigDecimal("102.00"), 45, 14, 12)),
+			DecisionReason.COUNTER_TO_CLOSE_GAP,
+			NegotiationIssue.PRICE,
+			NegotiationStrategy.BOULWARE,
+			"Boulware is active to keep the buyer firm for longer and delay concessions until the supplier shows stronger movement.",
+			new OfferEvaluation(
+				new BigDecimal("0.6200"),
+				new BigDecimal("0.4100"),
+				new BigDecimal("0.7800"),
+				new BigDecimal("0.3500"),
+				new BigDecimal("0.1200"))));
+
+		AiNegotiationMessageService concederService = new AiNegotiationMessageService(new CapturingAiGatewayService("   "));
+		String concederResponse = concederService.composeBuyerReply(new AiNegotiationMessageService.BuyerReplyMessageRequest(
+			3,
+			6,
+			"COUNTER",
+			"COUNTERED",
+			"108 is our best price.",
+			new OfferVector(new BigDecimal("108.00"), 30, 15, 12),
+			new OfferVector(new BigDecimal("102.00"), 45, 14, 12),
+			List.of(new OfferVector(new BigDecimal("102.00"), 45, 14, 12)),
+			DecisionReason.COUNTER_TO_CLOSE_GAP,
+			NegotiationIssue.PRICE,
+			NegotiationStrategy.CONCEDER,
+			"Conceder is active to improve close probability by softening earlier and keeping momentum in the conversation.",
+			new OfferEvaluation(
+				new BigDecimal("0.6200"),
+				new BigDecimal("0.4100"),
+				new BigDecimal("0.7800"),
+				new BigDecimal("0.3500"),
+				new BigDecimal("0.1200"))));
+
+		assertEquals(
+			"Thank you for the proposal. We can continue if you can move to price 102.00, payment in 45 days, delivery in 14 days, and a 12 month contract. If that is achievable, send your confirmation on that basis.",
+			boulwareResponse);
+		assertEquals(
+			"Thank you for the movement. To keep momentum and move this toward agreement, we could proceed on price 102.00, payment in 45 days, delivery in 14 days, and a 12 month contract. Let me know if you can close on that basis.",
+			concederResponse);
+	}
+
+	@Test
 	void composeBuyerReplyUsesFallbackWhenAiReturnsMetaAssistantResponse() {
 		CapturingAiGatewayService gateway = new CapturingAiGatewayService(
 			"I notice you've provided detailed context for a procurement negotiation scenario, but you haven't included the actual question or problem that needs solving."
@@ -191,7 +255,7 @@ class AiNegotiationMessageServiceTest {
 		));
 
 		assertEquals(
-			"Thank you for the update. To keep this moving, we would need price 95.00, payment in 50 days, delivery in 14 days, and a 10 month contract. Let me know if you can work on that basis.",
+			"Thank you for the update. One workable structure on our side would be price 95.00, payment in 50 days, delivery in 14 days, and a 10 month contract. If that direction is close, let me know what still needs adjustment.",
 			response);
 	}
 
@@ -217,10 +281,14 @@ class AiNegotiationMessageServiceTest {
 	}
 
 	private NegotiationSession buildSession() {
+		return buildSession(NegotiationStrategy.BASELINE);
+	}
+
+	private NegotiationSession buildSession(NegotiationStrategy strategy) {
 		return new NegotiationSession(
 			1,
 			6,
-			NegotiationStrategy.BASELINE,
+			strategy,
 			new BigDecimal("0.1500"),
 			NegotiationSessionStatus.PENDING,
 			new BuyerProfileSnapshot(

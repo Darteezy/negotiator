@@ -15,6 +15,7 @@ import org.GLM.negoriator.domain.NegotiationSession;
 import org.GLM.negoriator.domain.NegotiationSessionRepository;
 import org.GLM.negoriator.domain.NegotiationSessionStatus;
 import org.GLM.negoriator.domain.NegotiationStrategyChangeTrigger;
+import org.GLM.negoriator.negotiation.NegotiationEngine.DecisionReason;
 import org.GLM.negoriator.negotiation.NegotiationEngine.BuyerProfile;
 import org.GLM.negoriator.negotiation.NegotiationEngine.IssueWeights;
 import org.GLM.negoriator.negotiation.NegotiationEngine.NegotiationBounds;
@@ -257,10 +258,22 @@ class NegotiationApplicationServiceTest {
 			.orElseThrow()
 			.toOfferVector();
 
-		NegotiationSession acceptedSession = submit(
+		NegotiationSession confirmationSession = submit(
 			counteredSession,
 			selectedBuyerOption,
 			"accept option 2");
+		NegotiationDecision confirmationDecision = latestDecision(confirmationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, confirmationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, confirmationDecision.getDecision());
+		assertEquals(DecisionReason.FINAL_CONFIRMATION_REQUIRED, confirmationDecision.getReasonCode());
+		assertNotNull(confirmationDecision.getCounterOffer());
+		assertTrue(confirmationDecision.getCounterOffer().toOfferVector().matches(selectedBuyerOption));
+
+		NegotiationSession acceptedSession = submit(
+			confirmationSession,
+			selectedBuyerOption,
+			"accept");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
@@ -287,10 +300,20 @@ class NegotiationApplicationServiceTest {
 			.orElseThrow()
 			.toOfferVector();
 
-		NegotiationSession acceptedSession = submit(
+		NegotiationSession confirmationSession = submit(
 			counteredSession,
 			selectedBuyerOption,
 			"We agree with option 1");
+		NegotiationDecision confirmationDecision = latestDecision(confirmationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, confirmationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, confirmationDecision.getDecision());
+		assertEquals(DecisionReason.FINAL_CONFIRMATION_REQUIRED, confirmationDecision.getReasonCode());
+
+		NegotiationSession acceptedSession = submit(
+			confirmationSession,
+			selectedBuyerOption,
+			"confirmed");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
@@ -317,10 +340,20 @@ class NegotiationApplicationServiceTest {
 			.orElseThrow()
 			.toOfferVector();
 
-		NegotiationSession acceptedSession = submit(
+		NegotiationSession confirmationSession = submit(
 			counteredSession,
 			selectedBuyerOption,
 			"Let's go with the first package.");
+		NegotiationDecision confirmationDecision = latestDecision(confirmationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, confirmationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, confirmationDecision.getDecision());
+		assertEquals(DecisionReason.FINAL_CONFIRMATION_REQUIRED, confirmationDecision.getReasonCode());
+
+		NegotiationSession acceptedSession = submit(
+			confirmationSession,
+			selectedBuyerOption,
+			"accept");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
@@ -374,10 +407,20 @@ class NegotiationApplicationServiceTest {
 			.orElseThrow()
 			.toOfferVector();
 
-		NegotiationSession acceptedSession = submit(
+		NegotiationSession confirmationSession = submit(
 			counteredSession,
 			fasterDeliveryOption,
 			"Let's go with the faster delivery option.");
+		NegotiationDecision confirmationDecision = latestDecision(confirmationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, confirmationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, confirmationDecision.getDecision());
+		assertEquals(DecisionReason.FINAL_CONFIRMATION_REQUIRED, confirmationDecision.getReasonCode());
+
+		NegotiationSession acceptedSession = submit(
+			confirmationSession,
+			fasterDeliveryOption,
+			"accept");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
@@ -387,7 +430,7 @@ class NegotiationApplicationServiceTest {
 	}
 
 	@Test
-	void transcriptStyleMesoConversationClosesImmediatelyOnOptionAgreement() {
+	void transcriptStyleMesoConversationRequestsFinalConfirmationBeforeClosing() {
 		NegotiationSession startedSession = service.startSession(
 			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
 
@@ -403,10 +446,20 @@ class NegotiationApplicationServiceTest {
 			.findFirst()
 			.orElseThrow();
 
-		NegotiationSession acceptedSession = submit(
+		NegotiationSession confirmationSession = submit(
 			counteredSession,
 			optionOne.toOfferVector(),
 			"We agree with option 1");
+		NegotiationDecision confirmationDecision = latestDecision(confirmationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, confirmationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, confirmationDecision.getDecision());
+		assertEquals(DecisionReason.FINAL_CONFIRMATION_REQUIRED, confirmationDecision.getReasonCode());
+
+		NegotiationSession acceptedSession = submit(
+			confirmationSession,
+			optionOne.toOfferVector(),
+			"accept");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
@@ -453,7 +506,7 @@ class NegotiationApplicationServiceTest {
 	}
 
 	@Test
-	void exactBuyerOfferMatchCanCloseEvenWhenSupplierMessageIsUnclear() {
+	void exactBuyerOfferMatchStaysOpenUntilExplicitFinalConfirmationArrives() {
 		NegotiationSession startedSession = service.startSession(
 			NegotiationDefaults.startSessionCommand(NegotiationStrategy.BOULWARE));
 
@@ -473,10 +526,21 @@ class NegotiationApplicationServiceTest {
 			.max(Comparator.comparing(org.GLM.negoriator.domain.NegotiationOffer::getCreatedAt))
 			.orElseThrow();
 
-		NegotiationSession acceptedSession = submit(
+		NegotiationSession confirmationSession = submit(
 			pendingAcceptanceSession,
 			lastBuyerOffer.toOfferVector(),
 			"Understood.");
+		NegotiationDecision confirmationDecision = latestDecision(confirmationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, confirmationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, confirmationDecision.getDecision());
+		assertEquals(DecisionReason.COUNTER_TO_CLOSE_GAP, confirmationDecision.getReasonCode());
+		assertTrue(confirmationDecision.getExplanation().contains("Please confirm whether you accept our current terms"));
+
+		NegotiationSession acceptedSession = submit(
+			confirmationSession,
+			lastBuyerOffer.toOfferVector(),
+			"accept");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
@@ -513,7 +577,7 @@ class NegotiationApplicationServiceTest {
 	}
 
 	@Test
-	void aiFallbackResolvesUnclearReplyIntoBuyerOptionAcceptance() {
+	void aiFallbackResolvesUnclearReplyIntoBuyerOptionConfirmationFlow() {
 		aiGatewayService.setJsonResponse("{\"intentType\":\"ACCEPT_ACTIVE_OFFER\",\"selectedCounterOfferIndex\":1}");
 
 		NegotiationSession startedSession = service.startSession(
@@ -531,16 +595,58 @@ class NegotiationApplicationServiceTest {
 			.findFirst()
 			.orElseThrow();
 
-		NegotiationSession acceptedSession = submit(
+		NegotiationSession confirmationSession = submit(
 			counteredSession,
 			new OfferVector(new BigDecimal("100.00"), 50, 20, 10),
 			"That arrangement is fine on our side.");
+		NegotiationDecision confirmationDecision = latestDecision(confirmationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, confirmationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, confirmationDecision.getDecision());
+		assertEquals(DecisionReason.FINAL_CONFIRMATION_REQUIRED, confirmationDecision.getReasonCode());
+		assertNotNull(confirmationDecision.getCounterOffer());
+		assertTrue(confirmationDecision.getCounterOffer().toOfferVector().matches(optionOne.toOfferVector()));
+
+		NegotiationSession acceptedSession = submit(
+			confirmationSession,
+			optionOne.toOfferVector(),
+			"accept");
 		NegotiationDecision acceptedDecision = latestDecision(acceptedSession);
 
 		assertEquals(NegotiationSessionStatus.ACCEPTED, acceptedSession.getStatus());
 		assertEquals(NegotiationDecisionType.ACCEPT, acceptedDecision.getDecision());
 		assertNotNull(acceptedDecision.getCounterOffer());
 		assertTrue(acceptedDecision.getCounterOffer().toOfferVector().matches(optionOne.toOfferVector()));
+	}
+
+	@Test
+	void mixedIntentAcceptanceLanguageDoesNotCloseDeal() {
+		NegotiationSession startedSession = service.startSession(
+			NegotiationDefaults.startSessionCommand(NegotiationStrategy.MESO));
+
+		NegotiationSession counteredSession = submit(
+			startedSession,
+			new OfferVector(new BigDecimal("100.00"), 50, 20, 10),
+			"Price 100, payment 50, delivery 20, contract 10");
+
+		OfferVector optionOne = counteredSession.getOffers().stream()
+			.filter(offer -> offer.getParty() == org.GLM.negoriator.domain.NegotiationParty.BUYER)
+			.filter(offer -> offer.getRoundNumber() == 1)
+			.sorted(Comparator.comparing(org.GLM.negoriator.domain.NegotiationOffer::getCreatedAt))
+			.findFirst()
+			.orElseThrow()
+			.toOfferVector();
+
+		NegotiationSession clarificationSession = submit(
+			counteredSession,
+			optionOne,
+			"No we want to keep price lower, but we can accept other terms to be worse for us");
+		NegotiationDecision clarificationDecision = latestDecision(clarificationSession);
+
+		assertEquals(NegotiationSessionStatus.COUNTERED, clarificationSession.getStatus());
+		assertEquals(NegotiationDecisionType.COUNTER, clarificationDecision.getDecision());
+		assertTrue(clarificationDecision.getExplanation().contains("Please confirm which buyer option is closest")
+			|| clarificationDecision.getExplanation().contains("Please confirm whether you accept our current terms"));
 	}
 
 	@Test

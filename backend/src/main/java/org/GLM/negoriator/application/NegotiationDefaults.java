@@ -13,11 +13,17 @@ import org.GLM.negoriator.negotiation.NegotiationEngine.SupplierModel;
 
 public final class NegotiationDefaults {
 
+	private static volatile DefaultsSnapshot snapshot = DefaultsSnapshot.from(new NegotiationDefaultsProperties());
+
 	private NegotiationDefaults() {
 	}
 
+	static void configure(NegotiationDefaultsProperties properties) {
+		snapshot = DefaultsSnapshot.from(properties);
+	}
+
 	public static NegotiationStrategy defaultStrategy() {
-		return NegotiationStrategy.BASELINE;
+		return snapshot.defaultStrategy();
 	}
 
 	public static int maxRounds() {
@@ -25,47 +31,23 @@ public final class NegotiationDefaults {
 	}
 
 	public static int maxRounds(NegotiationStrategy strategy) {
-		return switch (strategy) {
-			case BASELINE, MESO, BOULWARE, CONCEDER, TIT_FOR_TAT -> 8;
-		};
+		return snapshot.maxRounds();
 	}
 
 	public static BigDecimal riskOfWalkaway() {
-		return new BigDecimal("0.15");
+		return snapshot.riskOfWalkaway();
 	}
 
 	public static BuyerProfile buyerProfile() {
-		return new BuyerProfile(
-			new OfferVector(new BigDecimal("90.00"), 60, 7, 6),
-			new OfferVector(new BigDecimal("120.00"), 30, 30, 24),
-			new IssueWeights(
-				new BigDecimal("0.40"),
-				new BigDecimal("0.20"),
-				new BigDecimal("0.25"),
-				new BigDecimal("0.15")),
-			BigDecimal.ZERO);
+		return snapshot.buyerProfile();
 	}
 
 	public static NegotiationBounds bounds() {
-		return new NegotiationBounds(
-			new BigDecimal("80.00"),
-			new BigDecimal("120.00"),
-			30,
-			90,
-			7,
-			30,
-			3,
-			24);
+		return snapshot.bounds();
 	}
 
 	public static SupplierModel supplierModel() {
-		return new SupplierModel(
-			Map.of(
-				SupplierArchetype.MARGIN_FOCUSED, new BigDecimal("0.25"),
-				SupplierArchetype.CASHFLOW_FOCUSED, new BigDecimal("0.25"),
-				SupplierArchetype.OPERATIONS_FOCUSED, new BigDecimal("0.25"),
-				SupplierArchetype.STABILITY_FOCUSED, new BigDecimal("0.25")),
-			new BigDecimal("0.35"));
+		return snapshot.supplierModel();
 	}
 
 	public static NegotiationApplicationService.StartSessionCommand startSessionCommand() {
@@ -80,5 +62,58 @@ public final class NegotiationDefaults {
 			buyerProfile(),
 			bounds(),
 			supplierModel());
+	}
+
+	private record DefaultsSnapshot(
+		NegotiationStrategy defaultStrategy,
+		int maxRounds,
+		BigDecimal riskOfWalkaway,
+		BuyerProfile buyerProfile,
+		NegotiationBounds bounds,
+		SupplierModel supplierModel
+	) {
+		private static DefaultsSnapshot from(NegotiationDefaultsProperties properties) {
+			BuyerProfile buyerProfile = properties.toBuyerProfile();
+			NegotiationBounds bounds = properties.toBounds();
+			SupplierModel supplierModel = properties.toSupplierModel();
+
+			return new DefaultsSnapshot(
+				properties.defaultStrategy(),
+				properties.getMaxRounds(),
+				properties.getRiskOfWalkaway(),
+				new BuyerProfile(
+					cloneOffer(buyerProfile.idealOffer()),
+					cloneOffer(buyerProfile.reservationOffer()),
+					new IssueWeights(
+						buyerProfile.weights().price(),
+						buyerProfile.weights().paymentDays(),
+						buyerProfile.weights().deliveryDays(),
+						buyerProfile.weights().contractMonths()),
+					buyerProfile.reservationUtility()),
+				new NegotiationBounds(
+					bounds.minPrice(),
+					bounds.maxPrice(),
+					bounds.minPaymentDays(),
+					bounds.maxPaymentDays(),
+					bounds.minDeliveryDays(),
+					bounds.maxDeliveryDays(),
+					bounds.minContractMonths(),
+					bounds.maxContractMonths()),
+				new SupplierModel(
+					Map.of(
+						SupplierArchetype.MARGIN_FOCUSED, supplierModel.archetypeBeliefs().get(SupplierArchetype.MARGIN_FOCUSED),
+						SupplierArchetype.CASHFLOW_FOCUSED, supplierModel.archetypeBeliefs().get(SupplierArchetype.CASHFLOW_FOCUSED),
+						SupplierArchetype.OPERATIONS_FOCUSED, supplierModel.archetypeBeliefs().get(SupplierArchetype.OPERATIONS_FOCUSED),
+						SupplierArchetype.STABILITY_FOCUSED, supplierModel.archetypeBeliefs().get(SupplierArchetype.STABILITY_FOCUSED)),
+					supplierModel.reservationUtility()));
+		}
+
+		private static OfferVector cloneOffer(OfferVector offer) {
+			return new OfferVector(
+				offer.price(),
+				offer.paymentDays(),
+				offer.deliveryDays(),
+				offer.contractMonths());
+		}
 	}
 }

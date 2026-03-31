@@ -46,10 +46,22 @@ public class CounterOfferGenerator {
         ) {
         NegotiationEngine.OfferVector idealOffer = profile.idealOffer();
 
-        BigDecimal price = supplierOffer.price();
-        int paymentDays = supplierOffer.paymentDays();
-        int deliveryDays = supplierOffer.deliveryDays();
-        int contractMonths = supplierOffer.contractMonths();
+        BigDecimal price = clampDecimal(
+            supplierOffer.price(),
+            bounds.minPrice(),
+            bounds.maxPrice());
+        int paymentDays = clampInt(
+            supplierOffer.paymentDays(),
+            bounds.minPaymentDays(),
+            bounds.maxPaymentDays());
+        int deliveryDays = clampInt(
+            supplierOffer.deliveryDays(),
+            bounds.minDeliveryDays(),
+            bounds.maxDeliveryDays());
+        int contractMonths = clampInt(
+            supplierOffer.contractMonths(),
+            bounds.minContractMonths(),
+            bounds.maxContractMonths());
 
         switch (issueToImprove) {
             case PAYMENT_DAYS -> paymentDays = moveIntTowards(

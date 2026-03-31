@@ -12,6 +12,10 @@ import {
   submitSupplierOffer,
   updateNegotiationSettings,
 } from "@/lib/negotiationApi";
+import {
+  normalizeSessionBounds,
+  validateSessionInputs,
+} from "@/lib/sessionValidation";
 import type {
   ApiConversationEvent,
   ApiStrategyDetails,
@@ -160,6 +164,19 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
       return;
     }
 
+    const validationError = validateSessionInputs({
+      maxRounds: parsed.maxRounds,
+      riskOfWalkaway: parsed.riskOfWalkaway,
+      idealOffer: parsed.idealOffer,
+      reservationOffer: parsed.reservationOffer,
+      bounds: parsed.bounds,
+    });
+
+    if (validationError) {
+      setSettingsError(validationError);
+      return;
+    }
+
     if (!hasSettingsChanges(session, parsed)) {
       setSettingsError("Change at least one setting before applying.");
       return;
@@ -168,6 +185,12 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
     setSettingsError("");
 
     try {
+      const normalizedBounds = normalizeSessionBounds(
+        parsed.bounds,
+        parsed.idealOffer,
+        parsed.reservationOffer,
+      );
+
       setApplyingSettings(true);
       const nextSession = await updateNegotiationSettings(session.id, {
         strategy: parsed.strategy,
@@ -179,7 +202,7 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
           weights: parsed.weights,
           reservationUtility: session.buyerProfile.reservationUtility,
         },
-        bounds: parsed.bounds,
+        bounds: normalizedBounds,
       });
 
       setSession(nextSession);
@@ -269,7 +292,6 @@ export function NegotiationPage({ initialSession, onRestart }: Props) {
                       ? `${event.counterOffers.length} options`
                       : undefined
                   }
-                  counterOffers={event.counterOffers}
                   detailRows={buildDetailRows(event)}
                   highlight={
                     event.eventType === "BUYER_REPLY" &&
@@ -969,11 +991,21 @@ function StrategyTooltipContent({
 function buildDetailRows(event: ApiConversationEvent) {
   const rows: Array<{ label: string; value: string }> = [];
   const debug = event.debug;
+  const hasMultipleCounterOffers = event.counterOffers.length > 1;
 
-  if (event.terms) {
+  if (event.terms && !hasMultipleCounterOffers) {
     rows.push({
       label: "Terms",
       value: formatTerms(event.terms),
+    });
+  }
+
+  if (hasMultipleCounterOffers) {
+    event.counterOffers.forEach((offer, index) => {
+      rows.push({
+        label: `Option ${index + 1}`,
+        value: formatTerms(offer),
+      });
     });
   }
 
